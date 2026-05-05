@@ -10,6 +10,8 @@ import Scan from './pages/Scan';
 import ProductLookup from './pages/ProductLookup';
 import StockCount from './pages/StockCount';
 import Receiving from './pages/Receiving';
+import Replenish from './pages/Replenish';
+import GapScan from './pages/GapScan';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -42,6 +44,8 @@ const AuthenticatedApp = () => {
       <Route path="/product/:id" element={<ProductLookup />} />
       <Route path="/stock-count" element={<StockCount />} />
       <Route path="/receiving" element={<Receiving />} />
+      <Route path="/replenish" element={<Replenish />} />
+      <Route path="/gap-scan" element={<GapScan />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

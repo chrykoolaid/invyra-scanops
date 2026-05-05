@@ -9,10 +9,10 @@ export default function AppHeader() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-base font-bold text-foreground tracking-tight">
-            StockPilot
+            Invyra ScanOps
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Sarah M. · Grocery
+            Sarah M. · Staff · Grocery
           </p>
         </div>
         <div className="flex items-center gap-1.5">

@@ -18,20 +18,16 @@ const tiles = [
   { icon: Search, label: "Product Lookup", to: "/scan", active: true },
   { icon: ClipboardList, label: "Stock Count", to: "/stock-count", active: true },
   { icon: PackageOpen, label: "Receiving", to: "/receiving", active: true },
-  { icon: RefreshCw, label: "Replenish", to: null, active: false },
+  { icon: RefreshCw, label: "Replenish", to: "/replenish", active: true },
   { icon: Tags, label: "Markdowns", to: null, active: false },
   { icon: Trash2, label: "Waste", to: null, active: false },
   { icon: Clock, label: "Expiry Check", to: null, active: false },
-  { icon: ScanBarcode, label: "Gap Scan", to: null, active: false },
+  { icon: ScanBarcode, label: "Gap Scan", to: "/gap-scan", active: true },
   { icon: Printer, label: "Labels", to: null, active: false },
   { icon: ArrowLeftRight, label: "Transfers", to: null, active: false },
 ];
 
-const tasks = [
-  { id: 1, text: "Dairy count due by 2pm", done: false },
-  { id: 2, text: "Check bakery expiries", done: true },
-  { id: 3, text: "Receive frozen delivery", done: false },
-];
+const tasks = [];
 
 export default function Home() {
   return (
@@ -57,29 +53,16 @@ export default function Home() {
           <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
             Today's Tasks
           </h2>
-          <div className="bg-card rounded-2xl border border-border divide-y divide-border">
-            {tasks.map((task) => (
-              <div key={task.id} className="flex items-center gap-3 px-4 py-3.5">
-                <div className={`
-                  w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0
-                  ${task.done
-                    ? "bg-accent border-accent"
-                    : "border-border"
-                  }
-                `}>
-                  {task.done && (
-                    <svg className="w-3 h-3 text-accent-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </div>
-                <span className={`text-sm ${task.done ? "line-through text-muted-foreground" : "text-foreground font-medium"}`}>
-                  {task.text}
-                </span>
+          <div className="bg-card rounded-2xl border border-border px-4 py-4">
+            {tasks.length === 0 ? (
+              <div>
+                <p className="text-sm font-semibold text-foreground">No assigned scanner tasks yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Stage F will add manager-assigned and auto-generated task routing.</p>
               </div>
-            ))}
+            ) : null}
           </div>
         </section>
+
       </main>
     </div>
   );
