@@ -3,11 +3,12 @@ import { buildTransferPayload, TRANSFER_TYPES, validateTransfer } from "./scanOp
 export function createTransferDraft(extra = {}) {
   return {
     transferType: TRANSFER_TYPES.BACKROOM_TO_SHELF,
-    sourceLocation: "BACKROOM-A",
-    destinationLocation: "AISLE-4-DRINKS",
+    sourceLocation: "",
+    destinationLocation: "",
     quantity: 1,
     unitType: "each",
     item: null,
+    reason: "",
     ...extra,
   };
 }

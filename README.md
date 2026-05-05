@@ -178,3 +178,32 @@ TRANSFER_SUPERVISOR_REVIEW_REQUIRED
 npm install
 npm run dev
 ```
+
+## Stage I.2 — Transfer Validation Hardening v1
+
+This pass keeps Stage I intact and focuses only on transfer workflow correctness.
+
+Hardened transfer behavior:
+
+```text
+Source and destination are no longer prefilled.
+Operator must select or scan the source and destination.
+TRANSFER_STARTED is recorded when the transfer workspace opens.
+TRANSFER_REVIEWED is recorded before confirm, block, or supervisor-review outcomes.
+Damaged, expiry, freshness, and promo-display transfers expose large touch reason buttons.
+Damaged/expiry transfer reasons are required before confirm.
+Quantity above local snapshot no longer records as a normal completed transfer.
+Quantity above local snapshot records supervisor-review and exception events instead.
+Supervisor-review transfer events are held in Inventory Sync as Needs review.
+Retry all does not push Needs review transfer events as if they were approved.
+```
+
+Transfer validation boundaries:
+
+```text
+No direct stock mutation.
+No fake transfer approval.
+No automatic approval of quantity exceptions.
+No desktop reconciliation built yet.
+Inventory remains the official movement applier after sync/approval.
+```

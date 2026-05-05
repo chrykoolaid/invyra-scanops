@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeftRight, CheckCircle2, Home, MapPin, Minus, Package, Plus, RotateCw, ScanBarcode } from "lucide-react";
+import { ArrowLeftRight, CheckCircle2, ClipboardCheck, Home, MapPin, Minus, Package, Plus, RotateCw, ScanBarcode } from "lucide-react";
 import PageHeader from "../components/scanner/PageHeader";
 import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
 import DecisionRecommendationCard from "../components/scanner/DecisionRecommendationCard";
@@ -11,7 +11,7 @@ import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { buildDecisionLinkedPayload, createDecisionRecommendation, recordDecisionEvent } from "../lib/scanOpsDecisionEngine";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { createTransferDraft, buildQueuedTransfer, getTransferValidation } from "../lib/scanOpsTransfers";
-import { LOCATION_OPTIONS, TRANSFER_TYPE_OPTIONS, getLocationLabel, getTransferTypeLabel } from "../lib/scanOpsTransferRules";
+import { LOCATION_OPTIONS, TRANSFER_REASON_OPTIONS, TRANSFER_TYPE_OPTIONS, getLocationLabel, getReasonLabel, getTransferTypeLabel } from "../lib/scanOpsTransferRules";
 import { TRANSFER_SCAN_SEQUENCE } from "../lib/scanOpsTransferFixtures";
 
 const BUTTON_PRIMARY = "w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40";
@@ -24,8 +24,16 @@ export default function Transfers() {
   const [draft, setDraft] = useState(() => createTransferDraft());
   const [scanIndex, setScanIndex] = useState(0);
   const [doneState, setDoneState] = useState(null);
+  const startRecorded = useRef(false);
   const validation = useMemo(() => getTransferValidation(draft), [draft]);
   const decision = useMemo(() => createDecisionRecommendation({ workflow: "transfer", item: draft.item, context: { transferType: draft.transferType, sourceLocation: draft.sourceLocation, destinationLocation: draft.destinationLocation, quantity: draft.quantity, validation } }), [draft, validation]);
+  const reasonOptions = TRANSFER_REASON_OPTIONS[draft.transferType] || [];
+
+  useEffect(() => {
+    if (startRecorded.current) return;
+    startRecorded.current = true;
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_STARTED, { source_module: "Transfers", status: "started", item_name: "Transfer workflow opened", transfer_type: draft.transferType });
+  }, [draft.transferType]);
 
   const updateDraft = (patch) => {
     setDraft((current) => ({ ...current, ...patch }));
@@ -33,8 +41,13 @@ export default function Transfers() {
   };
 
   const selectTransferType = (transferType) => {
-    updateDraft({ transferType });
+    updateDraft({ transferType, reason: "" });
     createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_TYPE_SELECTED, { source_module: "Transfers", status: "selected", transfer_type: transferType, item_name: getTransferTypeLabel(transferType) });
+  };
+
+  const selectReason = (reason) => {
+    updateDraft({ reason });
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_REVIEWED, { source_module: "Transfers", status: "reason_selected", transfer_type: draft.transferType, reason, reason_label: getReasonLabel(reason), item_name: getReasonLabel(reason) });
   };
 
   const selectSource = (sourceLocation) => {
@@ -84,18 +97,42 @@ export default function Transfers() {
 
   const confirmTransfer = () => {
     const currentValidation = getTransferValidation(draft);
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_REVIEWED, { source_module: "Transfers", status: currentValidation.review ? "review_required" : currentValidation.ok ? "reviewed" : "blocked", item_name: draft.item?.name || "Transfer review", transfer_type: draft.transferType, source_location: draft.sourceLocation, destination_location: draft.destinationLocation, quantity: draft.quantity, reason: draft.reason || null, validation_message: currentValidation.message });
     if (!currentValidation.ok) {
       toast({ description: currentValidation.message, duration: 1800 });
       return;
     }
     const decisionEvent = recordDecisionEvent(decision, currentValidation.review ? "supervisor_review" : "accepted", { source_module: "Transfers", status: currentValidation.review ? "review_required" : "accepted" });
+    const transfer = buildQueuedTransfer({ ...draft, reviewRequired: currentValidation.review }, decision);
+    const linkedPayload = buildDecisionLinkedPayload(decision, decisionEvent);
+
     if (currentValidation.review) {
-      createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_SUPERVISOR_REVIEW_REQUIRED, { source_module: "Transfers", status: "review_required", item_name: draft.item?.name, reason: currentValidation.message, ...buildDecisionLinkedPayload(decision, decisionEvent) });
+      const reviewEvent = createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_SUPERVISOR_REVIEW_REQUIRED, {
+        source_module: "Transfers",
+        status: "review_required",
+        item_name: transfer.itemName,
+        transfer_id: transfer.transferId,
+        transfer_type: transfer.transferType,
+        source_location: transfer.sourceLocation,
+        destination_location: transfer.destinationLocation,
+        quantity: transfer.quantity,
+        unit_type: transfer.unitType,
+        reason: currentValidation.message,
+        supervisor_review_required: true,
+        applies_stock_directly: false,
+        official_inventory_applies_after_sync: true,
+        ...linkedPayload,
+      });
+      createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_EXCEPTION_RECORDED, { source_module: "Transfers", status: "review_required", item_name: transfer.itemName, transfer_id: transfer.transferId, transfer_type: transfer.transferType, reason: currentValidation.message, supervisor_review_required: true, applies_stock_directly: false, ...linkedPayload });
+      createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_QUEUED_FOR_SYNC, { source_module: "Transfers", status: "review_required", item_name: transfer.itemName, transfer_id: transfer.transferId, transfer_type: transfer.transferType, applies_stock_directly: false, supervisor_review_required: true });
+      setDoneState({ title: "Transfer Held for Supervisor Review", helper: currentValidation.message, event: reviewEvent });
+      toast({ description: "Transfer held for supervisor review", duration: 1500 });
+      return;
     }
-    const transfer = buildQueuedTransfer(draft, decision);
+
     const event = createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_COMPLETED, {
       source_module: "Transfers",
-      status: currentValidation.review ? "queued_review_required" : "queued_for_sync",
+      status: "queued_for_sync",
       item_name: transfer.itemName,
       transfer_id: transfer.transferId,
       transfer_type: transfer.transferType,
@@ -105,6 +142,7 @@ export default function Transfers() {
       destination_location_label: transfer.destinationLocationLabel,
       quantity: transfer.quantity,
       unit_type: transfer.unitType,
+      reason: draft.reason || transfer.reason,
       sku: transfer.sku,
       barcode: transfer.barcode,
       gtin: transfer.gtin,
@@ -114,11 +152,11 @@ export default function Transfers() {
       lot_id: transfer.lotId,
       applies_stock_directly: false,
       official_inventory_applies_after_sync: true,
-      ...buildDecisionLinkedPayload(decision, decisionEvent),
+      ...linkedPayload,
     });
     createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_QUEUED_FOR_SYNC, { source_module: "Transfers", status: "queued", item_name: transfer.itemName, transfer_id: transfer.transferId, transfer_type: transfer.transferType, applies_stock_directly: false });
-    setDoneState({ title: currentValidation.review ? "Transfer Queued · Review Required" : "Transfer Queued", helper: currentValidation.review ? currentValidation.message : "Transfer event queued. Official stock movement is applied by Invyra Inventory after sync.", event });
-    toast({ description: currentValidation.review ? "Transfer queued for review" : "Transfer queued", duration: 1500 });
+    setDoneState({ title: "Transfer Queued", helper: "Transfer event queued. Official stock movement is applied by Invyra Inventory after sync.", event });
+    toast({ description: "Transfer queued", duration: 1500 });
   };
 
   const reset = () => {
@@ -147,6 +185,11 @@ export default function Transfers() {
             {TRANSFER_TYPE_OPTIONS.map((option) => <button key={option.id} type="button" onClick={() => selectTransferType(option.id)} className={`${SOFT_BUTTON} ${draft.transferType === option.id ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground active:bg-border"}`}><span className="block">{option.label}</span><span className="block text-[11px] font-semibold opacity-80 mt-1">{option.helper}</span></button>)}
           </div>
         </TransferStepCard>
+        {reasonOptions.length > 0 && <TransferStepCard title="Reason" helper="Required for damaged, expiry, freshness, and promo display transfers." icon={ClipboardCheck}>
+          <div className="grid grid-cols-2 gap-2">
+            {reasonOptions.map((reason) => <button key={reason.id} type="button" onClick={() => selectReason(reason.id)} className={`${SOFT_BUTTON} ${draft.reason === reason.id ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground active:bg-border"}`}>{reason.label}</button>)}
+          </div>
+        </TransferStepCard>}
         <TransferStepCard title="Source location" helper="Scan or select where the stock is moving from." icon={MapPin}>
           <LocationButtons selected={draft.sourceLocation} onSelect={selectSource} />
         </TransferStepCard>
