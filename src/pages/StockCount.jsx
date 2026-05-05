@@ -3,11 +3,16 @@ import PageHeader from "../components/scanner/PageHeader";
 import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
 import NumericKeypad from "../components/scanner/NumericKeypad";
 import { CheckCircle2, AlertTriangle } from "lucide-react";
+import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
+import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 
+const COUNT_ITEM = resolveInventoryIdentity("930000000010");
 const MOCK_PRODUCT = {
-  name: "Organic Whole Milk 1L",
-  sku: "SKU-00284710",
-  systemQty: 14,
+  name: COUNT_ITEM?.name || "Rice 5kg",
+  sku: COUNT_ITEM?.sku || "GROC-RICE-5KG",
+  barcode: COUNT_ITEM?.barcode || "930000000010",
+  internalItemId: COUNT_ITEM?.internalItemId || COUNT_ITEM?.id,
+  systemQty: COUNT_ITEM?.stockOnHand ?? COUNT_ITEM?.stock_on_hand ?? 18,
 };
 
 const VARIANCE_REASONS = [
@@ -48,7 +53,21 @@ export default function StockCount() {
 
   const handleVarianceConfirm = () => setStep(STEPS.CONFIRM);
 
-  const handleFinalConfirm = () => setStep(STEPS.DONE);
+  const handleFinalConfirm = () => {
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.STOCK_COUNT_SUBMITTED, {
+      source_module: "Stock Count",
+      sku: MOCK_PRODUCT.sku,
+      barcode: MOCK_PRODUCT.barcode,
+      internal_item_id: MOCK_PRODUCT.internalItemId,
+      item_name: MOCK_PRODUCT.name,
+      system_quantity: MOCK_PRODUCT.systemQty,
+      counted_quantity: countedNum,
+      variance,
+      variance_reason: reason,
+      status: hasVariance ? "variance_recorded" : "count_confirmed",
+    });
+    setStep(STEPS.DONE);
+  };
 
   const resetAll = () => {
     setCounted("");

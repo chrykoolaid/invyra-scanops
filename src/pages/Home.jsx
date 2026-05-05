@@ -13,7 +13,7 @@ import {
   ListChecks,
   Printer,
   ArrowLeftRight,
-  WifiOff,
+  Database,
 } from "lucide-react";
 
 const tiles = [
@@ -28,7 +28,7 @@ const tiles = [
   { icon: Clock, label: "Expiry Check", to: "/expiry-check", active: true },
   { icon: Printer, label: "Labels", to: null, active: false },
   { icon: ArrowLeftRight, label: "Transfers", to: null, active: false },
-  { icon: WifiOff, label: "Offline Sync", to: null, active: false },
+  { icon: Database, label: "Inventory Sync", to: "/inventory-sync", active: true },
 ];
 
 export default function Home() {

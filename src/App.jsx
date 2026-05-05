@@ -16,6 +16,7 @@ import Markdowns from './pages/Markdowns';
 import Waste from './pages/Waste';
 import ExpiryCheck from './pages/ExpiryCheck';
 import Tasks from './pages/Tasks';
+import InventorySync from './pages/InventorySync';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -54,6 +55,7 @@ const AuthenticatedApp = () => {
       <Route path="/waste" element={<Waste />} />
       <Route path="/expiry-check" element={<ExpiryCheck />} />
       <Route path="/tasks" element={<Tasks />} />
+      <Route path="/inventory-sync" element={<InventorySync />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

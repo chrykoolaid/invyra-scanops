@@ -4,7 +4,7 @@ import { CheckCircle2, Home, Printer, RotateCw, Tags } from "lucide-react";
 import PageHeader from "../components/scanner/PageHeader";
 import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
 import { useToast } from "@/components/ui/use-toast";
-import { MARKDOWN_SCAN_ITEM } from "../lib/scanOpsInventoryFixtures";
+import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { getMarkdownRecommendation, MARKDOWN_REASONS } from "../lib/scanOpsRules";
 
@@ -24,7 +24,7 @@ export default function Markdowns() {
   const recommendation = useMemo(() => getMarkdownRecommendation(item, reasonId), [item, reasonId]);
 
   const startScan = () => {
-    setItem(MARKDOWN_SCAN_ITEM);
+    setItem(resolveInventoryIdentity("930000000004"));
     setReasonId("near_expiry");
     setDoneState(null);
     setLastMarkdownEvent(null);
@@ -45,9 +45,9 @@ export default function Markdowns() {
       barcode: item.barcode,
       item_name: item.name,
       department: item.department,
-      stock_location: item.location,
-      expiry_status: item.expiry_status,
-      current_price: item.current_price,
+      stock_location: item.shelfLocation || item.location,
+      expiry_status: item.freshnessStatus || item.expiry_status,
+      current_price: item.currentPrice ?? item.currentPrice ?? item.current_price,
       markdown_reason: recommendation.reason.label,
       markdown_reason_id: recommendation.reason.id,
       suggested_discount_percent: recommendation.discountPercent,
@@ -74,7 +74,7 @@ export default function Markdowns() {
       item_name: item.name,
       linked_markdown_event_id: lastMarkdownEvent?.event_id || null,
       label_type: "Markdown shelf label",
-      current_price: item.current_price,
+      current_price: item.currentPrice ?? item.currentPrice ?? item.current_price,
       markdown_price: recommendation.newPrice,
       discount_percent: recommendation.discountPercent,
       status: "requested",
@@ -128,12 +128,12 @@ function ItemSummary({ item, recommendation }) {
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground font-mono break-all">{item.sku} · {item.barcode}</p>
           <h2 className="text-lg font-bold text-foreground leading-snug mt-1 break-words">{item.name}</h2>
-          <p className="text-sm text-muted-foreground mt-2 break-words">{item.location} · {item.aisle} · {item.bay}</p>
+          <p className="text-sm text-muted-foreground mt-2 break-words">{item.shelfLocation || item.location} · {item.aisle} · {item.bay}</p>
           <div className="mt-4 grid grid-cols-2 gap-3">
-            <Metric label="Current" value={`${item.currency}${item.current_price}`} />
+            <Metric label="Current" value={`${item.currency}${item.currentPrice ?? item.currentPrice ?? item.current_price}`} />
             <Metric label="Suggested" value={`${recommendation.discountPercent}% off`} />
-            <Metric label="Expiry" value={item.expiry_status} small />
-            <Metric label="Shelf stock" value={item.shelf_stock} />
+            <Metric label="Expiry" value={item.freshnessStatus || item.expiry_status} small />
+            <Metric label="Shelf stock" value={item.shelfStock ?? item.shelf_stock} />
           </div>
         </div>
       </div>
@@ -157,7 +157,7 @@ function PricePanel({ item, recommendation }) {
     <section className="bg-primary/5 rounded-2xl border border-primary/20 p-5 min-w-0">
       <p className="text-xs font-bold text-primary uppercase tracking-wider">New markdown price</p>
       <div className="flex items-end justify-between gap-4 mt-2">
-        <div><p className="text-3xl font-black text-foreground">{item.currency}{recommendation.newPrice}</p><p className="text-sm text-muted-foreground mt-1">Was {item.currency}{item.current_price}</p></div>
+        <div><p className="text-3xl font-black text-foreground">{item.currency}{recommendation.newPrice}</p><p className="text-sm text-muted-foreground mt-1">Was {item.currency}{item.currentPrice ?? item.current_price}</p></div>
         <div className="text-right min-w-0"><p className="text-sm font-bold text-foreground">{recommendation.discountPercent}%</p><p className="text-xs text-muted-foreground">suggested discount</p></div>
       </div>
       {recommendation.approvalRequired && <p className="text-xs font-semibold text-destructive mt-4">Supervisor approval required for this reason.</p>}

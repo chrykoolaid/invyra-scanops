@@ -4,7 +4,7 @@ import PageHeader from "../components/scanner/PageHeader";
 import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
 import { useToast } from "@/components/ui/use-toast";
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Home, PackageCheck, PackageSearch, Printer, RotateCw, Truck } from "lucide-react";
-import { GAP_SCAN_SCENARIOS } from "../lib/scanOpsInventoryFixtures";
+import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { classifyGap, formatActionLabel, GAP_TYPES } from "../lib/scanOpsRules";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 
@@ -19,6 +19,36 @@ const GAP_TYPE_LABELS = {
   [GAP_TYPES.SHELF_LABEL_PLANOGRAM_ISSUE]: "Shelf label / planogram issue",
   [GAP_TYPES.SUPPLIER_PENDING]: "Supplier pending",
 };
+
+function scenarioFromIdentity(input, buttonLabel, overrides = {}) {
+  const item = resolveInventoryIdentity(input);
+  return {
+    ...item,
+    id: overrides.id || item?.internalItemId || item?.id || input,
+    buttonLabel,
+    name: item?.name || input,
+    sku: item?.sku || input,
+    barcode: item?.barcode || item?.plu || input,
+    shelf_stock: item?.shelfStock ?? item?.shelf_stock ?? 0,
+    backroom_stock: item?.backroomStock ?? item?.backroom_stock ?? 0,
+    pending_delivery_qty: item?.pendingDeliveryQty ?? item?.pending_delivery_qty ?? 0,
+    pending_delivery_eta: item?.pendingDeliveryEta ?? item?.pending_delivery_eta ?? null,
+    minimum_shelf_qty: item?.minimumStock ?? item?.minimum_shelf_qty ?? 0,
+    aisle: item?.aisle || "—",
+    bay: item?.bay || "—",
+    shelf: item?.shelf || item?.shelfLocation || "—",
+    planogram_status: item?.planogramStatus || item?.planogram_status || "OK",
+    ...overrides,
+  };
+}
+
+const GAP_SCAN_SCENARIOS = [
+  scenarioFromIdentity("930000000001", "Backroom available"),
+  scenarioFromIdentity("930000000002", "True out of stock"),
+  scenarioFromIdentity("930000000004", "Supplier pending"),
+  scenarioFromIdentity("4011", "Produce PLU gap", { shelf_stock: 0, backroom_stock: 24, minimum_shelf_qty: 20 }),
+  { id: "label-planogram-issue", buttonLabel: "Label / planogram issue", name: "Unknown / Mismatched Shelf Label", sku: "UNLINKED-LABEL", barcode: "A4-B2-03", shelf_stock: null, backroom_stock: null, pending_delivery_qty: null, minimum_shelf_qty: null, aisle: "Aisle 4", bay: "Bay 2", shelf: "Label A4-B2-03", planogram_status: "MISMATCH", label_issue: true },
+];
 
 export default function GapScan() {
   const navigate = useNavigate();
@@ -47,6 +77,11 @@ export default function GapScan() {
       sku: item.sku,
       item_name: item.name,
       barcode: item.barcode,
+      gtin: item.gtin,
+      plu: item.plu,
+      scale_code: item.scaleCode,
+      internal_item_id: item.internalItemId || item.id,
+      sell_type: item.sellType,
       aisle: item.aisle,
       bay: item.bay,
       shelf: item.shelf,

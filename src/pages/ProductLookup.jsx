@@ -1,97 +1,19 @@
 import React from "react";
+import { useParams } from "react-router-dom";
 import PageHeader from "../components/scanner/PageHeader";
 import InfoRow from "../components/scanner/InfoRow";
 import BottomActionBar from "../components/scanner/BottomActionBar";
-import {
-  DollarSign,
-  Package,
-  MapPin,
-  Clock,
-  ClipboardList,
-  Tags,
-  Trash2,
-} from "lucide-react";
-
-const product = {
-  name: "Organic Whole Milk 1L",
-  sku: "SKU-00284710",
-  barcode: "5012345678901",
-  price: "$4.29",
-  shelfQty: 6,
-  backroomQty: 24,
-  aisle: "Aisle 3 · Bay 12 · Shelf 2",
-  expiryDays: 5,
-};
+import { Barcode, ClipboardList, Clock, DollarSign, MapPin, Package, Scale, Tags, Trash2 } from "lucide-react";
+import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
+import { getIdentityDisplay } from "../lib/productIdentityResolver";
 
 export default function ProductLookup() {
-  const expiryUrgent = product.expiryDays <= 7;
-
-  return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <PageHeader title="Product Info" />
-
-      <main className="flex-1 px-4 py-5 pb-28 space-y-4 overflow-y-auto">
-        {/* Product Identity */}
-        <section className="bg-card rounded-2xl border border-border p-5">
-          <h2 className="text-lg font-bold text-foreground leading-snug">
-            {product.name}
-          </h2>
-          <p className="text-xs text-muted-foreground mt-1 font-mono">
-            {product.sku} · {product.barcode}
-          </p>
-        </section>
-
-        {/* Price */}
-        <section className="bg-card rounded-2xl border border-border px-5 py-1">
-          <InfoRow icon={DollarSign} label="Price" value={product.price} />
-        </section>
-
-        {/* Stock */}
-        <section className="bg-card rounded-2xl border border-border px-5 py-1">
-          <div className="flex items-center gap-2 pt-3 pb-1">
-            <Package className="w-4 h-4 text-muted-foreground" />
-            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Stock</span>
-          </div>
-          <div className="divide-y divide-border">
-            <div className="flex items-center justify-between py-3">
-              <span className="text-sm text-muted-foreground pl-7">Shelf</span>
-              <span className="text-sm font-semibold text-foreground">{product.shelfQty}</span>
-            </div>
-            <div className="flex items-center justify-between py-3">
-              <span className="text-sm text-muted-foreground pl-7">Backroom</span>
-              <span className="text-sm font-semibold text-foreground">{product.backroomQty}</span>
-            </div>
-          </div>
-        </section>
-
-        {/* Location */}
-        <section className="bg-card rounded-2xl border border-border px-5 py-1">
-          <InfoRow icon={MapPin} label="Location" value={product.aisle} />
-        </section>
-
-        {/* Expiry */}
-        <section className={`rounded-2xl border px-5 py-1 ${
-          expiryUrgent 
-            ? "bg-destructive/5 border-destructive/20" 
-            : "bg-card border-border"
-        }`}>
-          <InfoRow
-            icon={Clock}
-            label="Expiry"
-            value={`${product.expiryDays} days`}
-            highlight={expiryUrgent}
-          />
-        </section>
-      </main>
-
-      {/* Bottom Actions */}
-      <BottomActionBar
-        actions={[
-          { icon: ClipboardList, label: "Count", variant: "primary" },
-          { icon: Tags, label: "Markdown" },
-          { icon: Trash2, label: "Waste" },
-        ]}
-      />
-    </div>
-  );
+  const { id } = useParams();
+  const product = resolveInventoryIdentity(id === "demo" ? "930000000004" : id) || resolveInventoryIdentity("4011");
+  const displayPrice = product?.pricePerKg ? `${product.currency}${product.pricePerKg}/kg` : `${product?.currency || "₱"}${product?.currentPrice ?? product?.current_price ?? "—"}`;
+  const shelfQty = product?.shelfStock ?? product?.shelf_stock ?? "—";
+  const backroomQty = product?.backroomStock ?? product?.backroom_stock ?? "—";
+  const stockUnit = product?.unitType || "each";
+  return <div className="min-h-screen bg-background flex flex-col overflow-x-hidden"><PageHeader title="Product Info" subtitle="Stage G · Inventory snapshot lookup" /><main className="flex-1 px-4 py-5 pb-28 space-y-4 overflow-y-auto overflow-x-hidden"><section className="bg-card rounded-2xl border border-border p-5 min-w-0"><h2 className="text-lg font-bold text-foreground leading-snug break-words">{product?.name || "Product not found"}</h2><p className="text-xs text-muted-foreground mt-1 font-mono break-all">{getIdentityDisplay(product)}</p><div className="mt-4 grid grid-cols-2 gap-3"><Metric label="Sell type" value={product?.sellType || "—"} /><Metric label="Unit" value={stockUnit} /><Metric label="Department" value={product?.department || "—"} /><Metric label="Category" value={product?.category || "—"} /></div></section><section className="bg-card rounded-2xl border border-border px-5 py-1"><InfoRow icon={DollarSign} label="Price" value={displayPrice} /></section><section className="bg-card rounded-2xl border border-border px-5 py-1"><div className="flex items-center gap-2 pt-3 pb-1"><Package className="w-4 h-4 text-muted-foreground" /><span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Stock from Inventory Snapshot</span></div><div className="divide-y divide-border"><div className="flex items-center justify-between gap-3 py-3"><span className="text-sm text-muted-foreground pl-7">Shelf</span><span className="text-sm font-semibold text-foreground text-right">{shelfQty} {stockUnit}</span></div><div className="flex items-center justify-between gap-3 py-3"><span className="text-sm text-muted-foreground pl-7">Backroom</span><span className="text-sm font-semibold text-foreground text-right">{backroomQty} {stockUnit}</span></div></div></section><section className="bg-card rounded-2xl border border-border px-5 py-1"><InfoRow icon={MapPin} label="Location" value={product?.shelfLocation || product?.location || "—"} /></section><section className="bg-card rounded-2xl border border-border px-5 py-1"><InfoRow icon={Barcode} label="Identity resolver" value={product?.plu ? "Resolved by PLU / scale code" : product?.gtin ? "Resolved by GTIN / barcode" : "Resolved by SKU / item ID"} /></section><section className="bg-card rounded-2xl border border-border px-5 py-1"><InfoRow icon={Clock} label="Freshness" value={product?.freshnessStatus || product?.expiry_status || "No date issue"} /></section>{product?.plu && <section className="bg-primary/5 rounded-2xl border border-primary/20 px-5 py-4 flex items-start gap-3 min-w-0"><Scale className="w-5 h-5 text-primary shrink-0 mt-0.5" /><div className="min-w-0"><p className="text-sm font-bold text-foreground">Produce / PLU item</p><p className="text-xs text-muted-foreground mt-1 break-words">Found by PLU {product.plu}, scale code {product.scaleCode}, or internal SKU {product.sku}.</p></div></section>}</main><BottomActionBar actions={[{ icon: ClipboardList, label: "Count", variant: "primary" }, { icon: Tags, label: "Markdown" }, { icon: Trash2, label: "Waste" }]} /></div>;
 }
+function Metric({ label, value }) { return <div className="rounded-2xl bg-secondary/60 px-3 py-3 min-w-0"><p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{label}</p><p className="text-sm font-bold text-foreground mt-1 break-words">{value}</p></div>; }

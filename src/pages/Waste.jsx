@@ -4,7 +4,7 @@ import { AlertTriangle, CheckCircle2, Home, Minus, Plus, RotateCw, Trash2 } from
 import PageHeader from "../components/scanner/PageHeader";
 import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
 import { useToast } from "@/components/ui/use-toast";
-import { WASTE_SCAN_ITEM } from "../lib/scanOpsInventoryFixtures";
+import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { getWasteDecision, WASTE_REASONS } from "../lib/scanOpsRules";
 
@@ -24,7 +24,7 @@ export default function Waste() {
   const decision = useMemo(() => getWasteDecision(item, reasonId, quantity), [item, reasonId, quantity]);
 
   const startScan = () => {
-    setItem(WASTE_SCAN_ITEM);
+    setItem(resolveInventoryIdentity("930000000008"));
     setReasonId("expired");
     setQuantity(1);
     setDoneState(null);
@@ -37,7 +37,7 @@ export default function Waste() {
     setDoneState(null);
     setStep(STEPS.SCAN);
   };
-  const adjustQuantity = (delta) => setQuantity((current) => Math.max(1, Math.min(item?.stock_on_hand || 99, current + delta)));
+  const adjustQuantity = (delta) => setQuantity((current) => Math.max(1, Math.min(item?.stockOnHand ?? item?.stock_on_hand ?? 99, current + delta)));
   const recordWaste = () => {
     if (!item || !decision.reason) return;
     const eventType = decision.approvalRequired ? SCANOPS_EVENT_TYPES.WASTE_APPROVAL_REQUIRED : SCANOPS_EVENT_TYPES.WASTE_RECORDED;
@@ -47,12 +47,12 @@ export default function Waste() {
       barcode: item.barcode,
       item_name: item.name,
       department: item.department,
-      stock_location: item.location,
+      stock_location: item.shelfLocation || item.location,
       waste_reason: decision.reason.label,
       waste_reason_id: decision.reason.id,
       demand_logic_treatment: decision.demandLogic,
       quantity: decision.quantity,
-      unit_cost: item.unit_cost,
+      unit_cost: item.unitCost ?? item.unit_cost,
       estimated_value: decision.estimatedValue,
       approval_required: decision.approvalRequired,
       status: decision.approvalRequired ? "approval_required" : "recorded",
@@ -126,8 +126,8 @@ function ItemSummary({ item, decision }) {
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground font-mono break-all">{item.sku} · {item.barcode}</p>
           <h2 className="text-lg font-bold text-foreground leading-snug mt-1 break-words">{item.name}</h2>
-          <p className="text-sm text-muted-foreground mt-2 break-words">{item.location} · {item.aisle} · {item.bay}</p>
-          <div className="mt-4 grid grid-cols-2 gap-3"><Metric label="Stock" value={item.stock_on_hand} /><Metric label="Expiry" value={item.expiry_status} small /><Metric label="Unit cost" value={`${item.currency}${item.unit_cost}`} /><Metric label="Risk" value={decision.approvalRequired ? "Review" : "Normal"} /></div>
+          <p className="text-sm text-muted-foreground mt-2 break-words">{item.shelfLocation || item.location} · {item.aisle} · {item.bay}</p>
+          <div className="mt-4 grid grid-cols-2 gap-3"><Metric label="Stock" value={item.stockOnHand ?? item.stock_on_hand} /><Metric label="Expiry" value={item.freshnessStatus || item.expiry_status} small /><Metric label="Unit cost" value={`${item.currency}${item.unitCost ?? item.unit_cost}`} /><Metric label="Risk" value={decision.approvalRequired ? "Review" : "Normal"} /></div>
         </div>
       </div>
     </section>

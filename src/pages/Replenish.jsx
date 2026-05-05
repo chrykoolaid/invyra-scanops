@@ -5,7 +5,7 @@ import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
 import NumericKeypad from "../components/scanner/NumericKeypad";
 import { useToast } from "@/components/ui/use-toast";
 import { AlertTriangle, CheckCircle2, Home, Minus, PackageCheck, Plus, RotateCcw } from "lucide-react";
-import { REPLENISHMENT_SCAN_ITEM } from "../lib/scanOpsInventoryFixtures";
+import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { formatActionLabel, getReplenishmentRecommendation } from "../lib/scanOpsRules";
 
@@ -30,7 +30,7 @@ export default function Replenish() {
   const quantityNumber = Math.max(0, parseInt(quantity || "0", 10) || 0);
 
   const startScan = () => {
-    const scanned = REPLENISHMENT_SCAN_ITEM;
+    const scanned = resolveInventoryIdentity("930000000001");
     setItem(scanned);
     setQuantity(String(Math.min(scanned.minimum_shelf_qty, scanned.backroom_stock)));
     setCreatedEvent(null);
@@ -60,6 +60,11 @@ export default function Replenish() {
       sku: item.sku,
       item_name: item.name,
       barcode: item.barcode,
+      gtin: item.gtin,
+      plu: item.plu,
+      scale_code: item.scaleCode,
+      internal_item_id: item.internalItemId || item.id,
+      sell_type: item.sellType,
       aisle: item.aisle,
       bay: item.bay,
       shelf: item.shelf,
@@ -84,6 +89,8 @@ export default function Replenish() {
       source_module: "Replenish",
       sku: item.sku,
       item_name: item.name,
+      barcode: item.barcode,
+      internal_item_id: item.internalItemId || item.id,
       linked_event_id: createdEvent.event_id,
       quantity_requested: quantityNumber,
       quantity_completed: quantityNumber,

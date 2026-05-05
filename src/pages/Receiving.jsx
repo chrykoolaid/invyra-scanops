@@ -3,6 +3,8 @@ import PageHeader from "../components/scanner/PageHeader";
 import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
 import NumericKeypad from "../components/scanner/NumericKeypad";
 import { CheckCircle2, ChevronRight, Minus, Plus } from "lucide-react";
+import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
+import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 
 const SUPPLIERS = [
   { id: 1, name: "Fresh Fields Co.", ref: "PO-2847" },
@@ -10,10 +12,13 @@ const SUPPLIERS = [
   { id: 3, name: "Green Harvest", ref: "PO-2849" },
 ];
 
+const RECEIVING_ITEM = resolveInventoryIdentity("930000000004");
 const MOCK_PRODUCT = {
-  name: "Organic Whole Milk 1L",
-  sku: "SKU-00284710",
-  expectedQty: 24,
+  name: RECEIVING_ITEM?.name || "Greek Yoghurt 1kg",
+  sku: RECEIVING_ITEM?.sku || "DAIRY-GREEK-YOGHURT-1KG",
+  barcode: RECEIVING_ITEM?.barcode || "930000000004",
+  internalItemId: RECEIVING_ITEM?.internalItemId || RECEIVING_ITEM?.id,
+  expectedQty: RECEIVING_ITEM?.pendingDeliveryQty ?? RECEIVING_ITEM?.pending_delivery_qty ?? 24,
 };
 
 const ISSUES = ["Damaged", "Missing", "Extra"];
@@ -222,7 +227,24 @@ export default function Receiving() {
             </div>
 
             <button
-              onClick={() => setStep(STEPS.DONE)}
+              onClick={() => {
+                createScanOpsEvent(SCANOPS_EVENT_TYPES.RECEIVING_CONFIRMED, {
+                  source_module: "Receiving",
+                  supplier_id: supplier?.id,
+                  supplier_name: supplier?.name,
+                  purchase_order_ref: supplier?.ref,
+                  sku: MOCK_PRODUCT.sku,
+                  barcode: MOCK_PRODUCT.barcode,
+                  internal_item_id: MOCK_PRODUCT.internalItemId,
+                  item_name: MOCK_PRODUCT.name,
+                  expected_quantity: MOCK_PRODUCT.expectedQty,
+                  received_quantity: receivedNum,
+                  receiving_issues: selectedIssues,
+                  expiry_capture: expiry,
+                  status: selectedIssues.length ? "received_with_issues" : "received",
+                });
+                setStep(STEPS.DONE);
+              }}
               className="w-full py-4 rounded-2xl bg-accent text-accent-foreground font-bold text-sm active:scale-[0.98] transition-all"
             >
               Confirm Receipt
