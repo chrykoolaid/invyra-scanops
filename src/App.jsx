@@ -8,6 +8,8 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Home from './pages/Home';
 import Scan from './pages/Scan';
 import ProductLookup from './pages/ProductLookup';
+import StockCount from './pages/StockCount';
+import Receiving from './pages/Receiving';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -38,6 +40,8 @@ const AuthenticatedApp = () => {
       <Route path="/" element={<Home />} />
       <Route path="/scan" element={<Scan />} />
       <Route path="/product/:id" element={<ProductLookup />} />
+      <Route path="/stock-count" element={<StockCount />} />
+      <Route path="/receiving" element={<Receiving />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

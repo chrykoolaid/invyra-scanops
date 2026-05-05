@@ -16,8 +16,8 @@ import {
 
 const tiles = [
   { icon: Search, label: "Product Lookup", to: "/scan", active: true },
-  { icon: ClipboardList, label: "Stock Count", to: null, active: false },
-  { icon: PackageOpen, label: "Receiving", to: null, active: false },
+  { icon: ClipboardList, label: "Stock Count", to: "/stock-count", active: true },
+  { icon: PackageOpen, label: "Receiving", to: "/receiving", active: true },
   { icon: RefreshCw, label: "Replenish", to: null, active: false },
   { icon: Tags, label: "Markdowns", to: null, active: false },
   { icon: Trash2, label: "Waste", to: null, active: false },
