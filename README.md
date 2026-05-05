@@ -37,3 +37,18 @@ Open [Base44.com](http://Base44.com) and click on Publish.
 Documentation: [https://docs.base44.com/Integrations/Using-GitHub](https://docs.base44.com/Integrations/Using-GitHub)
 
 Support: [https://app.base44.com/support](https://app.base44.com/support)
+
+## Invyra ScanOps stage status
+
+Current package: Stage D — Markdowns + Waste.
+
+Active scanner workflows:
+- Product Lookup
+- Stock Count
+- Receiving
+- Replenish
+- Gap Scan
+- Markdowns
+- Waste
+
+Stage D adds event-driven markdown and waste workflows only. Later-stage modules such as Expiry/Freshness, Tasks, Offline Sync, Labels, Transfers, and hardening remain intentionally inactive.

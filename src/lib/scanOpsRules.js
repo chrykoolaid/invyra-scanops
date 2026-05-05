@@ -13,6 +13,28 @@ export const RECOMMENDED_ACTIONS = {
   NO_ACTION: "NO_ACTION",
 };
 
+export const MARKDOWN_REASONS = [
+  { id: "near_expiry", label: "Near expiry", suggestedDiscount: 30, approvalRequired: false },
+  { id: "damaged_packaging", label: "Damaged packaging", suggestedDiscount: 20, approvalRequired: false },
+  { id: "clearance", label: "Clearance", suggestedDiscount: 25, approvalRequired: false },
+  { id: "overstock", label: "Overstock", suggestedDiscount: 15, approvalRequired: false },
+  { id: "seasonal_clearance", label: "Seasonal clearance", suggestedDiscount: 35, approvalRequired: false },
+  { id: "discontinued", label: "Discontinued", suggestedDiscount: 40, approvalRequired: true },
+  { id: "manager_special", label: "Manager special", suggestedDiscount: 50, approvalRequired: true },
+];
+
+export const WASTE_REASONS = [
+  { id: "expired", label: "Expired", demandLogic: "reportable_excluded_from_reorder", approvalRisk: "normal" },
+  { id: "spoiled", label: "Spoiled", demandLogic: "reportable_excluded_from_reorder", approvalRisk: "normal" },
+  { id: "damaged", label: "Damaged", demandLogic: "special_handling", approvalRisk: "normal" },
+  { id: "dropped_broken", label: "Dropped/broken", demandLogic: "special_handling", approvalRisk: "normal" },
+  { id: "temperature_breach", label: "Temperature breach", demandLogic: "reportable_excluded_from_reorder", approvalRisk: "high" },
+  { id: "theft_shrink", label: "Theft/shrink", demandLogic: "special_handling", approvalRisk: "high" },
+  { id: "customer_return_unsellable", label: "Return unsellable", demandLogic: "reportable_excluded_from_reorder", approvalRisk: "normal" },
+  { id: "production_use", label: "Production use", demandLogic: "special_handling", approvalRisk: "high" },
+  { id: "sampling_promos", label: "Sampling/promos", demandLogic: "special_handling", approvalRisk: "high" },
+];
+
 export function getReplenishmentRecommendation(item) {
   if (!item) {
     return { recommended_action: RECOMMENDED_ACTIONS.NO_ACTION, title: "Scan an item", helper: "Scan a shelf item or shelf label to check stock position." };
@@ -40,6 +62,35 @@ export function classifyGap(item) {
     return { gap_type: GAP_TYPES.TRUE_OUT_OF_STOCK, recommended_action: RECOMMENDED_ACTIONS.REQUEST_REORDER, title: "True out of stock", helper: "No shelf, backroom, or pending delivery stock is available." };
   }
   return { gap_type: null, recommended_action: RECOMMENDED_ACTIONS.NO_ACTION, title: "No gap action required", helper: "The scanned item does not currently look like a gap." };
+}
+
+export function getMarkdownRecommendation(item, reasonId) {
+  const reason = MARKDOWN_REASONS.find((entry) => entry.id === reasonId) || MARKDOWN_REASONS[0];
+  const currentPrice = Number(item?.current_price || 0);
+  const discountPercent = reason.suggestedDiscount;
+  const newPrice = Math.max(0, Math.round(currentPrice * (1 - discountPercent / 100)));
+  return {
+    reason,
+    discountPercent,
+    newPrice,
+    approvalRequired: reason.approvalRequired || discountPercent > 40,
+    labelRequired: true,
+  };
+}
+
+export function getWasteDecision(item, reasonId, quantity) {
+  const reason = WASTE_REASONS.find((entry) => entry.id === reasonId) || null;
+  const qty = Math.max(1, Number(quantity || 1));
+  const unitCost = Number(item?.unit_cost || 0);
+  const estimatedValue = qty * unitCost;
+  const approvalRequired = Boolean(reason?.approvalRisk === "high" || qty >= 5 || estimatedValue >= 500);
+  return {
+    reason,
+    quantity: qty,
+    estimatedValue,
+    approvalRequired,
+    demandLogic: reason?.demandLogic || "reportable",
+  };
 }
 
 export function formatActionLabel(action) {

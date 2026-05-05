@@ -35,6 +35,10 @@ export const SCANOPS_EVENT_TYPES = {
   PLANOGRAM_ISSUE_FLAGGED: "PLANOGRAM_ISSUE_FLAGGED",
   SUPPLIER_PENDING_CONFIRMED: "SUPPLIER_PENDING_CONFIRMED",
   REPLENISHMENT_CANCELLED: "REPLENISHMENT_CANCELLED",
+  MARKDOWN_APPLIED: "MARKDOWN_APPLIED",
+  LABEL_PRINT_REQUESTED: "LABEL_PRINT_REQUESTED",
+  WASTE_RECORDED: "WASTE_RECORDED",
+  WASTE_APPROVAL_REQUIRED: "WASTE_APPROVAL_REQUIRED",
 };
 
 export function createScanOpsEvent(eventType, payload = {}) {
@@ -52,7 +56,7 @@ export function createScanOpsEvent(eventType, payload = {}) {
     ...payload,
   };
   const events = safeReadEvents();
-  safeWriteEvents([event, ...events].slice(0, 50));
+  safeWriteEvents([event, ...events].slice(0, 80));
   return event;
 }
 

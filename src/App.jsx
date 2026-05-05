@@ -12,6 +12,8 @@ import StockCount from './pages/StockCount';
 import Receiving from './pages/Receiving';
 import Replenish from './pages/Replenish';
 import GapScan from './pages/GapScan';
+import Markdowns from './pages/Markdowns';
+import Waste from './pages/Waste';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -46,6 +48,8 @@ const AuthenticatedApp = () => {
       <Route path="/receiving" element={<Receiving />} />
       <Route path="/replenish" element={<Replenish />} />
       <Route path="/gap-scan" element={<GapScan />} />
+      <Route path="/markdowns" element={<Markdowns />} />
+      <Route path="/waste" element={<Waste />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

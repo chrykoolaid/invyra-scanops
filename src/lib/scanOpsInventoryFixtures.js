@@ -86,3 +86,38 @@ export const GAP_SCAN_SCENARIOS = [
     label_issue: true,
   },
 ];
+
+export const MARKDOWN_SCAN_ITEM = {
+  id: "markdown-yoghurt-1kg",
+  name: "Greek Yoghurt 1kg",
+  sku: "930000000004",
+  barcode: "930000000004",
+  current_price: 220,
+  currency: "₱",
+  expiry_status: "Expires tomorrow",
+  expiry_days: 1,
+  shelf_stock: 9,
+  backroom_stock: 12,
+  department: "Dairy",
+  aisle: "Aisle 2",
+  bay: "Bay 8",
+  shelf: "Shelf 1",
+  location: "Chilled dairy bay",
+};
+
+export const WASTE_SCAN_ITEM = {
+  id: "waste-chicken-1kg",
+  name: "Chicken Breast 1kg",
+  sku: "930000000008",
+  barcode: "930000000008",
+  unit_cost: 185,
+  currency: "₱",
+  stock_on_hand: 22,
+  department: "Fresh Meat",
+  aisle: "Fresh Zone",
+  bay: "Meat Case 3",
+  shelf: "Tray 2",
+  location: "Chilled meat case",
+  expiry_status: "Use by today",
+  cold_chain_required: true,
+};
