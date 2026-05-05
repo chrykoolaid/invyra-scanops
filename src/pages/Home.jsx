@@ -21,7 +21,7 @@ const tiles = [
   { icon: RefreshCw, label: "Replenish", to: "/replenish", active: true },
   { icon: Tags, label: "Markdowns", to: "/markdowns", active: true },
   { icon: Trash2, label: "Waste", to: "/waste", active: true },
-  { icon: Clock, label: "Expiry Check", to: null, active: false },
+  { icon: Clock, label: "Expiry Check", to: "/expiry-check", active: true },
   { icon: ScanBarcode, label: "Gap Scan", to: "/gap-scan", active: true },
   { icon: Printer, label: "Labels", to: null, active: false },
   { icon: ArrowLeftRight, label: "Transfers", to: null, active: false },

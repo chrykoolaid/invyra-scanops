@@ -40,7 +40,7 @@ Support: [https://app.base44.com/support](https://app.base44.com/support)
 
 ## Invyra ScanOps stage status
 
-Current package: Stage D — Markdowns + Waste.
+Current package: Stage E — Expiry / Freshness Engine v1.
 
 Active scanner workflows:
 - Product Lookup
@@ -50,5 +50,6 @@ Active scanner workflows:
 - Gap Scan
 - Markdowns
 - Waste
+- Expiry Check
 
-Stage D adds event-driven markdown and waste workflows only. Later-stage modules such as Expiry/Freshness, Tasks, Offline Sync, Labels, Transfers, and hardening remain intentionally inactive.
+Stage E adds event-driven expiry and freshness checks only. It records expiry status, freshness condition, and recommendations for markdown, waste, or supervisor review. Later-stage modules such as Tasks, Offline Sync, Labels full engine, Transfers, AI/Decision Engine, and full audit hardening remain intentionally inactive.

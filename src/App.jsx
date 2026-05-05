@@ -14,6 +14,7 @@ import Replenish from './pages/Replenish';
 import GapScan from './pages/GapScan';
 import Markdowns from './pages/Markdowns';
 import Waste from './pages/Waste';
+import ExpiryCheck from './pages/ExpiryCheck';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -50,6 +51,7 @@ const AuthenticatedApp = () => {
       <Route path="/gap-scan" element={<GapScan />} />
       <Route path="/markdowns" element={<Markdowns />} />
       <Route path="/waste" element={<Waste />} />
+      <Route path="/expiry-check" element={<ExpiryCheck />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

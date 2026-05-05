@@ -96,3 +96,158 @@ export function getWasteDecision(item, reasonId, quantity) {
 export function formatActionLabel(action) {
   return String(action || "").toLowerCase().split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
+
+export const EXPIRY_STATUSES = {
+  EXPIRED: "expired",
+  EXPIRES_TODAY: "expires_today",
+  EXPIRES_TOMORROW: "expires_tomorrow",
+  EXPIRES_2_TO_3_DAYS: "expires_2_to_3_days",
+  EXPIRES_4_TO_7_DAYS: "expires_4_to_7_days",
+  SAFE_NO_ACTION: "safe_no_action",
+  NO_EXPIRY_CAPTURED: "no_expiry_captured",
+};
+
+export const FRESHNESS_CONDITIONS = [
+  { id: "good", label: "Good", risk: "normal" },
+  { id: "monitor", label: "Monitor", risk: "monitor" },
+  { id: "near_expiry", label: "Near expiry", risk: "markdown" },
+  { id: "damaged_packaging", label: "Damaged packaging", risk: "markdown" },
+  { id: "poor_appearance", label: "Poor appearance", risk: "review" },
+  { id: "temperature_concern", label: "Temp concern", risk: "review" },
+  { id: "smell_concern", label: "Smell concern", risk: "waste" },
+  { id: "leaking_spoiled", label: "Leaking / spoiled", risk: "waste" },
+  { id: "customer_return_check", label: "Return check", risk: "review" },
+  { id: "needs_supervisor_review", label: "Supervisor review", risk: "review" },
+];
+
+export function getExpiryStatus(expiryDate, currentDate = "2026-05-05") {
+  if (!expiryDate) {
+    return {
+      status: EXPIRY_STATUSES.NO_EXPIRY_CAPTURED,
+      label: "No expiry date captured",
+      daysUntilExpiry: null,
+      severity: "review",
+    };
+  }
+
+  const today = new Date(`${currentDate}T00:00:00`);
+  const expiry = new Date(`${expiryDate}T00:00:00`);
+  if (Number.isNaN(expiry.getTime())) {
+    return {
+      status: EXPIRY_STATUSES.NO_EXPIRY_CAPTURED,
+      label: "No expiry date captured",
+      daysUntilExpiry: null,
+      severity: "review",
+    };
+  }
+
+  const msPerDay = 24 * 60 * 60 * 1000;
+  const daysUntilExpiry = Math.round((expiry - today) / msPerDay);
+
+  if (daysUntilExpiry < 0) return { status: EXPIRY_STATUSES.EXPIRED, label: "Expired", daysUntilExpiry, severity: "block" };
+  if (daysUntilExpiry === 0) return { status: EXPIRY_STATUSES.EXPIRES_TODAY, label: "Expires today", daysUntilExpiry, severity: "urgent" };
+  if (daysUntilExpiry === 1) return { status: EXPIRY_STATUSES.EXPIRES_TOMORROW, label: "Expires tomorrow", daysUntilExpiry, severity: "markdown" };
+  if (daysUntilExpiry <= 3) return { status: EXPIRY_STATUSES.EXPIRES_2_TO_3_DAYS, label: "Expires in 2–3 days", daysUntilExpiry, severity: "monitor" };
+  if (daysUntilExpiry <= 7) return { status: EXPIRY_STATUSES.EXPIRES_4_TO_7_DAYS, label: "Expires in 4–7 days", daysUntilExpiry, severity: "safe" };
+  return { status: EXPIRY_STATUSES.SAFE_NO_ACTION, label: "Safe / no action", daysUntilExpiry, severity: "safe" };
+}
+
+function getCategoryGroup(item) {
+  const value = `${item?.category || ""} ${item?.department || ""}`.toLowerCase();
+  if (value.includes("meat")) return "strict";
+  if (value.includes("seafood")) return "strict";
+  if (value.includes("ready")) return "strict";
+  if (value.includes("produce")) return "condition_led";
+  if (value.includes("dairy")) return "markdown_ok";
+  if (value.includes("bakery")) return "markdown_ok";
+  if (value.includes("deli")) return "markdown_ok";
+  if (value.includes("frozen")) return "date_led";
+  return "date_led";
+}
+
+export function getFreshnessRecommendation(item, expiryStatus, conditionId) {
+  const condition = FRESHNESS_CONDITIONS.find((entry) => entry.id === conditionId) || FRESHNESS_CONDITIONS[0];
+  const categoryGroup = getCategoryGroup(item);
+  const status = expiryStatus?.status || EXPIRY_STATUSES.NO_EXPIRY_CAPTURED;
+  const strict = categoryGroup === "strict";
+
+  if (status === EXPIRY_STATUSES.EXPIRED || condition.risk === "waste") {
+    return {
+      condition,
+      result: "Waste required",
+      recommendedAction: "Send to waste",
+      actionId: "send_to_waste",
+      eventType: "EXPIRY_WASTE_RECOMMENDED",
+      approvalRequired: strict || condition.risk === "waste",
+      helper: strict ? "High-risk fresh category. Remove from sale and route for review." : "Product should be removed from sale and wasted.",
+      demandLogicTreatment: "reportable_excluded_from_reorder",
+    };
+  }
+
+  if (status === EXPIRY_STATUSES.NO_EXPIRY_CAPTURED || condition.risk === "review") {
+    return {
+      condition,
+      result: "Supervisor review required",
+      recommendedAction: "Flag for supervisor",
+      actionId: "flag_for_supervisor",
+      eventType: "FRESHNESS_REVIEW_REQUIRED",
+      approvalRequired: true,
+      helper: "Missing date, condition concern, or borderline freshness needs supervisor review.",
+      demandLogicTreatment: "special_handling",
+    };
+  }
+
+  if (status === EXPIRY_STATUSES.EXPIRES_TODAY) {
+    return {
+      condition,
+      result: strict ? "Supervisor review required" : "Sellable with markdown",
+      recommendedAction: strict ? "Flag for supervisor" : "Apply markdown",
+      actionId: strict ? "flag_for_supervisor" : "apply_markdown",
+      eventType: strict ? "FRESHNESS_REVIEW_REQUIRED" : "EXPIRY_MARKDOWN_RECOMMENDED",
+      approvalRequired: strict,
+      helper: strict ? "Same-day expiry in a strict fresh category needs review." : "Still sellable if condition is acceptable; markdown is recommended.",
+      demandLogicTreatment: "reportable",
+    };
+  }
+
+  if (status === EXPIRY_STATUSES.EXPIRES_TOMORROW || condition.risk === "markdown") {
+    return {
+      condition,
+      result: "Sellable with markdown",
+      recommendedAction: "Apply markdown",
+      actionId: "apply_markdown",
+      eventType: "EXPIRY_MARKDOWN_RECOMMENDED",
+      approvalRequired: false,
+      helper: "Near-expiry product should be marked down if still sellable.",
+      demandLogicTreatment: "reportable",
+    };
+  }
+
+  if (status === EXPIRY_STATUSES.EXPIRES_2_TO_3_DAYS || condition.risk === "monitor") {
+    return {
+      condition,
+      result: "Monitor next check",
+      recommendedAction: "Monitor",
+      actionId: "monitor_next_check",
+      eventType: "FRESHNESS_CHECK_RECORDED",
+      approvalRequired: false,
+      helper: "No removal yet. Recheck during the next freshness sweep.",
+      demandLogicTreatment: "reportable",
+    };
+  }
+
+  return {
+    condition,
+    result: "Sellable",
+    recommendedAction: "No action",
+    actionId: "no_action",
+    eventType: "FRESHNESS_CHECK_RECORDED",
+    approvalRequired: false,
+    helper: categoryGroup === "condition_led" ? "Condition is acceptable for sale." : "Date and freshness condition are acceptable.",
+    demandLogicTreatment: "reportable",
+  };
+}
+
+export function requiresFreshnessReview(item, expiryStatus, conditionId) {
+  return getFreshnessRecommendation(item, expiryStatus, conditionId).approvalRequired;
+}
