@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "../components/scanner/PageHeader";
+import DecisionRecommendationCard from "../components/scanner/DecisionRecommendationCard";
 import { useToast } from "@/components/ui/use-toast";
 import {
   ArrowRight,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { SCANOPS_USER_CONTEXT } from "../lib/scanOpsInventoryFixtures";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
+import { buildDecisionLinkedPayload, createDecisionRecommendation, recordDecisionEvent } from "../lib/scanOpsDecisionEngine";
 import {
   buildTaskEventPayload,
   canCancelTask,
@@ -99,6 +101,7 @@ export default function Tasks() {
   const [lastEvent, setLastEvent] = useState(null);
 
   const selectedTask = useMemo(() => tasks.find((task) => task.id === selectedTaskId) || null, [selectedTaskId, tasks]);
+  const taskDecision = useMemo(() => createDecisionRecommendation({ workflow: "task_priority", item: selectedTask, context: { task: selectedTask } }), [selectedTask]);
   const filteredTasks = useMemo(() => filterTasks(tasks, activeFilter, SCANOPS_USER_CONTEXT).sort(sortTasks), [tasks, activeFilter]);
 
   const openCount = tasks.filter((task) => ![TASK_STATUSES.COMPLETED, TASK_STATUSES.CANCELLED].includes(task.status)).length;
@@ -121,9 +124,12 @@ export default function Tasks() {
 
   const startTask = (task) => {
     if (!canStartTask(task, SCANOPS_USER_CONTEXT)) return;
+    const decisionForTask = createDecisionRecommendation({ workflow: "task_priority", item: task, context: { task } });
+    const decisionEvent = recordDecisionEvent(decisionForTask, "accepted", { source_module: "Tasks", status: "accepted", task_id: task.id });
     updateStatus(task, TASK_STATUSES.IN_PROGRESS, SCANOPS_EVENT_TYPES.TASK_STARTED, {
       started_at: new Date().toISOString(),
       status: "in_progress",
+      ...buildDecisionLinkedPayload(decisionForTask, decisionEvent),
     });
     toast({ description: "Task started", duration: 1500 });
   };
@@ -141,10 +147,13 @@ export default function Tasks() {
   };
 
   const blockTask = (task) => {
+    const decisionForTask = createDecisionRecommendation({ workflow: "task_priority", item: task, context: { task } });
+    const decisionEvent = recordDecisionEvent(decisionForTask, "rejected", { source_module: "Tasks", status: "blocked", task_id: task.id, rejection_reason: "Operator marked task blocked" });
     updateStatus(task, TASK_STATUSES.BLOCKED, SCANOPS_EVENT_TYPES.TASK_BLOCKED, {
       blocked_at: new Date().toISOString(),
       block_reason: "Operator marked blocked from handheld",
       status: "blocked",
+      ...buildDecisionLinkedPayload(decisionForTask, decisionEvent),
     });
     toast({ description: "Task blocked", duration: 1500 });
   };
@@ -160,11 +169,27 @@ export default function Tasks() {
   };
 
   const openLinkedWorkflow = (task) => {
+    const decisionForTask = createDecisionRecommendation({ workflow: "task_priority", item: task, context: { task } });
+    const decisionEvent = recordDecisionEvent(decisionForTask, "accepted", { source_module: "Tasks", status: "linked_workflow_opened", task_id: task.id });
     writeTaskEvent(SCANOPS_EVENT_TYPES.TASK_LINKED_ACTION_OPENED, task, task.status, {
       status: "linked_workflow_opened",
       linked_workflow: getTaskLinkedWorkflow(task),
+      ...buildDecisionLinkedPayload(decisionForTask, decisionEvent),
     });
     navigate(getTaskLinkedWorkflow(task));
+  };
+
+  const rejectTaskRecommendation = (task) => {
+    const decisionForTask = createDecisionRecommendation({ workflow: "task_priority", item: task, context: { task } });
+    const event = recordDecisionEvent(decisionForTask, "rejected", { source_module: "Tasks", status: "rejected", task_id: task.id, rejection_reason: "Operator rejected task priority recommendation" });
+    setLastEvent(event);
+    toast({ description: "Recommendation rejected", duration: 1500 });
+  };
+
+  const viewTaskReason = (task) => {
+    const decisionForTask = createDecisionRecommendation({ workflow: "task_priority", item: task, context: { task } });
+    recordDecisionEvent(decisionForTask, "reason_viewed", { source_module: "Tasks", status: "reason_viewed", task_id: task.id });
+    toast({ description: decisionForTask.reasonText, duration: 2500 });
   };
 
   const changeFilter = (filterId) => {
@@ -191,6 +216,7 @@ export default function Tasks() {
         <main className="flex-1 px-4 py-5 pb-8 space-y-4 overflow-y-auto overflow-x-hidden">
           <TaskDetailHeader task={selectedTask} />
           <TaskLinkedItem task={selectedTask} />
+          <DecisionRecommendationCard decision={taskDecision} onReject={() => rejectTaskRecommendation(selectedTask)} onMoreInfo={() => viewTaskReason(selectedTask)} />
           <SupervisorNotice task={selectedTask} />
           <section className="bg-card rounded-2xl border border-border p-4 space-y-3 min-w-0">
             <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Actions</p>

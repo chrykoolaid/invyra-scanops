@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { AlertTriangle, CalendarClock, CheckCircle2, Home, RotateCw, Sparkles, Tags, Trash2 } from "lucide-react";
 import PageHeader from "../components/scanner/PageHeader";
 import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
+import DecisionRecommendationCard from "../components/scanner/DecisionRecommendationCard";
 import { useToast } from "@/components/ui/use-toast";
 import { EXPIRY_CHECK_SCAN_ITEM, EXPIRY_CHECK_SCENARIOS } from "../lib/scanOpsInventoryFixtures";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
+import { buildDecisionLinkedPayload, createDecisionRecommendation, recordDecisionEvent } from "../lib/scanOpsDecisionEngine";
 import { FRESHNESS_CONDITIONS, getExpiryStatus, getFreshnessRecommendation } from "../lib/scanOpsRules";
 
 const BUTTON_PRIMARY = "w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40";
@@ -26,8 +28,12 @@ export default function ExpiryCheck() {
 
   const expiryStatus = useMemo(() => getExpiryStatus(expiryDate, TODAY), [expiryDate]);
   const recommendation = useMemo(() => getFreshnessRecommendation(item, expiryStatus, freshnessId), [item, expiryStatus, freshnessId]);
+  const decision = useMemo(() => createDecisionRecommendation({ workflow: "expiry_freshness", item, context: { expiryStatus, freshnessId } }), [item, expiryStatus, freshnessId]);
 
   const startScan = (scenario = EXPIRY_CHECK_SCAN_ITEM) => {
+    const scenarioExpiryStatus = getExpiryStatus(scenario.expiry_date || "", TODAY);
+    const scanDecision = createDecisionRecommendation({ workflow: "expiry_freshness", item: scenario, context: { expiryStatus: scenarioExpiryStatus, freshnessId: scenario.freshness_default || "good" } });
+    recordDecisionEvent(scanDecision, "generated", { source_module: "Expiry Check", status: "generated" });
     setItem(scenario);
     setExpiryDate(scenario.expiry_date || "");
     setFreshnessId(scenario.freshness_default || "good");
@@ -74,21 +80,25 @@ export default function ExpiryCheck() {
   const recordCheck = () => {
     if (!item) return;
     const events = [];
+    const decisionEvent = recordDecisionEvent(decision, "accepted", { source_module: "Expiry Check", status: "check_recorded" });
     if ((item.expiry_date || "") !== (expiryDate || "")) {
       events.push(createScanOpsEvent(SCANOPS_EVENT_TYPES.EXPIRY_DATE_UPDATED, {
         ...basePayload(),
         previous_expiry_date: item.expiry_date || null,
         new_expiry_date: expiryDate || null,
         status: "updated",
+        ...buildDecisionLinkedPayload(decision, decisionEvent),
       }));
     }
     events.push(createScanOpsEvent(SCANOPS_EVENT_TYPES.EXPIRY_CHECK_RECORDED, {
       ...basePayload(),
       status: recommendation.approvalRequired ? "recorded_review_required" : "recorded",
+      ...buildDecisionLinkedPayload(decision, decisionEvent),
     }));
     events.push(createScanOpsEvent(SCANOPS_EVENT_TYPES.FRESHNESS_CHECK_RECORDED, {
       ...basePayload(),
       status: recommendation.approvalRequired ? "recorded_review_required" : "recorded",
+      ...buildDecisionLinkedPayload(decision, decisionEvent),
     }));
     setDoneState({
       title: recommendation.approvalRequired ? "Check Recorded · Review Required" : "Expiry Check Recorded",
@@ -102,10 +112,12 @@ export default function ExpiryCheck() {
 
   const recommendAction = () => {
     if (!item) return;
+    const decisionEvent = recordDecisionEvent(decision, "accepted", { source_module: "Expiry Check", status: "accepted" });
     const type = SCANOPS_EVENT_TYPES[recommendation.eventType] || SCANOPS_EVENT_TYPES.FRESHNESS_CHECK_RECORDED;
     const event = createScanOpsEvent(type, {
       ...basePayload(),
       status: recommendation.approvalRequired ? "review_required" : "recommended",
+      ...buildDecisionLinkedPayload(decision, decisionEvent),
     });
     setDoneState({
       title: recommendation.recommendedAction,
@@ -115,6 +127,19 @@ export default function ExpiryCheck() {
     });
     setStep(STEPS.DONE);
     toast({ description: `${recommendation.recommendedAction} recorded`, duration: 1500 });
+  };
+
+  const rejectRecommendation = () => {
+    if (!item) return;
+    const event = recordDecisionEvent(decision, "rejected", { source_module: "Expiry Check", status: "rejected", rejection_reason: "Operator rejected expiry/freshness recommendation" });
+    setDoneState({ title: "Freshness Recommendation Rejected", helper: "No markdown, waste, or stock action was applied. Rejection was queued as a decision event.", primaryEvent: event, events: [event] });
+    setStep(STEPS.DONE);
+    toast({ description: "Recommendation rejected", duration: 1500 });
+  };
+
+  const viewReason = () => {
+    recordDecisionEvent(decision, "reason_viewed", { source_module: "Expiry Check", status: "reason_viewed" });
+    toast({ description: decision.reasonText, duration: 2500 });
   };
 
   return (
@@ -149,6 +174,7 @@ export default function ExpiryCheck() {
             <ItemSummary item={item} expiryStatus={expiryStatus} recommendation={recommendation} />
             <ExpiryDatePanel expiryDate={expiryDate} onChange={setExpiryDate} expiryStatus={expiryStatus} recommendation={recommendation} />
             <FreshnessButtons selected={freshnessId} onSelect={setFreshnessId} />
+            <DecisionRecommendationCard decision={decision} onReject={rejectRecommendation} onMoreInfo={viewReason} />
             <RecommendationPanel recommendation={recommendation} />
             <div className="space-y-3">
               <button onClick={recordCheck} className={BUTTON_PRIMARY}><CheckCircle2 className="w-4 h-4" />Record Check</button>

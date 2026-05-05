@@ -2,11 +2,14 @@ import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "../components/scanner/PageHeader";
 import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
+import DecisionRecommendationCard from "../components/scanner/DecisionRecommendationCard";
 import { useToast } from "@/components/ui/use-toast";
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Home, PackageCheck, PackageSearch, Printer, RotateCw, Truck } from "lucide-react";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { classifyGap, formatActionLabel, GAP_TYPES } from "../lib/scanOpsRules";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
+import { createTaskFromDecision } from "../lib/scanOpsTasks";
+import { buildDecisionLinkedPayload, createDecisionRecommendation, recordDecisionEvent } from "../lib/scanOpsDecisionEngine";
 
 const BUTTON_PRIMARY = "w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2";
 const BUTTON_SECONDARY = "w-full py-4 rounded-2xl bg-secondary text-secondary-foreground font-bold text-sm active:scale-[0.98] active:bg-border transition-all flex items-center justify-center gap-2";
@@ -57,8 +60,11 @@ export default function GapScan() {
   const [item, setItem] = useState(null);
   const [doneState, setDoneState] = useState(null);
   const classification = useMemo(() => classifyGap(item), [item]);
+  const decision = useMemo(() => createDecisionRecommendation({ workflow: "gap_scan", item }), [item]);
 
   const handleScan = (scenario = GAP_SCAN_SCENARIOS[0]) => {
+    const scanDecision = createDecisionRecommendation({ workflow: "gap_scan", item: scenario });
+    recordDecisionEvent(scanDecision, "generated", { source_module: "Gap Scan", status: "generated" });
     setItem(scenario);
     setDoneState(null);
     setStep(STEPS.RESULT);
@@ -98,24 +104,41 @@ export default function GapScan() {
   };
 
   const finish = ({ eventType, title, helper, status, extra }) => {
-    const event = recordEvent(eventType, status, extra);
-    setDoneState({ title, helper, event });
+    const decisionEvent = recordDecisionEvent(decision, "accepted", { source_module: "Gap Scan", status: "accepted" });
+    const event = recordEvent(eventType, status, buildDecisionLinkedPayload(decision, decisionEvent, extra));
+    setDoneState({ title, helper, event, decisionEvent });
     setStep(STEPS.DONE);
     toast({ description: title, duration: 1500 });
   };
 
+  const rejectRecommendation = () => {
+    const event = recordDecisionEvent(decision, "rejected", { source_module: "Gap Scan", status: "rejected", rejection_reason: "Operator rejected from Gap Scan" });
+    setDoneState({ title: "Recommendation Rejected", helper: "The deterministic recommendation was rejected by the operator. No stock action was applied.", event });
+    setStep(STEPS.DONE);
+    toast({ description: "Recommendation rejected", duration: 1500 });
+  };
+
+  const viewReason = () => {
+    recordDecisionEvent(decision, "reason_viewed", { source_module: "Gap Scan", status: "reason_viewed" });
+    toast({ description: decision.reasonText, duration: 2500 });
+  };
+
   const createReplenishment = () => {
     const qty = Math.min(item.minimum_shelf_qty || 1, item.backroom_stock || 1);
-    const event = recordEvent(SCANOPS_EVENT_TYPES.REPLENISHMENT_CREATED, "created", { movement: "Backroom to Shelf", quantity_requested: qty, quantity_completed: null });
-    setDoneState({ title: "Replenishment Created", helper: "Gap was classified as backroom available and converted into a replenishment task.", event });
+    const decisionEvent = recordDecisionEvent(decision, "accepted", { source_module: "Gap Scan", status: "accepted" });
+    const task = createTaskFromDecision(decision, item, { sourceModule: "Gap Scan", linkedDecisionEventId: decisionEvent?.event_id, linkedWorkflowLabel: "Go to Replenish", quantityRequested: qty });
+    if (task) recordDecisionEvent(decision, "task_created", { source_module: "Gap Scan", status: "task_created", task_id: task.id });
+    const event = recordEvent(SCANOPS_EVENT_TYPES.REPLENISHMENT_CREATED, "created", buildDecisionLinkedPayload(decision, decisionEvent, { movement: "Backroom to Shelf", quantity_requested: qty, quantity_completed: null, linked_task_id: task?.id || null }));
+    setDoneState({ title: "Replenishment Created", helper: "Gap was classified as backroom available and converted into a replenishment task. Inventory truth will apply after sync.", event, decisionEvent });
     setStep(STEPS.DONE);
     toast({ description: "Replenishment created", duration: 1500 });
   };
 
   const requestReorder = () => {
-    const gapEvent = recordEvent(SCANOPS_EVENT_TYPES.GAP_CONFIRMED, "confirmed");
-    const reorderEvent = recordEvent(SCANOPS_EVENT_TYPES.REORDER_REQUESTED, "requested", { linked_gap_event_id: gapEvent?.event_id, reorder_requested: true });
-    setDoneState({ title: "Reorder Requested", helper: "True out-of-stock was confirmed and a reorder request was recorded.", event: reorderEvent });
+    const decisionEvent = recordDecisionEvent(decision, "accepted", { source_module: "Gap Scan", status: "accepted" });
+    const gapEvent = recordEvent(SCANOPS_EVENT_TYPES.GAP_CONFIRMED, "confirmed", buildDecisionLinkedPayload(decision, decisionEvent));
+    const reorderEvent = recordEvent(SCANOPS_EVENT_TYPES.REORDER_REQUESTED, "requested", buildDecisionLinkedPayload(decision, decisionEvent, { linked_gap_event_id: gapEvent?.event_id, reorder_requested: true }));
+    setDoneState({ title: "Reorder Requested", helper: "True out-of-stock was confirmed and a reorder request was recorded for Inventory Sync.", event: reorderEvent, decisionEvent });
     setStep(STEPS.DONE);
     toast({ description: "Reorder requested", duration: 1500 });
   };
@@ -185,7 +208,7 @@ export default function GapScan() {
           <div className="space-y-4">
             <ProductCard item={item} />
             <StatusGrid item={item} />
-            <GapCard classification={classification} />
+            <DecisionRecommendationCard decision={decision} onReject={rejectRecommendation} onMoreInfo={viewReason} />
             <div className="space-y-3">
               {renderActions()}
               <button onClick={resetScan} className={BUTTON_SECONDARY}>Scan Next Gap</button>

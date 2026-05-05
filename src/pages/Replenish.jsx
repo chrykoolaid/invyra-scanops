@@ -2,12 +2,14 @@ import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "../components/scanner/PageHeader";
 import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
+import DecisionRecommendationCard from "../components/scanner/DecisionRecommendationCard";
 import NumericKeypad from "../components/scanner/NumericKeypad";
 import { useToast } from "@/components/ui/use-toast";
 import { AlertTriangle, CheckCircle2, Home, Minus, PackageCheck, Plus, RotateCcw } from "lucide-react";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
-import { formatActionLabel, getReplenishmentRecommendation } from "../lib/scanOpsRules";
+import { buildDecisionLinkedPayload, createDecisionRecommendation, recordDecisionEvent } from "../lib/scanOpsDecisionEngine";
+import { getReplenishmentRecommendation } from "../lib/scanOpsRules";
 
 const BUTTON_PRIMARY = "w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40";
 const BUTTON_SECONDARY = "w-full py-4 rounded-2xl bg-secondary text-secondary-foreground font-bold text-sm active:scale-[0.98] active:bg-border transition-all flex items-center justify-center gap-2";
@@ -27,10 +29,13 @@ export default function Replenish() {
   const [selectedIssue, setSelectedIssue] = useState(null);
 
   const recommendation = useMemo(() => getReplenishmentRecommendation(item), [item]);
+  const decision = useMemo(() => createDecisionRecommendation({ workflow: "replenishment", item }), [item]);
   const quantityNumber = Math.max(0, parseInt(quantity || "0", 10) || 0);
 
   const startScan = () => {
     const scanned = resolveInventoryIdentity("930000000001");
+    const scanDecision = createDecisionRecommendation({ workflow: "replenishment", item: scanned });
+    recordDecisionEvent(scanDecision, "generated", { source_module: "Replenish", status: "generated" });
     setItem(scanned);
     setQuantity(String(Math.min(scanned.minimum_shelf_qty, scanned.backroom_stock)));
     setCreatedEvent(null);
@@ -55,6 +60,7 @@ export default function Replenish() {
 
   const createReplenishment = () => {
     if (!item || quantityNumber <= 0 || createdEvent) return;
+    const decisionEvent = recordDecisionEvent(decision, "accepted", { source_module: "Replenish", status: "accepted", quantity_requested: quantityNumber });
     const event = createScanOpsEvent(SCANOPS_EVENT_TYPES.REPLENISHMENT_CREATED, {
       source_module: "Replenish",
       sku: item.sku,
@@ -77,6 +83,7 @@ export default function Replenish() {
       quantity_completed: null,
       movement: "Backroom to Shelf",
       status: "created",
+      ...buildDecisionLinkedPayload(decision, decisionEvent),
     });
     setCreatedEvent(event);
     setStep(STEPS.CREATED);
@@ -104,12 +111,14 @@ export default function Replenish() {
 
   const confirmAlreadyFilled = () => {
     if (!item) return;
+    const decisionEvent = recordDecisionEvent(decision, "rejected", { source_module: "Replenish", status: "rejected", rejection_reason: "Shelf already filled" });
     createScanOpsEvent(SCANOPS_EVENT_TYPES.REPLENISHMENT_CANCELLED, {
       source_module: "Replenish",
       sku: item.sku,
       item_name: item.name,
       reason: "Shelf already filled",
       status: "no_action_required",
+      ...buildDecisionLinkedPayload(decision, decisionEvent),
     });
     toast({ description: "Shelf already filled recorded", duration: 1500 });
     resetScan();
@@ -117,15 +126,29 @@ export default function Replenish() {
 
   const recordIssue = () => {
     if (!item || !selectedIssue) return;
+    const decisionEvent = recordDecisionEvent(decision, "overridden", { source_module: "Replenish", status: "overridden", override_reason: selectedIssue });
     createScanOpsEvent(SCANOPS_EVENT_TYPES.SHELF_LABEL_ISSUE_FLAGGED, {
       source_module: "Replenish",
       sku: item.sku,
       item_name: item.name,
       issue_reason: selectedIssue,
       status: "flagged",
+      ...buildDecisionLinkedPayload(decision, decisionEvent),
     });
     toast({ description: "Issue flagged", duration: 1500 });
     resetScan();
+  };
+
+  const rejectRecommendation = () => {
+    if (!item) return;
+    recordDecisionEvent(decision, "rejected", { source_module: "Replenish", status: "rejected", rejection_reason: "Operator rejected from Replenish" });
+    toast({ description: "Recommendation rejected", duration: 1500 });
+    resetScan();
+  };
+
+  const viewReason = () => {
+    recordDecisionEvent(decision, "reason_viewed", { source_module: "Replenish", status: "reason_viewed" });
+    toast({ description: decision.reasonText, duration: 2500 });
   };
 
   return (
@@ -150,12 +173,7 @@ export default function Replenish() {
           <div className="space-y-4">
             <ProductCard item={item} />
             <StockGrid item={item} />
-            <section className="bg-primary/5 rounded-2xl border border-primary/20 p-5 min-w-0">
-              <p className="text-xs font-bold text-primary uppercase tracking-wider">Recommended action</p>
-              <h3 className="text-base font-bold text-foreground mt-1 break-words">{recommendation.title}</h3>
-              <p className="text-sm text-muted-foreground mt-1 break-words">{recommendation.helper}</p>
-              <p className="text-xs font-mono text-primary mt-3 break-all">{formatActionLabel(recommendation.recommended_action)}</p>
-            </section>
+            <DecisionRecommendationCard decision={decision} onReject={rejectRecommendation} onMoreInfo={viewReason} />
             <section className="bg-card rounded-2xl border border-border p-5 space-y-4">
               <div>
                 <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Qty to move</p>

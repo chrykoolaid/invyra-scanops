@@ -47,3 +47,56 @@ Still deferred:
 npm install
 npm run dev
 ```
+
+
+## Stage H — Decision Engine Foundation
+
+Stage H adds deterministic supermarket decisioning to existing ScanOps workflows. It does not add a Home tile and does not redesign the 3-column launcher.
+
+Decision rule:
+
+```text
+Decision Engine recommends.
+Operator confirms.
+Inventory system applies after sync.
+```
+
+Added foundations:
+
+- `src/lib/scanOpsDecisionEngine.js`
+- `src/lib/scanOpsDecisionRules.js`
+- `src/lib/scanOpsDecisionFixtures.js`
+- `src/components/scanner/DecisionRecommendationCard.jsx`
+
+Recommendation outputs include:
+
+```text
+recommendedAction
+confidence
+reasonText
+riskLevel
+requiredRole
+linkedWorkflow
+eventToCreate
+taskToCreate
+```
+
+Events added:
+
+```text
+DECISION_RECOMMENDATION_GENERATED
+DECISION_RECOMMENDATION_ACCEPTED
+DECISION_RECOMMENDATION_REJECTED
+DECISION_RECOMMENDATION_OVERRIDDEN
+DECISION_SUPERVISOR_REVIEW_REQUIRED
+DECISION_TASK_CREATED
+DECISION_REASON_VIEWED
+```
+
+Acceptance rules:
+
+- Recommendations appear inside Gap Scan, Replenish, Markdowns, Waste, Expiry Check, and Task Detail.
+- Accept/reject writes decision events.
+- Decision events flow into Inventory Sync.
+- No recommendation directly mutates official inventory truth.
+- Home remains clean with no Decision Engine tile.

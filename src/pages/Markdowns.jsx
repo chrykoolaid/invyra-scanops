@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { CheckCircle2, Home, Printer, RotateCw, Tags } from "lucide-react";
 import PageHeader from "../components/scanner/PageHeader";
 import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
+import DecisionRecommendationCard from "../components/scanner/DecisionRecommendationCard";
 import { useToast } from "@/components/ui/use-toast";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
+import { buildDecisionLinkedPayload, createDecisionRecommendation, recordDecisionEvent } from "../lib/scanOpsDecisionEngine";
 import { getMarkdownRecommendation, MARKDOWN_REASONS } from "../lib/scanOpsRules";
 
 const BUTTON_PRIMARY = "w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40";
@@ -22,9 +24,13 @@ export default function Markdowns() {
   const [doneState, setDoneState] = useState(null);
   const [lastMarkdownEvent, setLastMarkdownEvent] = useState(null);
   const recommendation = useMemo(() => getMarkdownRecommendation(item, reasonId), [item, reasonId]);
+  const decision = useMemo(() => createDecisionRecommendation({ workflow: "markdown", item, context: { reasonId } }), [item, reasonId]);
 
   const startScan = () => {
-    setItem(resolveInventoryIdentity("930000000004"));
+    const scanned = resolveInventoryIdentity("930000000004");
+    const scanDecision = createDecisionRecommendation({ workflow: "markdown", item: scanned, context: { reasonId: "near_expiry" } });
+    recordDecisionEvent(scanDecision, "generated", { source_module: "Markdowns", status: "generated" });
+    setItem(scanned);
     setReasonId("near_expiry");
     setDoneState(null);
     setLastMarkdownEvent(null);
@@ -39,6 +45,7 @@ export default function Markdowns() {
   };
   const applyMarkdown = () => {
     if (!item) return;
+    const decisionEvent = recordDecisionEvent(decision, "accepted", { source_module: "Markdowns", status: "accepted" });
     const event = createScanOpsEvent(SCANOPS_EVENT_TYPES.MARKDOWN_APPLIED, {
       source_module: "Markdowns",
       sku: item.sku,
@@ -55,6 +62,7 @@ export default function Markdowns() {
       label_required: recommendation.labelRequired,
       approval_required: recommendation.approvalRequired,
       status: recommendation.approvalRequired ? "approval_required" : "applied",
+      ...buildDecisionLinkedPayload(decision, decisionEvent),
     });
     setLastMarkdownEvent(event);
     setDoneState({
@@ -67,6 +75,7 @@ export default function Markdowns() {
   };
   const requestLabel = () => {
     if (!item) return;
+    const decisionEvent = recordDecisionEvent(decision, "accepted", { source_module: "Markdowns", status: "label_request_accepted" });
     const event = createScanOpsEvent(SCANOPS_EVENT_TYPES.LABEL_PRINT_REQUESTED, {
       source_module: "Markdowns",
       sku: item.sku,
@@ -78,10 +87,24 @@ export default function Markdowns() {
       markdown_price: recommendation.newPrice,
       discount_percent: recommendation.discountPercent,
       status: "requested",
+      ...buildDecisionLinkedPayload(decision, decisionEvent),
     });
     setDoneState({ title: "Label Requested", helper: "A markdown label request event was recorded for the future label-print engine.", event });
     setStep(STEPS.DONE);
     toast({ description: "Label request recorded", duration: 1500 });
+  };
+
+  const rejectRecommendation = () => {
+    if (!item) return;
+    const event = recordDecisionEvent(decision, "rejected", { source_module: "Markdowns", status: "rejected", rejection_reason: "Operator rejected markdown recommendation" });
+    setDoneState({ title: "Markdown Recommendation Rejected", helper: "No markdown or stock change was applied. The rejection was queued as a decision event.", event });
+    setStep(STEPS.DONE);
+    toast({ description: "Recommendation rejected", duration: 1500 });
+  };
+
+  const viewReason = () => {
+    recordDecisionEvent(decision, "reason_viewed", { source_module: "Markdowns", status: "reason_viewed" });
+    toast({ description: decision.reasonText, duration: 2500 });
   };
 
   return (
@@ -106,6 +129,7 @@ export default function Markdowns() {
           <div className="space-y-4">
             <ItemSummary item={item} recommendation={recommendation} />
             <ReasonButtons selected={reasonId} onSelect={setReasonId} />
+            <DecisionRecommendationCard decision={decision} onReject={rejectRecommendation} onMoreInfo={viewReason} />
             <PricePanel item={item} recommendation={recommendation} />
             <div className="space-y-3">
               <button onClick={applyMarkdown} className={BUTTON_PRIMARY}><Tags className="w-4 h-4" />Apply Markdown</button>

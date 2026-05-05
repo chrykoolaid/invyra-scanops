@@ -291,3 +291,40 @@ export function buildTaskEventPayload(task, status, extra = {}) {
     ...extra,
   };
 }
+
+
+function makeTaskId(prefix = "decision-task") {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export function createTaskFromDecision(decision, item, extra = {}) {
+  if (!decision?.taskToCreate) return null;
+  const currentTasks = safeReadTasks();
+  const task = {
+    id: extra.id || makeTaskId("task_decision"),
+    type: decision.taskToCreate,
+    priority: decision.taskPriority || TASK_PRIORITIES.NORMAL,
+    status: decision.supervisorReviewRequired ? TASK_STATUSES.NEEDS_SUPERVISOR : TASK_STATUSES.OPEN,
+    itemName: item?.name || item?.itemName || decision.itemIdentity?.item_name || "Scanner item",
+    sku: item?.sku || decision.itemIdentity?.sku || "—",
+    barcode: item?.barcode || item?.gtin || item?.plu || decision.itemIdentity?.barcode || decision.itemIdentity?.plu || "—",
+    location: item?.shelfLocation || item?.location || item?.aisle || decision.itemIdentity?.location || "Store floor",
+    department: item?.department || decision.itemIdentity?.department || "Store Operations",
+    reason: decision.reasonText,
+    recommendation: decision.recommendedAction,
+    linkedWorkflow: decision.linkedWorkflow || "/tasks",
+    linkedWorkflowLabel: extra.linkedWorkflowLabel || "Open Linked Workflow",
+    currentPrice: item?.currentPrice ?? item?.current_price ?? null,
+    currency: item?.currency || "₱",
+    suggestedMarkdown: extra.suggestedMarkdown || null,
+    requiresSupervisor: Boolean(decision.supervisorReviewRequired),
+    assignedTo: decision.supervisorReviewRequired ? "team" : SCANOPS_USER_CONTEXT.user_id,
+    sourceModule: extra.sourceModule || "Decision Engine",
+    linkedDecisionId: decision.decisionId,
+    linkedDecisionEventId: extra.linkedDecisionEventId || null,
+    createdAt: new Date().toISOString(),
+    ...extra,
+  };
+  safeWriteTasks([task, ...currentTasks].slice(0, 80));
+  return task;
+}

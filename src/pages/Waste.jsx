@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, Home, Minus, Plus, RotateCw, Trash2 } from "lucide-react";
 import PageHeader from "../components/scanner/PageHeader";
 import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
+import DecisionRecommendationCard from "../components/scanner/DecisionRecommendationCard";
 import { useToast } from "@/components/ui/use-toast";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
+import { buildDecisionLinkedPayload, createDecisionRecommendation, recordDecisionEvent } from "../lib/scanOpsDecisionEngine";
 import { getWasteDecision, WASTE_REASONS } from "../lib/scanOpsRules";
 
 const BUTTON_PRIMARY = "w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40";
@@ -22,9 +24,13 @@ export default function Waste() {
   const [quantity, setQuantity] = useState(1);
   const [doneState, setDoneState] = useState(null);
   const decision = useMemo(() => getWasteDecision(item, reasonId, quantity), [item, reasonId, quantity]);
+  const stageHDecision = useMemo(() => createDecisionRecommendation({ workflow: "waste", item, context: { reasonId, quantity } }), [item, reasonId, quantity]);
 
   const startScan = () => {
-    setItem(resolveInventoryIdentity("930000000008"));
+    const scanned = resolveInventoryIdentity("930000000008");
+    const scanDecision = createDecisionRecommendation({ workflow: "waste", item: scanned, context: { reasonId: "expired", quantity: 1 } });
+    recordDecisionEvent(scanDecision, "generated", { source_module: "Waste", status: "generated" });
+    setItem(scanned);
     setReasonId("expired");
     setQuantity(1);
     setDoneState(null);
@@ -40,6 +46,7 @@ export default function Waste() {
   const adjustQuantity = (delta) => setQuantity((current) => Math.max(1, Math.min(item?.stockOnHand ?? item?.stock_on_hand ?? 99, current + delta)));
   const recordWaste = () => {
     if (!item || !decision.reason) return;
+    const decisionEvent = recordDecisionEvent(stageHDecision, "accepted", { source_module: "Waste", status: "accepted" });
     const eventType = decision.approvalRequired ? SCANOPS_EVENT_TYPES.WASTE_APPROVAL_REQUIRED : SCANOPS_EVENT_TYPES.WASTE_RECORDED;
     const event = createScanOpsEvent(eventType, {
       source_module: "Waste",
@@ -56,6 +63,7 @@ export default function Waste() {
       estimated_value: decision.estimatedValue,
       approval_required: decision.approvalRequired,
       status: decision.approvalRequired ? "approval_required" : "recorded",
+      ...buildDecisionLinkedPayload(stageHDecision, decisionEvent),
     });
     setDoneState({
       title: decision.approvalRequired ? "Supervisor Review Required" : "Waste Recorded",
@@ -67,6 +75,7 @@ export default function Waste() {
   };
   const supervisorReview = () => {
     if (!item || !decision.reason) return;
+    const decisionEvent = recordDecisionEvent(stageHDecision, "supervisor_review", { source_module: "Waste", status: "supervisor_review_required" });
     const event = createScanOpsEvent(SCANOPS_EVENT_TYPES.WASTE_APPROVAL_REQUIRED, {
       source_module: "Waste",
       sku: item.sku,
@@ -78,10 +87,24 @@ export default function Waste() {
       quantity: decision.quantity,
       estimated_value: decision.estimatedValue,
       status: "manual_review_requested",
+      ...buildDecisionLinkedPayload(stageHDecision, decisionEvent),
     });
     setDoneState({ title: "Supervisor Review Requested", helper: "A waste approval request was recorded for supervisor/manager review.", event });
     setStep(STEPS.DONE);
     toast({ description: "Review request recorded", duration: 1500 });
+  };
+
+  const rejectRecommendation = () => {
+    if (!item) return;
+    const event = recordDecisionEvent(stageHDecision, "rejected", { source_module: "Waste", status: "rejected", rejection_reason: "Operator rejected waste recommendation" });
+    setDoneState({ title: "Waste Recommendation Rejected", helper: "No waste movement was applied. The rejection was queued as a decision event.", event });
+    setStep(STEPS.DONE);
+    toast({ description: "Recommendation rejected", duration: 1500 });
+  };
+
+  const viewReason = () => {
+    recordDecisionEvent(stageHDecision, "reason_viewed", { source_module: "Waste", status: "reason_viewed" });
+    toast({ description: stageHDecision.reasonText, duration: 2500 });
   };
 
   return (
@@ -104,6 +127,7 @@ export default function Waste() {
             <ItemSummary item={item} decision={decision} />
             <QuantityControl quantity={quantity} onMinus={() => adjustQuantity(-1)} onPlus={() => adjustQuantity(1)} />
             <ReasonButtons selected={reasonId} onSelect={setReasonId} />
+            <DecisionRecommendationCard decision={stageHDecision} onReject={rejectRecommendation} onMoreInfo={viewReason} />
             <DecisionPanel item={item} decision={decision} />
             <div className="space-y-3">
               <button onClick={recordWaste} className={BUTTON_PRIMARY}><Trash2 className="w-4 h-4" />Record Waste</button>
