@@ -26,8 +26,8 @@ const tiles = [
   { icon: Tags, label: "Markdowns", to: "/markdowns", active: true },
   { icon: Trash2, label: "Waste", to: "/waste", active: true },
   { icon: Clock, label: "Expiry Check", to: "/expiry-check", active: true },
-  { icon: Printer, label: "Labels", to: null, active: false },
-  { icon: ArrowLeftRight, label: "Transfers", to: null, active: false },
+  { icon: Printer, label: "Shelf Tickets", to: "/shelf-tickets", active: true },
+  { icon: ArrowLeftRight, label: "Transfers", to: "/transfers", active: true },
   { icon: Database, label: "Inventory Sync", to: "/inventory-sync", active: true },
 ];
 

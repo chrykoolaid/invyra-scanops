@@ -4,7 +4,7 @@ This project contains the Invyra ScanOps handheld scanner prototype.
 
 ## Invyra ScanOps stage status
 
-Current package: Stage G — Inventory Sync Foundation with PLU / GTIN / SKU support.
+Current package: Stage I — Shelf Tickets + Transfers Foundation.
 
 Active scanner workflows:
 - Product Lookup
@@ -17,10 +17,16 @@ Active scanner workflows:
 - Expiry Check
 - Tasks
 - Inventory Sync
+- Shelf Tickets
+- Transfers
 
-Stage G connects ScanOps to an Invyra Inventory sync foundation. The Inventory system is treated as the source of truth; ScanOps is the handheld execution layer. Scanner workflows now use a shared local inventory snapshot and create sync-aware inventory events.
+Invyra Inventory remains the source of truth. ScanOps is the handheld execution layer. Scanner workflows read from the local inventory snapshot, record operator-confirmed events, and queue those events through Inventory Sync.
 
-Stage G adds:
+Home remains a clean 3-column scanner launcher. No task list, sync list, decision list, ticket batch list, or transfer queue is shown on Home.
+
+## Stage G — Inventory Sync Foundation
+
+Stage G added:
 - Inventory Sync tile and dedicated Inventory Sync page
 - Local inventory snapshot cache
 - Product identity resolver for PLU, GTIN/barcode, SKU, scale code, internal item ID, batch, and lot
@@ -30,24 +36,6 @@ Stage G adds:
 - Retry and Push Queue actions
 - Honest sync states: saved on device, waiting to sync, syncing, synced, failed, conflict, needs review
 - App-wide sync banner on scanner workflow pages
-
-Home remains a clean 3-column scanner launcher. No inventory sync list, task list, or queue display is shown on Home.
-
-Still deferred:
-- Stage H Decision Engine
-- Stage I Labels full engine
-- Stage I Transfers
-- Stage J final role/device/audit hardening
-- Full conflict resolver
-- Real multi-device backend merge logic
-
-## Local run
-
-```bash
-npm install
-npm run dev
-```
-
 
 ## Stage H — Decision Engine Foundation
 
@@ -62,7 +50,6 @@ Inventory system applies after sync.
 ```
 
 Added foundations:
-
 - `src/lib/scanOpsDecisionEngine.js`
 - `src/lib/scanOpsDecisionRules.js`
 - `src/lib/scanOpsDecisionFixtures.js`
@@ -81,22 +68,113 @@ eventToCreate
 taskToCreate
 ```
 
-Events added:
+## Stage I.1 — Shelf Ticket Request Foundation
+
+Stage I.1 replaces the previous generic Labels placeholder with supermarket-specific Shelf Tickets.
+
+Shelf Tickets workflow:
 
 ```text
-DECISION_RECOMMENDATION_GENERATED
-DECISION_RECOMMENDATION_ACCEPTED
-DECISION_RECOMMENDATION_REJECTED
-DECISION_RECOMMENDATION_OVERRIDDEN
-DECISION_SUPERVISOR_REVIEW_REQUIRED
-DECISION_TASK_CREATED
-DECISION_REASON_VIEWED
+Select ticket size/type
+Scan item
+Resolve PLU / GTIN / barcode / SKU / internal item ID / batch / lot
+Add item to the shelf ticket batch
+Scan more items
+Send batch to desktop ticket queue through Inventory Sync
 ```
 
-Acceptance rules:
+Important boundaries:
+- ScanOps creates a paper shelf-ticket batch.
+- Desktop receives the batch later for preview/printing.
+- Stage I does not build full desktop print infrastructure.
+- Stage I does not claim anything printed unless a real print flow exists.
 
-- Recommendations appear inside Gap Scan, Replenish, Markdowns, Waste, Expiry Check, and Task Detail.
-- Accept/reject writes decision events.
-- Decision events flow into Inventory Sync.
-- No recommendation directly mutates official inventory truth.
-- Home remains clean with no Decision Engine tile.
+Added shelf-ticket foundations:
+- `src/pages/ShelfTickets.jsx`
+- `src/lib/scanOpsShelfTickets.js`
+- `src/lib/scanOpsShelfTicketRules.js`
+- `src/lib/scanOpsShelfTicketFixtures.js`
+- `src/components/scanner/ShelfTicketBatchCard.jsx`
+- `src/components/scanner/ShelfTicketSizeSelector.jsx`
+- `src/components/scanner/ShelfTicketLineCard.jsx`
+
+Shelf-ticket events:
+
+```text
+SHELF_TICKET_BATCH_CREATED
+SHELF_TICKET_SIZE_SELECTED
+SHELF_TICKET_ITEM_SCANNED
+SHELF_TICKET_ITEM_ADDED
+SHELF_TICKET_ITEM_REMOVED
+SHELF_TICKET_BATCH_SENT_TO_DESKTOP
+SHELF_TICKET_BATCH_QUEUED_FOR_SYNC
+SHELF_TICKET_BATCH_CANCELLED
+SHELF_TICKET_BATCH_RECEIVED_BY_DESKTOP
+```
+
+## Stage I.2 — Transfers Foundation
+
+Stage I.2 adds scan-first transfer requests.
+
+Transfer workflow:
+
+```text
+Select transfer type
+Scan/select source location
+Scan item
+Resolve PLU / GTIN / barcode / SKU / internal item ID / batch / lot
+Enter quantity or weight
+Scan/select destination location
+Review transfer
+Confirm transfer
+Queue transfer event to Inventory Sync
+```
+
+Important boundaries:
+- ScanOps records transfer intent.
+- ScanOps does not directly mutate official inventory stock.
+- Invyra Inventory applies official stock movement after sync.
+- Quantity above local snapshot availability is queued as supervisor-review required.
+
+Added transfer foundations:
+- `src/pages/Transfers.jsx`
+- `src/lib/scanOpsTransfers.js`
+- `src/lib/scanOpsTransferRules.js`
+- `src/lib/scanOpsTransferFixtures.js`
+- `src/components/scanner/TransferStepCard.jsx`
+- `src/components/scanner/TransferReviewCard.jsx`
+
+Transfer events:
+
+```text
+TRANSFER_STARTED
+TRANSFER_TYPE_SELECTED
+TRANSFER_SOURCE_SELECTED
+TRANSFER_ITEM_SCANNED
+TRANSFER_QUANTITY_ENTERED
+TRANSFER_DESTINATION_SELECTED
+TRANSFER_REVIEWED
+TRANSFER_COMPLETED
+TRANSFER_CANCELLED
+TRANSFER_EXCEPTION_RECORDED
+TRANSFER_QUEUED_FOR_SYNC
+TRANSFER_SUPERVISOR_REVIEW_REQUIRED
+```
+
+## Still deferred
+
+- Full desktop shelf-ticket preview/print workspace
+- Full printer registry / routing / retry infrastructure
+- Electronic shelf ticket integration
+- Store-to-store transfer reconciliation
+- Final role/device/session hardening
+- Final audit trace hardening
+- Full conflict resolver
+- Real multi-device backend merge logic
+
+## Local run
+
+```bash
+npm install
+npm run dev
+```

@@ -67,31 +67,32 @@ export default function Markdowns() {
     setLastMarkdownEvent(event);
     setDoneState({
       title: recommendation.approvalRequired ? "Markdown Sent for Review" : "Markdown Applied",
-      helper: recommendation.approvalRequired ? "This markdown reason is outside normal staff range and needs supervisor approval." : "The markdown was recorded and is ready for shelf-label handling.",
+      helper: recommendation.approvalRequired ? "This markdown reason is outside normal staff range and needs supervisor approval." : "The markdown was recorded and is ready for shelf-ticket handling.",
       event,
     });
     setStep(STEPS.DONE);
     toast({ description: recommendation.approvalRequired ? "Markdown review required" : "Markdown applied", duration: 1500 });
   };
-  const requestLabel = () => {
+  const requestShelfTicket = () => {
     if (!item) return;
-    const decisionEvent = recordDecisionEvent(decision, "accepted", { source_module: "Markdowns", status: "label_request_accepted" });
-    const event = createScanOpsEvent(SCANOPS_EVENT_TYPES.LABEL_PRINT_REQUESTED, {
+    const decisionEvent = recordDecisionEvent(decision, "accepted", { source_module: "Markdowns", status: "shelf_ticket_request_accepted" });
+    const event = createScanOpsEvent(SCANOPS_EVENT_TYPES.SHELF_TICKET_BATCH_SENT_TO_DESKTOP, {
       source_module: "Markdowns",
       sku: item.sku,
       barcode: item.barcode,
       item_name: item.name,
       linked_markdown_event_id: lastMarkdownEvent?.event_id || null,
-      label_type: "Markdown shelf label",
+      ticket_type: "CLEARANCE_TICKET",
+      ticket_reason: "CLEARANCE",
       current_price: item.currentPrice ?? item.currentPrice ?? item.current_price,
       markdown_price: recommendation.newPrice,
       discount_percent: recommendation.discountPercent,
       status: "requested",
       ...buildDecisionLinkedPayload(decision, decisionEvent),
     });
-    setDoneState({ title: "Label Requested", helper: "A markdown label request event was recorded for the future label-print engine.", event });
+    setDoneState({ title: "Shelf Ticket Requested", helper: "A markdown shelf-ticket request was queued for desktop preview/printing. No fake printed state was recorded.", event });
     setStep(STEPS.DONE);
-    toast({ description: "Label request recorded", duration: 1500 });
+    toast({ description: "Shelf ticket request queued", duration: 1500 });
   };
 
   const rejectRecommendation = () => {
@@ -118,7 +119,7 @@ export default function Markdowns() {
                 <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0"><Tags className="w-5 h-5" /></div>
                 <div className="min-w-0">
                   <h2 className="font-bold text-foreground">Scan item to apply markdown</h2>
-                  <p className="text-sm text-muted-foreground mt-1 break-words">Use large reason buttons, confirm suggested discount, then request a markdown label.</p>
+                  <p className="text-sm text-muted-foreground mt-1 break-words">Use large reason buttons, confirm suggested discount, then request a markdown shelf ticket.</p>
                 </div>
               </div>
             </section>
@@ -133,7 +134,7 @@ export default function Markdowns() {
             <PricePanel item={item} recommendation={recommendation} />
             <div className="space-y-3">
               <button onClick={applyMarkdown} className={BUTTON_PRIMARY}><Tags className="w-4 h-4" />Apply Markdown</button>
-              <button onClick={requestLabel} className={BUTTON_SECONDARY}><Printer className="w-4 h-4" />Request Label</button>
+              <button onClick={requestShelfTicket} className={BUTTON_SECONDARY}><Printer className="w-4 h-4" />Request Shelf Ticket</button>
               <button onClick={resetScan} className={BUTTON_SECONDARY}><RotateCw className="w-4 h-4" />Scan Next</button>
             </div>
           </div>

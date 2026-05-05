@@ -17,6 +17,8 @@ export const DECISION_RECOMMENDATION_TYPES = {
   FRESHNESS_RECOMMENDATION: "FRESHNESS_RECOMMENDATION",
   TASK_PRIORITY_RECOMMENDATION: "TASK_PRIORITY_RECOMMENDATION",
   SUPERVISOR_REVIEW_RECOMMENDATION: "SUPERVISOR_REVIEW_RECOMMENDATION",
+  SHELF_TICKET_RECOMMENDATION: "SHELF_TICKET_RECOMMENDATION",
+  TRANSFER_RECOMMENDATION: "TRANSFER_RECOMMENDATION",
 };
 
 export const DECISION_CONFIDENCE = { HIGH: "High", MEDIUM: "Medium", LOW: "Low" };
@@ -29,6 +31,8 @@ export const DECISION_WORKFLOWS = {
   EXPIRY_FRESHNESS: "expiry_freshness",
   TASK_PRIORITY: "task_priority",
   SUPERVISOR_REVIEW: "supervisor_review",
+  SHELF_TICKETS: "shelf_tickets",
+  TRANSFER: "transfer",
 };
 
 function value(item, camel, snake, fallback = 0) { return item?.[camel] ?? item?.[snake] ?? fallback; }
@@ -137,6 +141,73 @@ export function getTaskPriorityDecision(task) {
   return makeDecision(DECISION_WORKFLOWS.TASK_PRIORITY, task, { recommendationType: review ? DECISION_RECOMMENDATION_TYPES.SUPERVISOR_REVIEW_RECOMMENDATION : DECISION_RECOMMENDATION_TYPES.TASK_PRIORITY_RECOMMENDATION, recommendedAction: review ? "Route for supervisor review" : urgent || high ? "Work task next" : "Work when queue allows", confidence: urgent || review ? DECISION_CONFIDENCE.HIGH : DECISION_CONFIDENCE.MEDIUM, reasonText: `${task.priority} priority ${task.type?.replaceAll("_", " ") || "task"}; status ${task.status}; reason: ${task.reason}.`, riskLevel: review ? DECISION_RISK_LEVELS.REVIEW : urgent ? DECISION_RISK_LEVELS.HIGH : high ? DECISION_RISK_LEVELS.MEDIUM : DECISION_RISK_LEVELS.LOW, requiredRole: review ? "Supervisor" : "Staff", linkedWorkflow: task.linkedWorkflow || "/tasks", eventToCreate: "TASK_STARTED", taskPriority: task.priority, supervisorReviewRequired: review, nextStepText: review ? "Staff can start or block, but completion needs supervisor review." : "Open the linked workflow or start the task from this screen.", contextKey: `${task.id}-${task.status}-${task.priority}`, rawRule: task });
 }
 
+
+export function getShelfTicketDecision(item, context = {}) {
+  if (!item) return makeDecision(DECISION_WORKFLOWS.SHELF_TICKETS, item, {
+    recommendationType: DECISION_RECOMMENDATION_TYPES.SHELF_TICKET_RECOMMENDATION,
+    recommendedAction: "Scan item for shelf ticket",
+    confidence: DECISION_CONFIDENCE.LOW,
+    reasonText: "No product identity has been resolved yet. Scan a barcode, PLU, GTIN, or SKU before adding a shelf ticket line.",
+    riskLevel: DECISION_RISK_LEVELS.LOW,
+    requiredRole: "Staff",
+    linkedWorkflow: "/shelf-tickets",
+    eventToCreate: "SHELF_TICKET_ITEM_SCANNED",
+    nextStepText: "Select ticket size and scan an item into the desktop ticket batch.",
+  });
+  const location = item.shelfLocation || item.location || item.shelf || "shelf location pending";
+  const ticketType = context.ticketType || "STANDARD_SHELF_TICKET";
+  const ticketReason = context.ticketReason || "MISSING_OR_DAMAGED";
+  return makeDecision(DECISION_WORKFLOWS.SHELF_TICKETS, item, {
+    recommendationType: DECISION_RECOMMENDATION_TYPES.SHELF_TICKET_RECOMMENDATION,
+    recommendedAction: "Add to shelf ticket batch",
+    confidence: item.sku || item.gtin || item.barcode || item.plu ? DECISION_CONFIDENCE.HIGH : DECISION_CONFIDENCE.MEDIUM,
+    reasonText: `Resolved ${item.name || "item"} for ${location}. Ticket type ${String(ticketType).replaceAll("_", " ").toLowerCase()}; reason ${String(ticketReason).replaceAll("_", " ").toLowerCase()}. Batch syncs to desktop; ScanOps does not claim printing.`,
+    riskLevel: DECISION_RISK_LEVELS.LOW,
+    requiredRole: "Staff",
+    linkedWorkflow: "/shelf-tickets",
+    eventToCreate: "SHELF_TICKET_ITEM_ADDED",
+    taskToCreate: null,
+    taskPriority: TASK_PRIORITIES.LOW,
+    nextStepText: "Add the item to the current shelf-ticket batch, then send the batch to the desktop queue.",
+    contextKey: `${ticketType}-${ticketReason}`,
+  });
+}
+
+export function getTransferDecision(item, context = {}) {
+  const quantity = Number(context.quantity || 0);
+  const source = context.sourceLocation || "source pending";
+  const destination = context.destinationLocation || "destination pending";
+  const transferType = context.transferType || "BACKROOM_TO_SHELF";
+  const available = source.includes("BACKROOM") ? stockNumber(item, "backroomStock", "backroom_stock") : source.includes("AISLE") || source.includes("SHELF") ? stockNumber(item, "shelfStock", "shelf_stock") : stockNumber(item, "stockOnHand", "stock_on_hand");
+  const review = Boolean(context.validation?.review || (quantity > 0 && available >= 0 && quantity > available));
+  if (!item) return makeDecision(DECISION_WORKFLOWS.TRANSFER, item, {
+    recommendationType: DECISION_RECOMMENDATION_TYPES.TRANSFER_RECOMMENDATION,
+    recommendedAction: "Scan item for transfer",
+    confidence: DECISION_CONFIDENCE.LOW,
+    reasonText: "Source and destination can be selected, but the item identity is not resolved yet.",
+    riskLevel: DECISION_RISK_LEVELS.LOW,
+    requiredRole: "Staff",
+    linkedWorkflow: "/transfers",
+    eventToCreate: "TRANSFER_ITEM_SCANNED",
+    nextStepText: "Scan the item, enter quantity, then confirm only after reviewing the transfer.",
+  });
+  return makeDecision(DECISION_WORKFLOWS.TRANSFER, item, {
+    recommendationType: DECISION_RECOMMENDATION_TYPES.TRANSFER_RECOMMENDATION,
+    recommendedAction: review ? "Queue transfer for supervisor review" : "Queue transfer request",
+    confidence: review ? DECISION_CONFIDENCE.MEDIUM : DECISION_CONFIDENCE.HIGH,
+    reasonText: review ? `Requested quantity ${quantity} exceeds local snapshot availability ${available}. Queue the transfer for supervisor review; do not mutate stock on the scanner.` : `${String(transferType).replaceAll("_", " ").toLowerCase()} from ${source} to ${destination}. Quantity ${quantity}; available snapshot ${available}. Official movement happens after Inventory Sync.`,
+    riskLevel: review ? DECISION_RISK_LEVELS.REVIEW : DECISION_RISK_LEVELS.LOW,
+    requiredRole: review ? "Supervisor" : "Staff",
+    linkedWorkflow: "/transfers",
+    eventToCreate: review ? "TRANSFER_SUPERVISOR_REVIEW_REQUIRED" : "TRANSFER_COMPLETED",
+    taskToCreate: review ? TASK_TYPES.STOCK_COUNT_RECHECK_TASK : null,
+    taskPriority: review ? TASK_PRIORITIES.HIGH : TASK_PRIORITIES.NORMAL,
+    supervisorReviewRequired: review,
+    nextStepText: "Confirm to queue the transfer event. ScanOps does not directly adjust official stock.",
+    contextKey: `${transferType}-${source}-${destination}-${quantity}`,
+  });
+}
+
 export function getDecisionForWorkflow({ workflow, item, context = {} }) {
   const normalizedWorkflow = normalizeWorkflow(workflow);
   switch (normalizedWorkflow) {
@@ -146,6 +217,8 @@ export function getDecisionForWorkflow({ workflow, item, context = {} }) {
     case DECISION_WORKFLOWS.WASTE: return getWasteRecommendationDecision(item, context.reasonId, context.quantity);
     case DECISION_WORKFLOWS.EXPIRY_FRESHNESS: return getExpiryFreshnessDecision(item, context.expiryStatus, context.freshnessId);
     case DECISION_WORKFLOWS.TASK_PRIORITY: return getTaskPriorityDecision(item || context.task);
+    case DECISION_WORKFLOWS.SHELF_TICKETS: return getShelfTicketDecision(item, context);
+    case DECISION_WORKFLOWS.TRANSFER: return getTransferDecision(item, context);
     default: return makeDecision(normalizedWorkflow || "scanops", item, { recommendationType: DECISION_RECOMMENDATION_TYPES.SUPERVISOR_REVIEW_RECOMMENDATION, recommendedAction: "Review scanner context", confidence: DECISION_CONFIDENCE.LOW, reasonText: "No deterministic workflow rule is mapped for this scanner context.", riskLevel: DECISION_RISK_LEVELS.REVIEW, requiredRole: "Supervisor" });
   }
 }

@@ -172,7 +172,7 @@ export default function GapScan() {
       return (
         <>
           <button onClick={() => finish({ eventType: SCANOPS_EVENT_TYPES.SHELF_LABEL_ISSUE_FLAGGED, title: "Label Issue Flagged", helper: "Gap was classified as a shelf label or planogram issue, not a stock shortage.", status: "flagged" })} className={BUTTON_PRIMARY}>Flag Label Issue</button>
-          <button onClick={() => finish({ eventType: SCANOPS_EVENT_TYPES.PLANOGRAM_ISSUE_FLAGGED, title: "Shelf Label Requested", helper: "A label request placeholder was recorded for the future Labels stage.", status: "label_requested" })} className={BUTTON_SECONDARY}>Request Shelf Label</button>
+          <button onClick={() => finish({ eventType: SCANOPS_EVENT_TYPES.SHELF_TICKET_BATCH_SENT_TO_DESKTOP, title: "Shelf Ticket Requested", helper: "A shelf-ticket request was queued for the desktop ticket queue. No fake printed state was recorded.", status: "queued_for_desktop" })} className={BUTTON_SECONDARY}>Request Shelf Ticket</button>
         </>
       );
     }

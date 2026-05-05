@@ -17,6 +17,8 @@ import Waste from './pages/Waste';
 import ExpiryCheck from './pages/ExpiryCheck';
 import Tasks from './pages/Tasks';
 import InventorySync from './pages/InventorySync';
+import ShelfTickets from './pages/ShelfTickets';
+import Transfers from './pages/Transfers';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -56,6 +58,8 @@ const AuthenticatedApp = () => {
       <Route path="/expiry-check" element={<ExpiryCheck />} />
       <Route path="/tasks" element={<Tasks />} />
       <Route path="/inventory-sync" element={<InventorySync />} />
+      <Route path="/shelf-tickets" element={<ShelfTickets />} />
+      <Route path="/transfers" element={<Transfers />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
