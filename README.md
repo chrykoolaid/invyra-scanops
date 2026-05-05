@@ -207,3 +207,25 @@ No automatic approval of quantity exceptions.
 No desktop reconciliation built yet.
 Inventory remains the official movement applier after sync/approval.
 ```
+
+## Stage J — Header Operational Menu + Role / Device / Audit Hardening
+
+Stage J adds the compact `☰` operational menu in the existing app header. It does not add another Home row and does not add a Stage J Home tile; Home remains the existing 3-column launcher.
+
+Menu coverage:
+- Daily Controls: Sync Now, Scanner Test, Device Status, Shelf Ticket Queue Status
+- Session: Recent Audit Events, Request Supervisor Override, End Session
+- Settings: Scanner Settings, Display & Sound, Offline Mode, Store / Department Context
+- Support: Help / Workflow Guide, About ScanOps
+
+Stage J hardening:
+- Operational audit events support actorUserId, actorName, actorRole, deviceId, scannerId, storeId, departmentId, sessionId, environment, traceId, and timestamp.
+- Scanner Test accepts barcode / PLU / SKU / internal ID and records an audit trace without mutating stock.
+- Staff blocked attempts create audit events.
+- Supervisor / Manager / Admin approval behavior can be validated through the prototype-only role preview in Device Status.
+
+Boundaries preserved:
+- No backend server.
+- No printer infrastructure.
+- No full login/user management.
+- Invyra Inventory remains source of truth; ScanOps remains the handheld execution layer.

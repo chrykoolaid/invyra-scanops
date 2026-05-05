@@ -1,5 +1,6 @@
 import { SCANOPS_USER_CONTEXT } from "./scanOpsInventoryFixtures";
 import { recordEventForInventorySync } from "./scanOpsSync";
+import { buildEventIdentity, getScanOpsSession } from "./scanOpsSession";
 
 const STORAGE_KEY = "invyra_scanops_events_v1";
 
@@ -104,24 +105,55 @@ export const SCANOPS_EVENT_TYPES = {
   TRANSFER_EXCEPTION_RECORDED: "TRANSFER_EXCEPTION_RECORDED",
   TRANSFER_QUEUED_FOR_SYNC: "TRANSFER_QUEUED_FOR_SYNC",
   TRANSFER_SUPERVISOR_REVIEW_REQUIRED: "TRANSFER_SUPERVISOR_REVIEW_REQUIRED",
+  OPERATIONAL_MENU_OPENED: "OPERATIONAL_MENU_OPENED",
+  OPERATIONAL_PANEL_OPENED: "OPERATIONAL_PANEL_OPENED",
+  SYNC_NOW_REQUESTED: "SYNC_NOW_REQUESTED",
+  SCANNER_TEST_STARTED: "SCANNER_TEST_STARTED",
+  SCANNER_TEST_SCANNED: "SCANNER_TEST_SCANNED",
+  DEVICE_STATUS_VIEWED: "DEVICE_STATUS_VIEWED",
+  AUDIT_EVENTS_VIEWED: "AUDIT_EVENTS_VIEWED",
+  SUPERVISOR_OVERRIDE_REQUESTED: "SUPERVISOR_OVERRIDE_REQUESTED",
+  SUPERVISOR_OVERRIDE_APPROVED: "SUPERVISOR_OVERRIDE_APPROVED",
+  SUPERVISOR_OVERRIDE_BLOCKED: "SUPERVISOR_OVERRIDE_BLOCKED",
+  PERMISSION_ATTEMPT_BLOCKED: "PERMISSION_ATTEMPT_BLOCKED",
+  SCANOPS_SETTINGS_VIEWED: "SCANOPS_SETTINGS_VIEWED",
+  SCANOPS_SETTING_CHANGED: "SCANOPS_SETTING_CHANGED",
+  STORE_CONTEXT_CHANGE_BLOCKED: "STORE_CONTEXT_CHANGE_BLOCKED",
+  SHELF_TICKET_QUEUE_STATUS_VIEWED: "SHELF_TICKET_QUEUE_STATUS_VIEWED",
+  SESSION_ENDED: "SESSION_ENDED",
+  SESSION_ROLE_PREVIEW_CHANGED: "SESSION_ROLE_PREVIEW_CHANGED",
 };
 
 export function createScanOpsEvent(eventType, payload = {}) {
+  const identity = buildEventIdentity(getScanOpsSession());
+  const traceId = payload.traceId || payload.trace_id || makeId("trace");
   const event = {
     event_id: makeId("evt"),
-    trace_id: payload.trace_id || makeId("trace"),
+    trace_id: traceId,
+    traceId,
     event_type: eventType,
     source_module: payload.source_module || "ScanOps",
-    user_id: SCANOPS_USER_CONTEXT.user_id,
-    role: SCANOPS_USER_CONTEXT.role,
-    scanner_id: SCANOPS_USER_CONTEXT.scanner_id,
-    location_id: SCANOPS_USER_CONTEXT.location_id,
-    created_at: new Date().toISOString(),
+    user_id: identity.user_id || SCANOPS_USER_CONTEXT.user_id,
+    user_name: identity.user_name || SCANOPS_USER_CONTEXT.user_name,
+    role: identity.role || SCANOPS_USER_CONTEXT.role,
+    scanner_id: identity.scanner_id || SCANOPS_USER_CONTEXT.scanner_id,
+    location_id: identity.location_id || SCANOPS_USER_CONTEXT.location_id,
+    created_at: identity.created_at,
+    timestamp: identity.timestamp,
+    actorUserId: identity.actorUserId,
+    actorName: identity.actorName,
+    actorRole: identity.actorRole,
+    deviceId: identity.deviceId,
+    scannerId: identity.scannerId,
+    storeId: identity.storeId,
+    departmentId: identity.departmentId,
+    sessionId: identity.sessionId,
+    environment: identity.environment,
     status: payload.status || "recorded",
     ...payload,
   };
   const events = safeReadEvents();
-  safeWriteEvents([event, ...events].slice(0, 80));
+  safeWriteEvents([event, ...events].slice(0, 120));
   recordEventForInventorySync(event);
   return event;
 }
