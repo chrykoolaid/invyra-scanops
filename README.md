@@ -40,7 +40,7 @@ Support: [https://app.base44.com/support](https://app.base44.com/support)
 
 ## Invyra ScanOps stage status
 
-Current package: Stage E — Expiry / Freshness Engine v1.
+Current package: Stage F — Task System v1.
 
 Active scanner workflows:
 - Product Lookup
@@ -51,5 +51,6 @@ Active scanner workflows:
 - Markdowns
 - Waste
 - Expiry Check
+- Tasks
 
-Stage E adds event-driven expiry and freshness checks only. It records expiry status, freshness condition, and recommendations for markdown, waste, or supervisor review. Later-stage modules such as Tasks, Offline Sync, Labels full engine, Transfers, AI/Decision Engine, and full audit hardening remain intentionally inactive.
+Stage F adds a dedicated task queue workflow while keeping the Home screen as a clean 3-column scanner launcher. The old Home task display has been removed so task content cannot stretch the dashboard. Tasks support open operational work, task detail, Start Task, Complete Task, Mark Blocked, linked workflow routing, and task events. Later-stage modules such as Offline Sync, Labels full engine, Transfers, AI/Decision Engine, and full audit hardening remain intentionally inactive.

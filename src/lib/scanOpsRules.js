@@ -251,3 +251,19 @@ export function getFreshnessRecommendation(item, expiryStatus, conditionId) {
 export function requiresFreshnessReview(item, expiryStatus, conditionId) {
   return getFreshnessRecommendation(item, expiryStatus, conditionId).approvalRequired;
 }
+
+
+export function getTaskRolePermission(task, userContext = { role: "Staff" }) {
+  const role = userContext.role || "Staff";
+  const elevated = ["Supervisor", "Manager", "Admin"].includes(role);
+  const managerLevel = ["Manager", "Admin"].includes(role);
+  return {
+    canStart: Boolean(task),
+    canComplete: Boolean(task && (!task.requiresSupervisor || elevated)),
+    canBlock: Boolean(task),
+    canCancel: Boolean(task && managerLevel),
+    helper: task?.requiresSupervisor && !elevated
+      ? "Supervisor review is required before this task can be completed."
+      : "Task action allowed for the current scanner role.",
+  };
+}

@@ -15,6 +15,7 @@ import GapScan from './pages/GapScan';
 import Markdowns from './pages/Markdowns';
 import Waste from './pages/Waste';
 import ExpiryCheck from './pages/ExpiryCheck';
+import Tasks from './pages/Tasks';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -52,6 +53,7 @@ const AuthenticatedApp = () => {
       <Route path="/markdowns" element={<Markdowns />} />
       <Route path="/waste" element={<Waste />} />
       <Route path="/expiry-check" element={<ExpiryCheck />} />
+      <Route path="/tasks" element={<Tasks />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

@@ -10,8 +10,10 @@ import {
   Trash2,
   Clock,
   ScanBarcode,
+  ListChecks,
   Printer,
   ArrowLeftRight,
+  WifiOff,
 } from "lucide-react";
 
 const tiles = [
@@ -19,23 +21,21 @@ const tiles = [
   { icon: ClipboardList, label: "Stock Count", to: "/stock-count", active: true },
   { icon: PackageOpen, label: "Receiving", to: "/receiving", active: true },
   { icon: RefreshCw, label: "Replenish", to: "/replenish", active: true },
+  { icon: ScanBarcode, label: "Gap Scan", to: "/gap-scan", active: true },
+  { icon: ListChecks, label: "Tasks", to: "/tasks", active: true },
   { icon: Tags, label: "Markdowns", to: "/markdowns", active: true },
   { icon: Trash2, label: "Waste", to: "/waste", active: true },
   { icon: Clock, label: "Expiry Check", to: "/expiry-check", active: true },
-  { icon: ScanBarcode, label: "Gap Scan", to: "/gap-scan", active: true },
   { icon: Printer, label: "Labels", to: null, active: false },
   { icon: ArrowLeftRight, label: "Transfers", to: null, active: false },
+  { icon: WifiOff, label: "Offline Sync", to: null, active: false },
 ];
-
-const tasks = [];
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
       <AppHeader />
-
-      <main className="flex-1 px-4 py-5 space-y-6 overflow-y-auto pb-8">
-        {/* Action Grid */}
+      <main className="flex-1 px-4 py-5 overflow-y-auto overflow-x-hidden pb-8">
         <div className="grid grid-cols-3 gap-3">
           {tiles.map((tile) => (
             <ActionTile
@@ -47,22 +47,6 @@ export default function Home() {
             />
           ))}
         </div>
-
-        {/* Today's Tasks */}
-        <section>
-          <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">
-            Today's Tasks
-          </h2>
-          <div className="bg-card rounded-2xl border border-border px-4 py-4">
-            {tasks.length === 0 ? (
-              <div>
-                <p className="text-sm font-semibold text-foreground">No assigned scanner tasks yet</p>
-                <p className="text-xs text-muted-foreground mt-1">Stage F will add manager-assigned and auto-generated task routing.</p>
-              </div>
-            ) : null}
-          </div>
-        </section>
-
       </main>
     </div>
   );
