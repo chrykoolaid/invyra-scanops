@@ -24,6 +24,7 @@ export default function WorkflowHeader({
   const [matches, setMatches] = useState([]);
   const [lookupState, setLookupState] = useState("idle");
   const [showKeyboardFallback, setShowKeyboardFallback] = useState(false);
+  const [keyboardCaps, setKeyboardCaps] = useState(false);
   const inputRef = useRef(null);
   const keyboardFallbackTimer = useRef(null);
   const focusViewportHeight = useRef(null);
@@ -139,6 +140,7 @@ export default function WorkflowHeader({
     event?.preventDefault?.();
     window.clearTimeout(debounceTimer.current);
     runLookup(currentValue, "submit");
+    setShowKeyboardFallback(false);
   };
 
   const updateValue = (next) => {
@@ -206,9 +208,15 @@ export default function WorkflowHeader({
     };
   }, [disabled, onScanValueChange, runLookup, showSearch]);
 
+  useEffect(() => {
+    document.documentElement.classList.toggle("scanops-keyboard-open", Boolean(showKeyboardFallback && manualFocused));
+    return () => document.documentElement.classList.remove("scanops-keyboard-open");
+  }, [showKeyboardFallback, manualFocused]);
+
   useEffect(() => () => {
     window.clearTimeout(debounceTimer.current);
     window.clearTimeout(keyboardFallbackTimer.current);
+    document.documentElement.classList.remove("scanops-keyboard-open");
   }, []);
 
   return (
@@ -322,91 +330,117 @@ export default function WorkflowHeader({
 
           {showKeyboardFallback && manualFocused && (
             <div
-              className="mt-2 rounded-2xl border border-border bg-background p-2 shadow-sm"
+              className="scanops-keyboard-fallback fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/98 px-3 pt-2 shadow-[0_-10px_30px_rgba(15,23,42,0.12)] backdrop-blur"
               aria-label="On-screen search keyboard"
               onMouseDown={(event) => event.preventDefault()}
             >
-              <div className="mb-2 flex items-center justify-between gap-2 px-1">
-                <p className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">Keyboard</p>
-                <p className="text-[11px] font-semibold text-muted-foreground">Manual search only</p>
-              </div>
-              {[
-                ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
-                ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
-                ["Z", "X", "C", "V", "B", "N", "M"],
-              ].map((row, rowIndex) => (
-                <div key={rowIndex} className="mb-1.5 flex justify-center gap-1">
-                  {row.map((key) => (
+              <div className="mx-auto w-full max-w-[480px] pb-[max(0.6rem,env(safe-area-inset-bottom))]">
+                <div className="mb-2 flex items-center justify-between gap-2 px-1">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Manual search</p>
+                  <button
+                    type="button"
+                    className="rounded-full bg-secondary px-3 py-1 text-[10px] font-black text-muted-foreground active:bg-border"
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      setShowKeyboardFallback(false);
+                      requestAnimationFrame(() => inputRef.current?.blur?.());
+                    }}
+                  >
+                    Hide
+                  </button>
+                </div>
+                {[
+                  ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+                  ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+                  ["z", "x", "c", "v", "b", "n", "m"],
+                ].map((row, rowIndex) => (
+                  <div key={rowIndex} className="mb-1.5 flex justify-center gap-1">
+                    {row.map((key) => {
+                      const visibleKey = keyboardCaps ? key.toUpperCase() : key;
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          className="flex h-9 min-w-0 flex-1 items-center justify-center rounded-xl bg-secondary px-1 text-sm font-black text-foreground active:bg-border"
+                          onPointerDown={(event) => {
+                            event.preventDefault();
+                            appendKeyboardText(visibleKey);
+                          }}
+                        >
+                          {visibleKey}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
+                <div className="mb-1.5 grid grid-cols-10 gap-1">
+                  {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((key) => (
                     <button
                       key={key}
                       type="button"
-                      className="flex h-8 min-w-0 flex-1 items-center justify-center rounded-lg bg-secondary px-1 text-[11px] font-black text-foreground active:bg-border"
+                      className="flex h-9 items-center justify-center rounded-xl bg-secondary text-sm font-black text-foreground active:bg-border"
                       onPointerDown={(event) => {
                         event.preventDefault();
-                        appendKeyboardText(key.toLowerCase());
+                        appendKeyboardText(key);
                       }}
                     >
                       {key}
                     </button>
                   ))}
                 </div>
-              ))}
-              <div className="mb-1.5 grid grid-cols-10 gap-1">
-                {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((key) => (
+                <div className="grid grid-cols-[0.9fr_0.9fr_2.1fr_1.1fr_1.15fr] gap-1">
                   <button
-                    key={key}
                     type="button"
-                    className="flex h-8 items-center justify-center rounded-lg bg-secondary text-[11px] font-black text-foreground active:bg-border"
+                    aria-pressed={keyboardCaps}
+                    className={`h-10 rounded-xl px-2 text-xs font-black active:bg-border ${keyboardCaps ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"}`}
                     onPointerDown={(event) => {
                       event.preventDefault();
-                      appendKeyboardText(key);
+                      setKeyboardCaps((value) => !value);
                     }}
                   >
-                    {key}
+                    {keyboardCaps ? "ABC" : "abc"}
                   </button>
-                ))}
-              </div>
-              <div className="grid grid-cols-[1fr_2fr_1fr_1fr] gap-1">
-                <button
-                  type="button"
-                  className="h-9 rounded-lg bg-secondary px-2 text-xs font-black text-foreground active:bg-border"
-                  onPointerDown={(event) => {
-                    event.preventDefault();
-                    appendKeyboardText("-");
-                  }}
-                >
-                  -
-                </button>
-                <button
-                  type="button"
-                  className="h-9 rounded-lg bg-secondary px-2 text-xs font-black text-foreground active:bg-border"
-                  onPointerDown={(event) => {
-                    event.preventDefault();
-                    appendKeyboardText(" ");
-                  }}
-                >
-                  Space
-                </button>
-                <button
-                  type="button"
-                  className="h-9 rounded-lg bg-secondary px-2 text-xs font-black text-foreground active:bg-border"
-                  onPointerDown={(event) => {
-                    event.preventDefault();
-                    backspaceKeyboardText();
-                  }}
-                >
-                  Delete
-                </button>
-                <button
-                  type="button"
-                  className="h-9 rounded-lg bg-primary px-2 text-xs font-black text-primary-foreground active:opacity-90"
-                  onPointerDown={(event) => {
-                    event.preventDefault();
-                    submit(event);
-                  }}
-                >
-                  Search
-                </button>
+                  <button
+                    type="button"
+                    className="h-10 rounded-xl bg-secondary px-2 text-xs font-black text-foreground active:bg-border"
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      appendKeyboardText("-");
+                    }}
+                  >
+                    -
+                  </button>
+                  <button
+                    type="button"
+                    className="h-10 rounded-xl bg-secondary px-2 text-xs font-black text-foreground active:bg-border"
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      appendKeyboardText(" ");
+                    }}
+                  >
+                    Space
+                  </button>
+                  <button
+                    type="button"
+                    className="h-10 rounded-xl bg-secondary px-2 text-xs font-black text-foreground active:bg-border"
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      backspaceKeyboardText();
+                    }}
+                  >
+                    Delete
+                  </button>
+                  <button
+                    type="button"
+                    className="h-10 rounded-xl bg-primary px-2 text-xs font-black text-primary-foreground active:opacity-90"
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      submit(event);
+                    }}
+                  >
+                    Search
+                  </button>
+                </div>
               </div>
             </div>
           )}

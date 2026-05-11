@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle2, Minus, Package, Plus, Search } from "lucide-react";
+import { CheckCircle2, Minus, Package, Plus } from "lucide-react";
 
 export function PageShell({ children }) {
   return <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">{children}</div>;
@@ -17,18 +17,10 @@ export function SectionCard({ children, className = "" }) {
   return <section className={`scanops-work-card ${className}`}>{children}</section>;
 }
 
-export function ReadyCard({ title = "Ready to scan", helper = "Use hardware trigger or tap search above." }) {
-  return (
-    <SectionCard className="flex items-start gap-3">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-        <Search className="h-4 w-4" />
-      </div>
-      <div className="min-w-0">
-        <h2 className="text-sm font-black leading-tight text-foreground">{title}</h2>
-        <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{helper}</p>
-      </div>
-    </SectionCard>
-  );
+export function ReadyCard() {
+  // Stage M.1.2: idle workflows should not show large "Ready to scan" explainer walls.
+  // The header search field is the instruction surface. Keep the body clear until an item is selected.
+  return null;
 }
 
 export function ItemSummaryCard({ item, children }) {

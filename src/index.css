@@ -277,3 +277,17 @@ body {
 .scanops-root-shell .scanops-sticky-actions {
   margin-bottom: -3.5rem;
 }
+
+/* Stage M.1.2 keyboard placement polish */
+.scanops-keyboard-fallback {
+  max-height: 46dvh;
+  overflow: hidden;
+}
+
+.scanops-keyboard-open .scanops-root-shell main {
+  padding-bottom: max(16rem, env(safe-area-inset-bottom)) !important;
+}
+
+.scanops-keyboard-open .scanops-root-shell .scanops-sticky-actions {
+  bottom: 13.75rem;
+}
