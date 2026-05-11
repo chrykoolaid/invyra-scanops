@@ -17,6 +17,17 @@ export function canChangeContext(session) {
   return hasRoleAtLeast(session.actorRole, "Manager");
 }
 
+export function canReviewProductIdentity(session) {
+  return hasRoleAtLeast(session.actorRole, "Supervisor");
+}
+
+export function productIdentityReviewScopeLabel(session) {
+  if (session.actorRole === "Admin") return "All product identity evidence";
+  if (session.actorRole === "Manager") return "Store product identity evidence";
+  if (session.actorRole === "Supervisor") return "Team product identity evidence";
+  return "Evidence submission only";
+}
+
 export function auditScopeLabel(session) {
   if (session.actorRole === "Admin") return "All scanner audit diagnostics";
   if (session.actorRole === "Manager") return "Store audit events";

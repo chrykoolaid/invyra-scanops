@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import AttributeEvidenceFields from "../components/scanner/AttributeEvidenceFields";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
-import { BatchList, DoneCard, EmptyState, InfoLine, ItemSummaryCard, MetricPill, PageShell, QuantityStepper, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
+import { DoneCard, EmptyState, InfoLine, ItemSummaryCard, MetricPill, PageShell, QuantityStepper, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import {
@@ -15,29 +15,82 @@ import {
   saveWorkflowItemAttributeSnapshot,
   summarizeAttributeSnapshot,
 } from "../lib/scanOpsItemAttributes";
-import { calculateVariance, createCountSession, getSessionVarianceSummary, STOCK_COUNT_AREA_OPTIONS, STOCK_COUNT_MODE_OPTIONS, STOCK_COUNT_TYPES, STOCK_COUNT_TYPE_OPTIONS, STOCK_COUNT_VARIANCE_REASONS } from "../lib/scanOpsStockCount";
-import { makeWorkflowBatchItem, removeWorkflowBatchItem } from "../lib/scanOpsWorkflowBatch";
+import {
+  acceptCountEvidence,
+  calculateVariance,
+  canApproveCountSession,
+  canCloseCountSession,
+  canReviewCountSession,
+  createCountLine,
+  createCountSession,
+  deleteCountSessionItem,
+  expectedQuantityForItem,
+  getCountRecountRequests,
+  getCountSessionItems,
+  getCountSessions,
+  getSessionVarianceSummary,
+  isCountSessionReadOnly,
+  isSessionVisibleToRole,
+  requestCountRecount,
+  saveCountItemAttributeSnapshot,
+  setCountSessionStatus,
+  STOCK_COUNT_AREA_OPTIONS,
+  STOCK_COUNT_MODE_OPTIONS,
+  STOCK_COUNT_STATUSES,
+  STOCK_COUNT_TYPES,
+  STOCK_COUNT_TYPE_OPTIONS,
+  STOCK_COUNT_VARIANCE_REASONS,
+  STOCK_COUNT_VARIANCE_STATUSES,
+  submitCountRecount,
+  upsertCountSession,
+  upsertCountSessionItem,
+} from "../lib/scanOpsStockCount";
+import { useScanOpsSession } from "../lib/scanOpsSession";
 
 function findProduct(input) {
   if (!input) return null;
   return typeof input === "object" ? input : resolveInventoryIdentity(String(input || "").trim());
 }
 
-function itemKey(line) {
-  const base = line.item?.itemId || line.item?.raw?.internalItemId || line.item?.raw?.id || line.item?.raw?.sku || line.item?.raw?.barcode;
-  return `${base || "unknown"}|${line.attributeSnapshot?.attributeKey || "none"}`;
-}
-
-function upsertCountLine(current, nextLine) {
-  const key = itemKey(nextLine);
-  const exists = current.some((line) => itemKey(line) === key);
-  return exists
-    ? current.map((line) => itemKey(line) === key ? { ...line, ...nextLine, batchItemId: line.batchItemId, createdAt: line.createdAt } : line)
-    : [nextLine, ...current];
-}
-
 function getOptionLabel(options, value) {
   return options.find((option) => option.id === value)?.label || options.find((option) => option.id === value)?.title || value;
+}
+
+function formatDateTime(value) {
+  if (!value) return "—";
+  try {
+    return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
+function lineName(line) {
+  return line.item_snapshot?.name || line.item_name || "Scanned item";
+}
+
+function lineUnit(line) {
+  return line.item_snapshot?.unit_type || line.unit_type || line.unitType || "each";
+}
+
+function lineIdentity(line) {
+  return [line.sku && `SKU ${line.sku}`, line.barcode && `Barcode ${line.barcode}`, line.plu && `PLU ${line.plu}`].filter(Boolean).join(" · ");
+}
+
+function expectedLabel(value, unit = "each") {
+  return value === null || value === undefined ? "Expected unavailable" : `${value} ${unit}`;
+}
+
+function statusTone(status) {
+  if ([STOCK_COUNT_STATUSES.APPROVED, STOCK_COUNT_STATUSES.CLOSED, STOCK_COUNT_VARIANCE_STATUSES.ACCEPTED, STOCK_COUNT_VARIANCE_STATUSES.NO_VARIANCE].includes(status)) return "bg-accent/10 text-accent";
+  if ([STOCK_COUNT_STATUSES.RECOUNT_REQUIRED, STOCK_COUNT_VARIANCE_STATUSES.RECOUNT_REQUESTED].includes(status)) return "bg-destructive/10 text-destructive";
+  if ([STOCK_COUNT_STATUSES.REVIEW_REQUIRED, STOCK_COUNT_STATUSES.SUBMITTED, STOCK_COUNT_VARIANCE_STATUSES.REVIEW_REQUIRED, STOCK_COUNT_VARIANCE_STATUSES.EXPECTED_UNAVAILABLE].includes(status)) return "bg-primary/10 text-primary";
+  if ([STOCK_COUNT_STATUSES.CANCELLED, STOCK_COUNT_VARIANCE_STATUSES.REJECTED].includes(status)) return "bg-secondary text-muted-foreground";
+  return "bg-secondary text-muted-foreground";
+}
+
+function StatusBadge({ value }) {
+  return <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide ${statusTone(value)}`}>{value}</span>;
 }
 
 function CountTypeButton({ option, selected, onClick }) {
@@ -53,57 +106,158 @@ function CountTypeButton({ option, selected, onClick }) {
   );
 }
 
-function SessionSummary({ session, countType, area, countMode, lines }) {
+function SessionMetrics({ lines }) {
+  const summary = getSessionVarianceSummary(lines);
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      <MetricPill label="Items" value={summary.countedItems} />
+      <MetricPill label="Variances" value={summary.varianceItems} />
+      <MetricPill label="Recounts" value={summary.recountRequired} />
+    </div>
+  );
+}
+
+function SessionHeaderCard({ session, lines }) {
   const summary = getSessionVarianceSummary(lines);
   return (
     <SectionCard className="space-y-3">
-      <div className="grid grid-cols-3 gap-2">
-        <MetricPill label="Items" value={summary.countedItems} />
-        <MetricPill label="Variances" value={summary.varianceItems} />
-        <MetricPill label="Net diff" value={summary.totalVariance} />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="break-words text-base font-black leading-tight text-foreground">{session?.session_name || "Stock Count Session"}</p>
+          <p className="mt-1 text-xs font-bold text-muted-foreground">{session?.area_label || session?.count_area_label || "Area"} · {session?.department || "Department"}</p>
+        </div>
+        <StatusBadge value={session?.status || STOCK_COUNT_STATUSES.DRAFT} />
       </div>
+      <SessionMetrics lines={lines} />
       <div className="space-y-2">
-        <InfoLine label="Count type" value={getOptionLabel(STOCK_COUNT_TYPE_OPTIONS, countType)} />
-        <InfoLine label="Area" value={getOptionLabel(STOCK_COUNT_AREA_OPTIONS, area)} />
-        <InfoLine label="Mode" value={getOptionLabel(STOCK_COUNT_MODE_OPTIONS, countMode)} />
-        {session?.count_session_id && <InfoLine label="Session" value={session.count_session_id.replace("count_session_", "")} />}
+        <InfoLine label="Assigned to" value={session?.assigned_user_name || session?.assigned_user_id || "—"} />
+        <InfoLine label="Type" value={session?.count_type_label || "Quick Count"} />
+        <InfoLine label="Mode" value={session?.count_mode_label || "Unguided scan count"} />
+        <InfoLine label="Stock mutation" value="No direct adjustment" />
+        {summary.totalVariance !== 0 && <InfoLine label="Net diff" value={summary.totalVariance} />}
       </div>
     </SectionCard>
   );
 }
 
-function ReviewLine({ line, onReasonChange, onRemove }) {
-  const variance = Number(line.variance || 0);
-  const unit = line.item?.unit || "each";
-  const varianceReasonId = line.varianceReasonId || "shelf_empty_unknown";
+function SessionCard({ session, lines, onOpen }) {
+  const summary = getSessionVarianceSummary(lines);
+  const actionLabel = [STOCK_COUNT_STATUSES.DRAFT, STOCK_COUNT_STATUSES.IN_PROGRESS].includes(session.status) ? "Continue Count" : "Open Session";
   return (
     <SectionCard className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="break-words text-sm font-black text-foreground">{line.item?.itemName || "Scanned item"}</p>
-          <p className="mt-1 text-xs font-bold text-muted-foreground">Expected {line.expectedQuantity} · Counted {line.countedQuantity} · Diff {variance}</p>
-          {line.attributeSnapshot && <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">{summarizeAttributeSnapshot(line.attributeSnapshot)}</p>}
+          <p className="break-words text-sm font-black text-foreground">{session.session_name}</p>
+          <p className="mt-1 text-xs font-bold text-muted-foreground">{session.area_label || session.count_area_label} · {session.department || "Store"}</p>
         </div>
-        <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide ${variance === 0 ? "bg-secondary text-muted-foreground" : "bg-primary/10 text-primary"}`}>
-          {variance === 0 ? "Matched" : "Variance"}
-        </span>
+        <StatusBadge value={session.status} />
       </div>
-      {variance !== 0 && (
-        <TouchSelect
-          label="Variance reason"
-          value={varianceReasonId}
-          onChange={(nextReason) => onReasonChange(line.batchItemId, nextReason)}
-          options={STOCK_COUNT_VARIANCE_REASONS}
-        />
-      )}
       <div className="grid grid-cols-3 gap-2">
-        <MetricPill label="Expected" value={line.expectedQuantity} suffix={unit} />
-        <MetricPill label="Counted" value={line.countedQuantity} suffix={unit} />
-        <MetricPill label="Diff" value={variance} suffix={unit} />
+        <MetricPill label="Items" value={summary.countedItems} />
+        <MetricPill label="Variances" value={summary.varianceItems} />
+        <MetricPill label="Recount" value={summary.recountRequired} />
       </div>
-      <button type="button" onClick={() => onRemove(line.batchItemId)} className="min-h-9 rounded-xl bg-secondary px-3 text-xs font-black text-muted-foreground active:bg-border">
-        Remove line
+      <div className="space-y-2">
+        <InfoLine label="Assigned" value={session.assigned_user_name || session.assigned_user_id || "—"} />
+        <InfoLine label="Updated" value={formatDateTime(session.submitted_at || session.started_at || session.created_at)} />
+      </div>
+      <button type="button" onClick={() => onOpen(session)} className="min-h-11 w-full rounded-2xl bg-primary px-3 text-sm font-black text-primary-foreground active:scale-[0.98]">
+        {actionLabel}
       </button>
+    </SectionCard>
+  );
+}
+
+function CountLineSummaryCard({ line, onRemove = null, editable = false }) {
+  const unit = lineUnit(line);
+  const variance = line.variance_quantity ?? line.variance;
+  return (
+    <SectionCard className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="break-words text-sm font-black text-foreground">{lineName(line)}</p>
+          {lineIdentity(line) && <p className="mt-1 break-all font-mono text-[11px] uppercase tracking-wide text-muted-foreground">{lineIdentity(line)}</p>}
+          {line.attribute_snapshot && <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">{summarizeAttributeSnapshot(line.attribute_snapshot)}</p>}
+        </div>
+        <StatusBadge value={line.variance_status || STOCK_COUNT_VARIANCE_STATUSES.NO_VARIANCE} />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <MetricPill label="Expected" value={line.expected_quantity == null ? "—" : line.expected_quantity} suffix={line.expected_quantity == null ? "" : unit} />
+        <MetricPill label="Counted" value={line.counted_quantity} suffix={unit} />
+        <MetricPill label="Diff" value={variance == null ? "—" : variance} suffix={variance == null ? "" : unit} />
+      </div>
+      {line.evidence_note && <InfoLine label="Note" value={line.evidence_note} />}
+      {editable && onRemove && (
+        <button type="button" onClick={() => onRemove(line.id || line.count_line_id)} className="min-h-9 rounded-xl bg-secondary px-3 text-xs font-black text-muted-foreground active:bg-border">
+          Remove line
+        </button>
+      )}
+    </SectionCard>
+  );
+}
+
+function RecountEntry({ line, onSubmit }) {
+  const [quantity, setQuantity] = useState(Number(line.counted_quantity || 0));
+  const [note, setNote] = useState("");
+  const unit = lineUnit(line);
+  return (
+    <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-3 space-y-3">
+      <p className="text-xs font-black uppercase tracking-wider text-primary">Recount required</p>
+      <div className="grid grid-cols-2 gap-2">
+        <MetricPill label="Original" value={line.counted_quantity} suffix={unit} />
+        <MetricPill label="Expected" value={line.expected_quantity == null ? "—" : line.expected_quantity} suffix={line.expected_quantity == null ? "" : unit} />
+      </div>
+      <QuantityStepper label="Recounted" value={quantity} onChange={setQuantity} unit={unit} min={0} />
+      <TextInputField label="Evidence note" value={note} onChange={setNote} placeholder="Optional recount note" />
+      <button type="button" onClick={() => onSubmit(line, quantity, note)} className="min-h-11 w-full rounded-2xl bg-primary px-3 text-sm font-black text-primary-foreground active:scale-[0.98]">
+        Submit Recount
+      </button>
+    </div>
+  );
+}
+
+function ReviewLine({ line, canReview, canRecount, onRequestRecount, onAccept, onSubmitRecount }) {
+  const unit = lineUnit(line);
+  const variance = line.variance_quantity ?? line.variance;
+  const recounts = line.recounts || [];
+  const reviewable = ![STOCK_COUNT_VARIANCE_STATUSES.NO_VARIANCE, STOCK_COUNT_VARIANCE_STATUSES.ACCEPTED].includes(line.variance_status);
+  return (
+    <SectionCard className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="break-words text-sm font-black text-foreground">{lineName(line)}</p>
+          {lineIdentity(line) && <p className="mt-1 break-all font-mono text-[11px] uppercase tracking-wide text-muted-foreground">{lineIdentity(line)}</p>}
+          <p className="mt-1 text-xs font-bold text-muted-foreground">Expected {line.expected_quantity == null ? "unavailable" : line.expected_quantity} · Counted {line.counted_quantity} · Diff {variance == null ? "—" : variance}</p>
+        </div>
+        <StatusBadge value={line.variance_status || STOCK_COUNT_VARIANCE_STATUSES.NO_VARIANCE} />
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <MetricPill label="Expected" value={line.expected_quantity == null ? "—" : line.expected_quantity} suffix={line.expected_quantity == null ? "" : unit} />
+        <MetricPill label="Counted" value={line.counted_quantity} suffix={unit} />
+        <MetricPill label="Diff" value={variance == null ? "—" : variance} suffix={variance == null ? "" : unit} />
+      </div>
+      {line.attribute_snapshot && <p className="break-words rounded-2xl bg-secondary/60 p-3 text-xs font-semibold text-muted-foreground">{summarizeAttributeSnapshot(line.attribute_snapshot)}</p>}
+      {line.condition_note && <InfoLine label="Condition" value={getOptionLabel(COUNT_CONDITION_NOTE_OPTIONS, line.condition_note)} />}
+      {line.evidence_note && <InfoLine label="Evidence note" value={line.evidence_note} />}
+      {recounts.length > 0 && (
+        <div className="rounded-2xl bg-secondary/60 p-3 space-y-2">
+          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Recount evidence</p>
+          {recounts.map((entry) => (
+            <InfoLine key={entry.id} label={`${entry.recount_quantity} ${unit}`} value={entry.evidence_note || formatDateTime(entry.created_at)} />
+          ))}
+        </div>
+      )}
+      {line.variance_status === STOCK_COUNT_VARIANCE_STATUSES.RECOUNT_REQUESTED && canRecount && <RecountEntry line={line} onSubmit={onSubmitRecount} />}
+      {canReview && reviewable && line.variance_status !== STOCK_COUNT_VARIANCE_STATUSES.RECOUNT_REQUESTED && (
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => onRequestRecount(line)} className="min-h-10 rounded-xl bg-secondary px-3 text-xs font-black text-secondary-foreground active:bg-border">
+            Request Recount
+          </button>
+          <button type="button" onClick={() => onAccept(line)} className="min-h-10 rounded-xl bg-primary px-3 text-xs font-black text-primary-foreground active:scale-[0.98]">
+            Accept Evidence
+          </button>
+        </div>
+      )}
     </SectionCard>
   );
 }
@@ -111,13 +265,17 @@ function ReviewLine({ line, onReasonChange, onRemove }) {
 export default function StockCount() {
   const navigate = useNavigate();
   const location = useLocation();
+  const actorSession = useScanOpsSession();
   const taskParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const [scanValue, setScanValue] = useState("");
-  const [view, setView] = useState("setup");
+  const [view, setView] = useState("landing");
+  const [sessions, setSessions] = useState(() => getCountSessions());
+  const [activeSessionId, setActiveSessionId] = useState(null);
+  const [lines, setLines] = useState([]);
+  const [sessionName, setSessionName] = useState("Morning Count");
   const [countType, setCountType] = useState(() => taskParams.get("countType") || STOCK_COUNT_TYPES.QUICK_COUNT);
   const [area, setArea] = useState(() => taskParams.get("area") || "dairy_chilled");
   const [countMode, setCountMode] = useState(() => taskParams.get("countMode") || "unguided_scan_count");
-  const [session, setSession] = useState(null);
   const [item, setItem] = useState(null);
   const [counted, setCounted] = useState(1);
   const [reason, setReason] = useState("shelf_empty_unknown");
@@ -128,61 +286,109 @@ export default function StockCount() {
   const [enteredWeight, setEnteredWeight] = useState("");
   const [weightSource, setWeightSource] = useState("label_weight");
   const [note, setNote] = useState("");
-  const [lines, setLines] = useState([]);
-  const expected = Number(item?.stockOnHand ?? item?.stock_on_hand ?? item?.shelfStock ?? item?.shelf_stock ?? 0);
-  const variance = useMemo(() => calculateVariance(expected, Number(counted || 0)), [expected, counted]);
-  const unit = item?.unitType || item?.unit_type || "each";
-  const reasonLabel = getOptionLabel(STOCK_COUNT_VARIANCE_REASONS, reason);
-  const summary = getSessionVarianceSummary(lines);
-  const selectedType = STOCK_COUNT_TYPE_OPTIONS.find((option) => option.id === countType) || STOCK_COUNT_TYPE_OPTIONS[0];
-  const showSearch = view === "counting";
 
-  const resetSession = () => {
-    setScanValue("");
-    setView("setup");
-    setSession(null);
+  const activeSession = useMemo(() => sessions.find((entry) => (entry.id || entry.count_session_id) === activeSessionId) || null, [activeSessionId, sessions]);
+  const visibleSessions = useMemo(() => sessions.filter((session) => isSessionVisibleToRole(session, actorSession)), [actorSession, sessions]);
+  const expected = expectedQuantityForItem(item);
+  const variance = useMemo(() => calculateVariance(expected, Number(counted || 0)), [expected, counted]);
+  const unit = item?.unitType || item?.unit_type || item?.unit || "each";
+  const summary = getSessionVarianceSummary(lines);
+  const canReview = canReviewCountSession(actorSession.actorRole);
+  const canApprove = canApproveCountSession(actorSession.actorRole, summary);
+  const canClose = canCloseCountSession(actorSession.actorRole);
+  const sessionReadOnly = isCountSessionReadOnly(activeSession?.status) || ([STOCK_COUNT_STATUSES.SUBMITTED, STOCK_COUNT_STATUSES.REVIEW_REQUIRED].includes(activeSession?.status) && actorSession.actorRole === "Staff");
+  const canAddCountEvidence = activeSession && [STOCK_COUNT_STATUSES.DRAFT, STOCK_COUNT_STATUSES.IN_PROGRESS].includes(activeSession.status) && !sessionReadOnly;
+  const canSubmitRecount = activeSession?.status === STOCK_COUNT_STATUSES.RECOUNT_REQUIRED && (actorSession.actorRole === "Staff" || canReview);
+  const showSearch = view === "counting" && canAddCountEvidence;
+  const reasonLabel = getOptionLabel(STOCK_COUNT_VARIANCE_REASONS, reason);
+
+  const refreshSessions = () => setSessions(getCountSessions());
+  const refreshLines = (sessionId = activeSessionId) => setLines(sessionId ? getCountSessionItems(sessionId) : []);
+
+  const resetItem = () => {
     setItem(null);
+    setScanValue("");
     setCounted(1);
     setReason("shelf_empty_unknown");
     setExpiryDate("");
     setLotBatch("");
     setConditionNote("normal");
+    setQuantityType("each");
     setEnteredWeight("");
     setNote("");
-    setLines([]);
   };
 
-  const start = () => {
+  const goLanding = () => {
+    resetItem();
+    setActiveSessionId(null);
+    setLines([]);
+    refreshSessions();
+    setView("landing");
+  };
+
+  const openSession = (session) => {
+    let nextSession = session;
+    const sessionId = session.id || session.count_session_id;
+    if (session.status === STOCK_COUNT_STATUSES.DRAFT) {
+      nextSession = setCountSessionStatus(sessionId, STOCK_COUNT_STATUSES.IN_PROGRESS) || session;
+      createScanOpsEvent(SCANOPS_EVENT_TYPES.STOCK_COUNT_SESSION_STARTED, {
+        source_module: "Stock Count",
+        count_session_id: sessionId,
+        session_name: session.session_name,
+        status: "in_progress",
+        applies_stock_directly: false,
+      });
+      refreshSessions();
+    }
+    setActiveSessionId(sessionId);
+    setLines(getCountSessionItems(sessionId));
+    setView([STOCK_COUNT_STATUSES.IN_PROGRESS, STOCK_COUNT_STATUSES.DRAFT].includes(nextSession.status) ? "counting" : "review");
+  };
+
+  const startNewSession = () => {
     const nextSession = createCountSession(countType, {
+      session_name: sessionName || `${getOptionLabel(STOCK_COUNT_AREA_OPTIONS, area)} Count`,
+      area,
       count_area: area,
-      count_mode: countMode,
-      count_type_label: getOptionLabel(STOCK_COUNT_TYPE_OPTIONS, countType),
+      area_label: getOptionLabel(STOCK_COUNT_AREA_OPTIONS, area),
       count_area_label: getOptionLabel(STOCK_COUNT_AREA_OPTIONS, area),
-      count_mode_label: getOptionLabel(STOCK_COUNT_MODE_OPTIONS, countMode),
-    });
-    setSession(nextSession);
-    setView("counting");
-    createScanOpsEvent(SCANOPS_EVENT_TYPES.STOCK_COUNT_SESSION_STARTED, {
-      source_module: "Stock Count",
-      count_session_id: nextSession.count_session_id,
-      count_type: countType,
-      count_type_label: nextSession.count_type_label,
-      count_area: area,
-      count_area_label: nextSession.count_area_label,
       count_mode: countMode,
-      count_mode_label: nextSession.count_mode_label,
+      count_mode_label: getOptionLabel(STOCK_COUNT_MODE_OPTIONS, countMode),
+      count_type_label: getOptionLabel(STOCK_COUNT_TYPE_OPTIONS, countType),
+      status: STOCK_COUNT_STATUSES.IN_PROGRESS,
+    });
+    upsertCountSession(nextSession);
+    setSessions(getCountSessions());
+    setActiveSessionId(nextSession.id);
+    setLines([]);
+    setView("counting");
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.STOCK_COUNT_SESSION_CREATED, {
+      source_module: "Stock Count",
+      count_session_id: nextSession.id,
+      session_name: nextSession.session_name,
+      count_type: countType,
+      count_area: area,
+      count_mode: countMode,
       status: "in_progress",
       applies_stock_directly: false,
-      sync_exempt: true,
+    });
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.STOCK_COUNT_SESSION_STARTED, {
+      source_module: "Stock Count",
+      count_session_id: nextSession.id,
+      session_name: nextSession.session_name,
+      status: "in_progress",
+      applies_stock_directly: false,
     });
   };
 
   const scan = (value) => {
+    if (!canAddCountEvidence) return;
     const found = findProduct(value);
     if (!found) return;
     const rawScanValue = typeof value === "object" ? value?._searchMatch?.matchedValue || value?.barcode || value?.gtin || "" : String(value || "").trim();
+    const expectedQuantity = expectedQuantityForItem(found);
     setItem(found);
-    setCounted(Number(found?.stockOnHand ?? found?.stock_on_hand ?? found?.shelfStock ?? found?.shelf_stock ?? 1));
+    setCounted(expectedQuantity === null ? 1 : expectedQuantity);
     setReason("shelf_empty_unknown");
     setExpiryDate(getDefaultExpiryDate(found));
     setLotBatch(getDefaultLotBatch(found));
@@ -194,11 +400,12 @@ export default function StockCount() {
   };
 
   const saveLine = () => {
-    if (!item || !session) return;
-    const isVariance = Number(variance || 0) !== 0;
+    if (!item || !activeSession || !canAddCountEvidence) return;
+    const varianceStatus = expected === null ? STOCK_COUNT_VARIANCE_STATUSES.EXPECTED_UNAVAILABLE : variance === 0 ? STOCK_COUNT_VARIANCE_STATUSES.NO_VARIANCE : Math.abs(Number(variance || 0)) <= 1 ? STOCK_COUNT_VARIANCE_STATUSES.WITHIN_TOLERANCE : STOCK_COUNT_VARIANCE_STATUSES.REVIEW_REQUIRED;
+    const isVariance = varianceStatus !== STOCK_COUNT_VARIANCE_STATUSES.NO_VARIANCE;
     const attributeSnapshot = buildWorkflowItemAttributeSnapshot({
       workflowType: "stock_count",
-      workflowItemId: session.count_session_id,
+      workflowItemId: activeSession.id || activeSession.count_session_id,
       item,
       scanValue,
       expiryDate,
@@ -207,40 +414,32 @@ export default function StockCount() {
       enteredQuantity: enteredWeight || counted,
       weightSource,
       conditionNote,
-      source: "stock_count_evidence_card",
+      source: "stock_count_session_evidence_card",
     });
     saveWorkflowItemAttributeSnapshot(attributeSnapshot);
-    const line = makeWorkflowBatchItem({
-      workflowType: "stock_count",
-      item,
-      quantity: counted,
-      reason: isVariance ? reasonLabel : "Matched",
-      meta: {
-        countSessionId: session.count_session_id,
-        countType,
-        countTypeLabel: getOptionLabel(STOCK_COUNT_TYPE_OPTIONS, countType),
-        countArea: area,
-        countAreaLabel: getOptionLabel(STOCK_COUNT_AREA_OPTIONS, area),
-        countMode,
-        countModeLabel: getOptionLabel(STOCK_COUNT_MODE_OPTIONS, countMode),
-        expectedQuantity: expected,
-        countedQuantity: Number(counted || 0),
-        variance,
-        varianceReasonId: isVariance ? reason : null,
-        varianceReasonLabel: isVariance ? reasonLabel : null,
-        expiryDateEvidence: attributeSnapshot.expiry_snapshot?.expiry_date || undefined,
-        lotBatchEvidence: attributeSnapshot.lot_batch_snapshot?.lot_batch_value || undefined,
-        weightedEvidence: attributeSnapshot.weighted_snapshot || undefined,
-        attributeSnapshot,
-        conditionNote,
-        note,
-        reviewStatus: isVariance ? "variance_review_required" : "matched",
-      },
+    const line = createCountLine({
+      session: activeSession,
+      product: item,
+      countedQuantity: counted,
+      reason: isVariance ? reason : null,
+      note,
+      attributeSnapshot,
+      conditionNote,
     });
-    setLines((current) => upsertCountLine(current, line));
+    const savedLine = upsertCountSessionItem({ ...line, variance_status: varianceStatus, reason_code: isVariance ? reason : null, variance_reason_label: isVariance ? reasonLabel : null });
+    saveCountItemAttributeSnapshot({
+      id: `count_attr_${savedLine.id}`,
+      session_item_id: savedLine.id,
+      session_id: activeSession.id || activeSession.count_session_id,
+      expiry_snapshot: attributeSnapshot.expiry_snapshot || null,
+      lot_batch_snapshot: attributeSnapshot.lot_batch_snapshot || null,
+      weighted_snapshot: attributeSnapshot.weighted_snapshot || null,
+      created_at: new Date().toISOString(),
+    });
     createScanOpsEvent(attributeSnapshot.weighted_snapshot ? SCANOPS_EVENT_TYPES.WEIGHTED_ITEM_EVIDENCE_CAPTURED : SCANOPS_EVENT_TYPES.ATTRIBUTE_EVIDENCE_CAPTURED, {
       source_module: "Stock Count",
-      count_session_id: session.count_session_id,
+      count_session_id: activeSession.id || activeSession.count_session_id,
+      session_item_id: savedLine.id,
       item_name: item.name,
       sku: item.sku,
       barcode: item.barcode,
@@ -258,10 +457,8 @@ export default function StockCount() {
     });
     createScanOpsEvent(isVariance ? SCANOPS_EVENT_TYPES.STOCK_COUNT_VARIANCE_REVIEW_REQUIRED : SCANOPS_EVENT_TYPES.STOCK_COUNT_LINE_SAVED, {
       source_module: "Stock Count",
-      count_session_id: session.count_session_id,
-      count_type: countType,
-      count_area: area,
-      count_mode: countMode,
+      count_session_id: activeSession.id || activeSession.count_session_id,
+      session_item_id: savedLine.id,
       item_name: item.name,
       sku: item.sku,
       barcode: item.barcode,
@@ -270,6 +467,7 @@ export default function StockCount() {
       expected_quantity: expected,
       counted_quantity: Number(counted || 0),
       variance_quantity: variance,
+      variance_status: varianceStatus,
       variance_reason: isVariance ? reason : null,
       variance_reason_label: isVariance ? reasonLabel : null,
       expiry_date: attributeSnapshot.expiry_snapshot?.expiry_date || null,
@@ -280,89 +478,199 @@ export default function StockCount() {
       applies_stock_directly: false,
       status: isVariance ? "variance_review_required" : "line_saved",
     });
-    setItem(null);
-    setScanValue("");
-    setExpiryDate("");
-    setLotBatch("");
-    setConditionNote("normal");
-    setEnteredWeight("");
-    setNote("");
+    refreshLines(activeSession.id || activeSession.count_session_id);
+    refreshSessions();
+    resetItem();
   };
 
-  const updateReviewReason = (batchItemId, nextReason) => {
-    const nextLabel = getOptionLabel(STOCK_COUNT_VARIANCE_REASONS, nextReason);
-    setLines((current) => current.map((line) => line.batchItemId === batchItemId ? {
-      ...line,
-      reason: nextLabel,
-      varianceReasonId: nextReason,
-      varianceReasonLabel: nextLabel,
-      reviewStatus: "variance_reason_confirmed",
-    } : line));
+  const removeLine = (lineId) => {
+    deleteCountSessionItem(lineId);
+    refreshLines(activeSessionId);
   };
 
-  const submit = () => {
-    if (!lines.length || !session) return;
+  const submitSession = () => {
+    if (!activeSession || !lines.length) return;
     const nextSummary = getSessionVarianceSummary(lines);
+    const status = nextSummary.requiresReview ? STOCK_COUNT_STATUSES.REVIEW_REQUIRED : STOCK_COUNT_STATUSES.SUBMITTED;
+    setCountSessionStatus(activeSession.id || activeSession.count_session_id, status, { approval_status: nextSummary.requiresReview ? "Review required" : "Submitted" });
     createScanOpsEvent(SCANOPS_EVENT_TYPES.STOCK_COUNT_SUBMITTED, {
       source_module: "Stock Count",
-      count_session_id: session.count_session_id,
-      count_type: countType,
-      count_area: area,
-      count_mode: countMode,
+      count_session_id: activeSession.id || activeSession.count_session_id,
       counted_items: nextSummary.countedItems,
       variance_items: nextSummary.varianceItems,
       total_variance: nextSummary.totalVariance,
+      next_status: status,
       applies_stock_directly: false,
       status: "submitted_for_review",
       submission_type: "count_evidence_only",
     });
-    setView("submitted");
+    refreshSessions();
+    setView("review");
   };
 
-  const renderSetup = () => (
+  const requestRecount = (line) => {
+    if (!activeSession || !canReview) return;
+    const request = requestCountRecount({
+      sessionId: activeSession.id || activeSession.count_session_id,
+      sessionItemId: line.id || line.count_line_id,
+      reason: line.variance_status === STOCK_COUNT_VARIANCE_STATUSES.EXPECTED_UNAVAILABLE ? "Expected quantity unavailable" : "Variance exceeds threshold",
+    });
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.STOCK_COUNT_RECOUNT_REQUESTED, {
+      source_module: "Stock Count",
+      count_session_id: activeSession.id || activeSession.count_session_id,
+      session_item_id: line.id || line.count_line_id,
+      recount_request_id: request.id,
+      item_name: lineName(line),
+      reason: request.reason,
+      applies_stock_directly: false,
+      status: "recount_requested",
+    });
+    refreshSessions();
+    refreshLines(activeSession.id || activeSession.count_session_id);
+  };
+
+  const acceptEvidence = (line) => {
+    if (!activeSession || !canReview) return;
+    acceptCountEvidence(activeSession.id || activeSession.count_session_id, line.id || line.count_line_id, "Evidence accepted from handheld review");
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.STOCK_COUNT_EVIDENCE_ACCEPTED, {
+      source_module: "Stock Count",
+      count_session_id: activeSession.id || activeSession.count_session_id,
+      session_item_id: line.id || line.count_line_id,
+      item_name: lineName(line),
+      applies_stock_directly: false,
+      status: "evidence_accepted",
+    });
+    refreshLines(activeSession.id || activeSession.count_session_id);
+  };
+
+  const submitRecount = (line, recountQuantity, evidenceNote) => {
+    if (!canSubmitRecount) return;
+    const requestId = line.recount_request_id || getCountRecountRequests(activeSession.id || activeSession.count_session_id).find((request) => request.session_item_id === (line.id || line.count_line_id) && request.status === "Open")?.id;
+    if (!requestId) return;
+    const evidence = submitCountRecount({ requestId, sessionItemId: line.id || line.count_line_id, recountQuantity, evidenceNote });
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.STOCK_COUNT_RECOUNT_SUBMITTED, {
+      source_module: "Stock Count",
+      count_session_id: activeSession.id || activeSession.count_session_id,
+      session_item_id: line.id || line.count_line_id,
+      recount_request_id: requestId,
+      original_count_quantity: evidence.original_count_quantity,
+      recount_quantity: evidence.recount_quantity,
+      recount_variance_quantity: evidence.recount_variance_quantity,
+      evidence_note: evidenceNote,
+      applies_stock_directly: false,
+      status: "recount_completed",
+    });
+    refreshSessions();
+    refreshLines(activeSession.id || activeSession.count_session_id);
+  };
+
+  const approveSession = () => {
+    if (!activeSession || !canApprove) return;
+    setCountSessionStatus(activeSession.id || activeSession.count_session_id, STOCK_COUNT_STATUSES.APPROVED, {
+      approval_status: "Approved",
+      approved_by: actorSession.actorUserId,
+      approved_by_name: actorSession.actorName,
+    });
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.STOCK_COUNT_SESSION_APPROVED, {
+      source_module: "Stock Count",
+      count_session_id: activeSession.id || activeSession.count_session_id,
+      counted_items: summary.countedItems,
+      variance_items: summary.varianceItems,
+      applies_stock_directly: false,
+      status: "approved_evidence_only",
+    });
+    refreshSessions();
+  };
+
+  const closeSession = () => {
+    if (!activeSession || !canClose) return;
+    setCountSessionStatus(activeSession.id || activeSession.count_session_id, STOCK_COUNT_STATUSES.CLOSED);
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.STOCK_COUNT_SESSION_CLOSED, {
+      source_module: "Stock Count",
+      count_session_id: activeSession.id || activeSession.count_session_id,
+      applies_stock_directly: false,
+      status: "closed_read_only",
+    });
+    refreshSessions();
+    setView("review");
+  };
+
+  const renderLanding = () => (
     <>
       <SectionCard className="space-y-3">
-        <div>
-          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Count type</p>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            {STOCK_COUNT_TYPE_OPTIONS.map((option) => (
-              <CountTypeButton key={option.id} option={option} selected={countType === option.id} onClick={() => setCountType(option.id)} />
-            ))}
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-base font-black text-foreground">Active Sessions</p>
+            <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Open assigned counts, submit evidence, or review variances.</p>
           </div>
+          <StatusBadge value={actorSession.actorRole} />
         </div>
-        <TouchSelect label="Area / location" value={area} onChange={setArea} options={STOCK_COUNT_AREA_OPTIONS} />
-        <TouchSelect label="Count mode" value={countMode} onChange={setCountMode} options={STOCK_COUNT_MODE_OPTIONS} />
-      </SectionCard>
-      <SectionCard>
-        <p className="text-sm font-black text-foreground">{selectedType.title}</p>
-        <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">{selectedType.helper}</p>
-        <div className="mt-3 space-y-2">
-          <InfoLine label="Result" value="Creates count evidence only" />
-          <InfoLine label="Stock mutation" value="No direct adjustment" />
+        <div className="grid grid-cols-3 gap-2">
+          <MetricPill label="Visible" value={visibleSessions.length} />
+          <MetricPill label="Review" value={visibleSessions.filter((session) => [STOCK_COUNT_STATUSES.REVIEW_REQUIRED, STOCK_COUNT_STATUSES.SUBMITTED].includes(session.status)).length} />
+          <MetricPill label="Recount" value={visibleSessions.filter((session) => session.status === STOCK_COUNT_STATUSES.RECOUNT_REQUIRED).length} />
         </div>
       </SectionCard>
-      <StickyActions leftLabel="Back" rightLabel="Start Count" onLeft={() => navigate(-1)} onRight={start} />
+      {visibleSessions.length ? (
+        <div className="space-y-3">
+          {visibleSessions.map((session) => (
+            <SessionCard key={session.id || session.count_session_id} session={session} lines={getCountSessionItems(session.id || session.count_session_id)} onOpen={openSession} />
+          ))}
+        </div>
+      ) : (
+        <EmptyState title="No active count sessions." helper="Start a session to capture count evidence." />
+      )}
+      <StickyActions leftLabel="Back" rightLabel="Start New Count Session" onLeft={() => navigate(-1)} onRight={() => setView("new")} />
     </>
   );
 
+  const renderNewSession = () => {
+    const selectedType = STOCK_COUNT_TYPE_OPTIONS.find((option) => option.id === countType) || STOCK_COUNT_TYPE_OPTIONS[0];
+    return (
+      <>
+        <SectionCard className="space-y-3">
+          <TextInputField label="Session name" value={sessionName} onChange={setSessionName} placeholder="e.g. Dairy Morning Count" />
+          <div>
+            <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Count type</p>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {STOCK_COUNT_TYPE_OPTIONS.map((option) => (
+                <CountTypeButton key={option.id} option={option} selected={countType === option.id} onClick={() => setCountType(option.id)} />
+              ))}
+            </div>
+          </div>
+          <TouchSelect label="Area / location" value={area} onChange={setArea} options={STOCK_COUNT_AREA_OPTIONS} />
+          <TouchSelect label="Count mode" value={countMode} onChange={setCountMode} options={STOCK_COUNT_MODE_OPTIONS} />
+        </SectionCard>
+        <SectionCard className="space-y-2">
+          <p className="text-sm font-black text-foreground">{selectedType.title}</p>
+          <InfoLine label="Creates" value="Controlled count session" />
+          <InfoLine label="Stock mutation" value="No direct adjustment" />
+          <InfoLine label="Review path" value="Submit → variance review → approval" />
+        </SectionCard>
+        <StickyActions leftLabel="Back" rightLabel="Start Session" onLeft={() => setView("landing")} onRight={startNewSession} rightDisabled={!String(sessionName || "").trim()} />
+      </>
+    );
+  };
+
   const renderCounting = () => (
     <>
-      <SessionSummary session={session} countType={countType} area={area} countMode={countMode} lines={lines} />
-      {!item && <EmptyState title="No item selected." helper={lines.length ? "Scan another item or review the count." : ""} />}
-      {item && (
+      <SessionHeaderCard session={activeSession} lines={lines} />
+      {!canAddCountEvidence && <EmptyState title="Session is read-only." helper="Submitted, approved, closed, and cancelled sessions cannot be edited from the handheld." />}
+      {!item && canAddCountEvidence && <EmptyState title="No item selected." helper={lines.length ? "Scan another item or review the session." : "Use the header search to scan or enter an item."} />}
+      {item && canAddCountEvidence && (
         <>
           <ItemSummaryCard item={item}>
             <div className="grid grid-cols-2 gap-2">
-              <MetricPill label="Expected" value={expected} suffix={unit} />
-              <MetricPill label="Area" value={getOptionLabel(STOCK_COUNT_AREA_OPTIONS, area)} />
+              <MetricPill label="Expected" value={expected === null ? "Unavailable" : expected} suffix={expected === null ? "" : unit} />
+              <MetricPill label="Variance" value={variance === null ? "—" : variance} suffix={variance === null ? "" : unit} />
             </div>
           </ItemSummaryCard>
           <SectionCard className="space-y-3">
-            <QuantityStepper label="Counted quantity" value={counted} onChange={setCounted} unit={unit} min={0} />
+            <QuantityStepper label="Counted" value={counted} onChange={setCounted} unit={unit} min={0} />
             <div className="rounded-2xl bg-secondary/60 p-3 space-y-2">
-              <InfoLine label="Expected" value={`${expected} ${unit}`} />
+              <InfoLine label="System expected" value={expectedLabel(expected, unit)} />
               <InfoLine label="Counted" value={`${counted} ${unit}`} />
-              <InfoLine label="Difference" value={`${variance ?? 0} ${unit}`} />
+              <InfoLine label="Variance" value={variance === null ? "Review required" : `${variance} ${unit}`} />
             </div>
             {variance !== 0 && <TouchSelect label="Variance reason" value={reason} onChange={setReason} options={STOCK_COUNT_VARIANCE_REASONS} />}
             <AttributeEvidenceFields
@@ -380,71 +688,73 @@ export default function StockCount() {
               onWeightSourceChange={setWeightSource}
               expiryLabel="Expiry note"
             />
-            <TouchSelect label="Condition note" value={conditionNote} onChange={setConditionNote} options={COUNT_CONDITION_NOTE_OPTIONS} />
-            <TextInputField label="Note" value={note} onChange={setNote} placeholder="Optional count note" />
+            <TouchSelect label="Condition" value={conditionNote} onChange={setConditionNote} options={COUNT_CONDITION_NOTE_OPTIONS} />
+            <TextInputField label="Evidence note" value={note} onChange={setNote} placeholder="Optional count note" />
           </SectionCard>
         </>
       )}
-      <BatchList
-        title="Current count"
-        items={lines}
-        emptyText="Current count is empty."
-        renderMeta={(line) => `Expected ${line.expectedQuantity} · Counted ${line.countedQuantity} · Diff ${line.variance ?? 0}${line.varianceReasonLabel ? ` · ${line.varianceReasonLabel}` : ""}${line.attributeSnapshot ? ` · ${summarizeAttributeSnapshot(line.attributeSnapshot)}` : ""}`}
-        onRemove={(id) => setLines((current) => removeWorkflowBatchItem(current, id))}
-      />
+      <div className="space-y-3">
+        {lines.length ? lines.map((line) => <CountLineSummaryCard key={line.id || line.count_line_id} line={line} editable={canAddCountEvidence} onRemove={removeLine} />) : <EmptyState title="Current count is empty." />}
+      </div>
       <StickyActions
-        leftLabel={item ? "Cancel Item" : "Reset"}
-        rightLabel={item ? "Save Count" : "Review Count"}
-        onLeft={() => item ? setItem(null) : resetSession()}
-        onRight={item ? saveLine : () => setView("review")}
-        rightDisabled={item ? false : !lines.length}
+        leftLabel={item ? "Cancel Item" : "Back"}
+        rightLabel={item ? "Add Count Evidence" : "Submit Session"}
+        onLeft={() => item ? resetItem() : goLanding()}
+        onRight={item ? saveLine : submitSession}
+        rightDisabled={item ? false : !lines.length || !canAddCountEvidence}
       />
     </>
   );
 
   const renderReview = () => (
     <>
-      <SessionSummary session={session} countType={countType} area={area} countMode={countMode} lines={lines} />
+      <SessionHeaderCard session={activeSession} lines={lines} />
       <SectionCard className="space-y-2">
-        <p className="text-sm font-black text-foreground">Review Count</p>
-        <p className="text-xs font-semibold leading-snug text-muted-foreground">{summary.countedItems} items · {summary.varianceItems} variance lines · submit evidence only.</p>
+        <p className="text-sm font-black text-foreground">Session Variances</p>
+        <p className="text-xs font-semibold leading-snug text-muted-foreground">{summary.countedItems} items · {summary.varianceItems} variance lines · handheld evidence only.</p>
+        <InfoLine label="Edit state" value={sessionReadOnly || activeSession?.status !== STOCK_COUNT_STATUSES.IN_PROGRESS ? "Read-only evidence" : "Counting in progress"} />
       </SectionCard>
-      {lines.length ? (
-        <div className="space-y-3">
-          {lines.map((line) => (
-            <ReviewLine
-              key={line.batchItemId}
-              line={line}
-              onReasonChange={updateReviewReason}
-              onRemove={(id) => setLines((current) => removeWorkflowBatchItem(current, id))}
-            />
-          ))}
-        </div>
+      <div className="space-y-3">
+        {lines.length ? lines.map((line) => (
+          <ReviewLine
+            key={line.id || line.count_line_id}
+            line={line}
+            canReview={canReview && ![STOCK_COUNT_STATUSES.CLOSED, STOCK_COUNT_STATUSES.CANCELLED, STOCK_COUNT_STATUSES.APPROVED].includes(activeSession?.status)}
+            canRecount={canSubmitRecount}
+            onRequestRecount={requestRecount}
+            onAccept={acceptEvidence}
+            onSubmitRecount={submitRecount}
+          />
+        )) : <EmptyState title="No evidence in this session." />}
+      </div>
+      {activeSession?.status === STOCK_COUNT_STATUSES.APPROVED ? (
+        <StickyActions leftLabel="Back" rightLabel="Close Session" onLeft={goLanding} onRight={closeSession} rightDisabled={!canClose} />
+      ) : [STOCK_COUNT_STATUSES.CLOSED, STOCK_COUNT_STATUSES.CANCELLED].includes(activeSession?.status) ? (
+        <StickyActions leftLabel="Back" rightLabel="New Session" onLeft={goLanding} onRight={() => setView("new")} />
       ) : (
-        <EmptyState title="Current count is empty." />
+        <StickyActions
+          leftLabel="Back"
+          rightLabel={canApprove ? "Approve Session" : "Review Only"}
+          onLeft={goLanding}
+          onRight={approveSession}
+          rightDisabled={!canApprove || activeSession?.status === STOCK_COUNT_STATUSES.RECOUNT_REQUIRED || !lines.length}
+        />
       )}
-      <StickyActions leftLabel="Back to Count" rightLabel="Submit Evidence" onLeft={() => setView("counting")} onRight={submit} rightDisabled={!lines.length} />
     </>
   );
 
-  const renderSubmitted = () => (
+  const renderClosed = () => (
     <>
       <DoneCard
-        title="Count evidence submitted"
-        helper="Submitted for review only. Stock is not adjusted by the handheld."
+        title="Session closed"
+        helper="Count evidence is locked. No stock was adjusted by the handheld."
         rows={[
           { label: "Items counted", value: summary.countedItems },
           { label: "Variance lines", value: summary.varianceItems },
           { label: "Net difference", value: summary.totalVariance },
         ]}
       />
-      <BatchList
-        title="Submitted count"
-        items={lines}
-        emptyText="No submitted lines."
-        renderMeta={(line) => `Expected ${line.expectedQuantity} · Counted ${line.countedQuantity} · Diff ${line.variance ?? 0}${line.varianceReasonLabel ? ` · ${line.varianceReasonLabel}` : ""}${line.attributeSnapshot ? ` · ${summarizeAttributeSnapshot(line.attributeSnapshot)}` : ""}`}
-      />
-      <StickyActions leftLabel="Review" rightLabel="New Count" onLeft={() => setView("review")} onRight={resetSession} />
+      <StickyActions leftLabel="Back" rightLabel="New Session" onLeft={goLanding} onRight={() => setView("new")} />
     </>
   );
 
@@ -452,17 +762,18 @@ export default function StockCount() {
     <PageShell>
       <WorkflowHeader
         title="Stock Count"
-        subtitle={view === "setup" ? "Setup count session" : view === "review" ? "Review count evidence" : view === "submitted" ? "Submitted for review" : "Count stock by scan or search"}
+        subtitle={view === "landing" ? "Session workspace" : view === "new" ? "Start count session" : view === "review" ? "Variance review" : activeSession?.status || "Count stock by scan or search"}
         scanValue={scanValue}
         onScanValueChange={setScanValue}
         onScan={scan}
         showSearch={showSearch}
       />
       <WorkflowMain>
-        {view === "setup" && renderSetup()}
+        {view === "landing" && renderLanding()}
+        {view === "new" && renderNewSession()}
         {view === "counting" && renderCounting()}
         {view === "review" && renderReview()}
-        {view === "submitted" && renderSubmitted()}
+        {view === "closed" && renderClosed()}
       </WorkflowMain>
     </PageShell>
   );

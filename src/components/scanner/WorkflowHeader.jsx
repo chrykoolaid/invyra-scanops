@@ -337,7 +337,20 @@ export default function WorkflowHeader({
               ) : lookupState === "evidence_created" ? (
                 <div className="px-2 py-2">
                   <p className="text-sm font-black text-foreground">Unknown item evidence saved</p>
-                  <p className="mt-0.5 text-xs leading-snug text-muted-foreground">It is queued for review only. No product, stock, price, markdown, transfer, or ticket action was created.</p>
+                  <p className="mt-0.5 text-xs leading-snug text-muted-foreground">It is queued for Product Identity Review only. No product, stock, price, markdown, transfer, or ticket action was created.</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => navigate("/product-identity-review")}
+                      className="min-h-10 rounded-xl bg-primary px-3 text-xs font-black text-primary-foreground"
+                    >
+                      Open Review
+                    </button>
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={clearField} className="min-h-10 rounded-xl bg-secondary px-3 text-xs font-black text-secondary-foreground">
+                      Clear Search
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="px-2 py-2">

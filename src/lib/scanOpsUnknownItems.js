@@ -1,6 +1,14 @@
 import { SCANOPS_USER_CONTEXT } from "./scanOpsInventoryFixtures";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "./scanOpsEvents";
 
+export const UNKNOWN_ITEM_REVIEW_STATES = {
+  NEEDS_REVIEW: "needs_review",
+  LINKED_TO_EXISTING_PRODUCT: "linked_to_existing_product",
+  REJECTED: "rejected",
+  ESCALATED: "escalated",
+  DEFERRED: "deferred",
+};
+
 const STORAGE_KEY = "invyra_scanops_unknown_item_evidence_v1";
 
 function read() {
@@ -37,7 +45,7 @@ export function createUnknownItemEvidence({ enteredCode, sourceWorkflow = "ScanO
     createdRole: SCANOPS_USER_CONTEXT.role,
     createdAt: new Date().toISOString(),
     note,
-    status: "needs_review",
+    status: UNKNOWN_ITEM_REVIEW_STATES.NEEDS_REVIEW,
     createsProduct: false,
     appliesStockDirectly: false,
     appliesPriceDirectly: false,
@@ -50,7 +58,7 @@ export function createUnknownItemEvidence({ enteredCode, sourceWorkflow = "ScanO
     sourceRequestId: evidence.evidenceId,
     entered_code: evidence.enteredCode,
     item_name: "Unknown item evidence",
-    status: "needs_review",
+    status: UNKNOWN_ITEM_REVIEW_STATES.NEEDS_REVIEW,
     creates_product: false,
     applies_stock_directly: false,
     applies_price_directly: false,
@@ -61,4 +69,13 @@ export function createUnknownItemEvidence({ enteredCode, sourceWorkflow = "ScanO
 
 export function getUnknownItemEvidence() {
   return read();
+}
+
+
+export function updateUnknownItemEvidence(evidenceId, patch = {}) {
+  if (!evidenceId) return null;
+  const records = read();
+  const next = records.map((record) => (record.evidenceId === evidenceId ? { ...record, ...patch } : record));
+  write(next);
+  return next.find((record) => record.evidenceId === evidenceId) || null;
 }

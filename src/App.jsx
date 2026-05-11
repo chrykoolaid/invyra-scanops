@@ -20,6 +20,7 @@ import InventorySync from './pages/InventorySync';
 import SyncQueue from './pages/SyncQueue';
 import ShelfTickets from './pages/ShelfTickets';
 import Transfers from './pages/Transfers';
+import ProductIdentityReview from './pages/ProductIdentityReview';
 
 
 const ScrollToTopOnRouteChange = () => {
@@ -86,6 +87,7 @@ const AuthenticatedApp = () => {
         <Route path="/sync-queue" element={<SyncQueue />} />
         <Route path="/shelf-tickets" element={<ShelfTickets />} />
         <Route path="/transfers" element={<Transfers />} />
+        <Route path="/product-identity-review" element={<ProductIdentityReview />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>
     </div>
