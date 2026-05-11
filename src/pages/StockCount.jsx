@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
 import { BatchList, DoneCard, EmptyState, InfoLine, ItemSummaryCard, MetricPill, PageShell, QuantityStepper, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
@@ -100,11 +100,13 @@ function ReviewLine({ line, onReasonChange, onRemove }) {
 
 export default function StockCount() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const taskParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const [scanValue, setScanValue] = useState("");
   const [view, setView] = useState("setup");
-  const [countType, setCountType] = useState(STOCK_COUNT_TYPES.QUICK_COUNT);
-  const [area, setArea] = useState("dairy_chilled");
-  const [countMode, setCountMode] = useState("unguided_scan_count");
+  const [countType, setCountType] = useState(() => taskParams.get("countType") || STOCK_COUNT_TYPES.QUICK_COUNT);
+  const [area, setArea] = useState(() => taskParams.get("area") || "dairy_chilled");
+  const [countMode, setCountMode] = useState(() => taskParams.get("countMode") || "unguided_scan_count");
   const [session, setSession] = useState(null);
   const [item, setItem] = useState(null);
   const [counted, setCounted] = useState(1);

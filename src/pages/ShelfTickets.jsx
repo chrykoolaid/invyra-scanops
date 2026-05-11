@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
 import {
@@ -42,13 +43,18 @@ function totalCopies(lines) {
 }
 
 export default function ShelfTickets() {
+  const location = useLocation();
+  const taskParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const taskTicketType = taskParams.get("ticketType");
+  const taskPaperSize = taskParams.get("paperSize");
+  const taskReason = taskParams.get("reason");
   const savedDraft = useMemo(() => loadWorkflowDraft("shelf_tickets"), []);
   const [scanValue, setScanValue] = useState("");
   const [item, setItem] = useState(null);
-  const [ticketType, setTicketType] = useState("standard_shelf_ticket");
-  const [paperSize, setPaperSize] = useState("small_shelf_edge");
+  const [ticketType, setTicketType] = useState(() => SHELF_TICKET_REQUEST_TYPE_OPTIONS.some((option) => option.id === taskTicketType) ? taskTicketType : "standard_shelf_ticket");
+  const [paperSize, setPaperSize] = useState(() => SHELF_TICKET_PAPER_SIZE_OPTIONS.some((option) => option.id === taskPaperSize) ? taskPaperSize : "small_shelf_edge");
   const [copies, setCopies] = useState(1);
-  const [reason, setReason] = useState("missing_ticket");
+  const [reason, setReason] = useState(() => SHELF_TICKET_REQUEST_REASON_OPTIONS.some((option) => option.id === taskReason) ? taskReason : "missing_ticket");
   const [notes, setNotes] = useState("");
   const [batch, setBatch] = useState(savedDraft?.items || []);
   const [view, setView] = useState("entry");

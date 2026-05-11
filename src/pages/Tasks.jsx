@@ -1,14 +1,11 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "../components/scanner/PageHeader";
-import DecisionRecommendationCard from "../components/scanner/DecisionRecommendationCard";
 import {
   ArrowRight,
-  Ban,
   CheckCircle2,
   ClipboardCheck,
   Clock3,
-  ExternalLink,
   Flag,
   ListChecks,
   Play,
@@ -17,10 +14,8 @@ import {
 } from "lucide-react";
 import { SCANOPS_USER_CONTEXT } from "../lib/scanOpsInventoryFixtures";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
-import { buildDecisionLinkedPayload, createDecisionRecommendation, recordDecisionEvent } from "../lib/scanOpsDecisionEngine";
 import {
   buildTaskEventPayload,
-  canCancelTask,
   canCompleteTask,
   canStartTask,
   filterTasks,
@@ -38,8 +33,8 @@ import {
 
 const BUTTON_PRIMARY = "w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:active:scale-100";
 const BUTTON_SECONDARY = "w-full py-4 rounded-2xl bg-secondary text-secondary-foreground font-bold text-sm active:scale-[0.98] active:bg-border transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:active:scale-100";
-const BUTTON_DANGER = "w-full py-4 rounded-2xl bg-destructive/10 text-destructive font-bold text-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:active:scale-100";
-const CHIP_BUTTON = "rounded-2xl px-4 py-3 text-sm font-bold border transition-all active:scale-[0.98] whitespace-nowrap";
+const BUTTON_MUTED = "w-full py-4 rounded-2xl bg-background border border-border text-foreground font-bold text-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:active:scale-100";
+const CHIP_BUTTON = "rounded-2xl px-3 py-3 text-xs font-black border transition-all active:scale-[0.98] whitespace-nowrap";
 
 function priorityClass(priority) {
   switch (priority) {
@@ -62,176 +57,153 @@ function statusClass(status) {
       return "bg-primary/10 text-primary border-primary/20";
     case TASK_STATUSES.BLOCKED:
       return "bg-destructive/10 text-destructive border-destructive/20";
-    case TASK_STATUSES.NEEDS_SUPERVISOR:
+    case TASK_STATUSES.SYNC_PENDING:
       return "bg-amber-500/10 text-amber-700 border-amber-500/20";
-    case TASK_STATUSES.CANCELLED:
-      return "bg-muted text-muted-foreground border-border";
+    case TASK_STATUSES.SYNC_FAILED:
+      return "bg-destructive/10 text-destructive border-destructive/20";
     default:
       return "bg-secondary text-secondary-foreground border-border";
   }
 }
 
+function dueLabel(value) {
+  if (!value) return "No due time";
+  try {
+    const date = new Date(value);
+    return date.toLocaleDateString([], { month: "short", day: "numeric" }) + " · " + date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return value;
+  }
+}
+
 function sortTasks(a, b) {
-  const priorityOrder = {
-    [TASK_PRIORITIES.URGENT]: 0,
-    [TASK_PRIORITIES.HIGH]: 1,
-    [TASK_PRIORITIES.NORMAL]: 2,
-    [TASK_PRIORITIES.LOW]: 3,
-  };
-  const statusOrder = {
-    [TASK_STATUSES.NEEDS_SUPERVISOR]: 0,
-    [TASK_STATUSES.OPEN]: 1,
-    [TASK_STATUSES.IN_PROGRESS]: 2,
-    [TASK_STATUSES.BLOCKED]: 3,
-    [TASK_STATUSES.COMPLETED]: 4,
-    [TASK_STATUSES.CANCELLED]: 5,
-  };
-  return (priorityOrder[a.priority] ?? 5) - (priorityOrder[b.priority] ?? 5)
-    || (statusOrder[a.status] ?? 5) - (statusOrder[b.status] ?? 5)
-    || a.itemName.localeCompare(b.itemName);
+  const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
+  const statusOrder = { in_progress: 0, not_started: 1, blocked: 2, sync_failed: 3, sync_pending: 4, completed: 5, cancelled: 6 };
+  return (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9)
+    || (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9)
+    || String(a.dueAt || "").localeCompare(String(b.dueAt || ""));
 }
 
 export default function Tasks() {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState(() => getInitialTaskQueue());
-  const [activeFilter, setActiveFilter] = useState("all");
+  const [activeFilter, setActiveFilter] = useState("mine");
+  const [scope, setScope] = useState("mine");
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [lastEvent, setLastEvent] = useState(null);
 
-  const selectedTask = useMemo(() => tasks.find((task) => task.id === selectedTaskId) || null, [selectedTaskId, tasks]);
-  const taskDecision = useMemo(() => createDecisionRecommendation({ workflow: "task_priority", item: selectedTask, context: { task: selectedTask } }), [selectedTask]);
-  const filteredTasks = useMemo(() => filterTasks(tasks, activeFilter, SCANOPS_USER_CONTEXT).sort(sortTasks), [tasks, activeFilter]);
-
-  const openCount = tasks.filter((task) => ![TASK_STATUSES.COMPLETED, TASK_STATUSES.CANCELLED].includes(task.status)).length;
-  const urgentCount = tasks.filter((task) => task.priority === TASK_PRIORITIES.URGENT && task.status !== TASK_STATUSES.CANCELLED).length;
-  const supervisorCount = tasks.filter((task) => (task.requiresSupervisor || task.status === TASK_STATUSES.NEEDS_SUPERVISOR) && task.status !== TASK_STATUSES.CANCELLED).length;
-
-  const writeTaskEvent = (eventType, task, status, extra = {}) => {
-    const event = createScanOpsEvent(eventType, buildTaskEventPayload(task, status, extra));
-    setLastEvent(event);
-    return event;
-  };
-
-  const updateStatus = (task, status, eventType, extra = {}) => {
-    const taskExtra = { ...extra };
-    delete taskExtra.status;
-    const updated = updateTaskStatus(tasks, task.id, status, taskExtra);
-    setTasks(updated);
-    writeTaskEvent(eventType, { ...task, ...taskExtra }, status, extra);
-  };
-
-  const startTask = (task) => {
-    if (!canStartTask(task, SCANOPS_USER_CONTEXT)) return;
-    const decisionForTask = createDecisionRecommendation({ workflow: "task_priority", item: task, context: { task } });
-    const decisionEvent = recordDecisionEvent(decisionForTask, "accepted", { source_module: "Tasks", status: "accepted", task_id: task.id });
-    updateStatus(task, TASK_STATUSES.IN_PROGRESS, SCANOPS_EVENT_TYPES.TASK_STARTED, {
-      started_at: new Date().toISOString(),
-      status: "in_progress",
-      ...buildDecisionLinkedPayload(decisionForTask, decisionEvent),
-    });
-  };
-
-  const completeTask = (task) => {
-    if (!canCompleteTask(task, SCANOPS_USER_CONTEXT)) {
-      return;
-    }
-    updateStatus(task, TASK_STATUSES.COMPLETED, SCANOPS_EVENT_TYPES.TASK_COMPLETED, {
-      completed_at: new Date().toISOString(),
-      status: "completed",
-    });
-  };
-
-  const blockTask = (task) => {
-    const decisionForTask = createDecisionRecommendation({ workflow: "task_priority", item: task, context: { task } });
-    const decisionEvent = recordDecisionEvent(decisionForTask, "rejected", { source_module: "Tasks", status: "blocked", task_id: task.id, rejection_reason: "Operator marked task blocked" });
-    updateStatus(task, TASK_STATUSES.BLOCKED, SCANOPS_EVENT_TYPES.TASK_BLOCKED, {
-      blocked_at: new Date().toISOString(),
-      block_reason: "Operator marked blocked from handheld",
-      status: "blocked",
-      ...buildDecisionLinkedPayload(decisionForTask, decisionEvent),
-    });
-  };
-
-  const cancelTask = (task) => {
-    if (!canCancelTask(task, SCANOPS_USER_CONTEXT)) return;
-    updateStatus(task, TASK_STATUSES.CANCELLED, SCANOPS_EVENT_TYPES.TASK_CANCELLED, {
-      cancelled_at: new Date().toISOString(),
-      cancel_reason: "Manager/Admin cancelled from handheld",
-      status: "cancelled",
-    });
-  };
-
-  const openLinkedWorkflow = (task) => {
-    const decisionForTask = createDecisionRecommendation({ workflow: "task_priority", item: task, context: { task } });
-    const decisionEvent = recordDecisionEvent(decisionForTask, "accepted", { source_module: "Tasks", status: "linked_workflow_opened", task_id: task.id });
-    writeTaskEvent(SCANOPS_EVENT_TYPES.TASK_LINKED_ACTION_OPENED, task, task.status, {
-      status: "linked_workflow_opened",
-      linked_workflow: getTaskLinkedWorkflow(task),
-      ...buildDecisionLinkedPayload(decisionForTask, decisionEvent),
-    });
-    navigate(getTaskLinkedWorkflow(task));
-  };
-
-  const rejectTaskRecommendation = (task) => {
-    const decisionForTask = createDecisionRecommendation({ workflow: "task_priority", item: task, context: { task } });
-    const event = recordDecisionEvent(decisionForTask, "rejected", { source_module: "Tasks", status: "rejected", task_id: task.id, rejection_reason: "Operator rejected task priority recommendation" });
-    setLastEvent(event);
-  };
-
-  const viewTaskReason = (task) => {
-    const decisionForTask = createDecisionRecommendation({ workflow: "task_priority", item: task, context: { task } });
-    recordDecisionEvent(decisionForTask, "reason_viewed", { source_module: "Tasks", status: "reason_viewed", task_id: task.id });
-  };
+  const selectedTask = useMemo(() => tasks.find((task) => task.taskId === selectedTaskId || task.id === selectedTaskId) || null, [selectedTaskId, tasks]);
+  const filteredTasks = useMemo(() => filterTasks(tasks, activeFilter, SCANOPS_USER_CONTEXT, scope).sort(sortTasks), [tasks, activeFilter, scope]);
+  const stats = useMemo(() => ({
+    active: tasks.filter((task) => ![TASK_STATUSES.COMPLETED, TASK_STATUSES.CANCELLED].includes(task.status)).length,
+    today: filterTasks(tasks, "due_today", SCANOPS_USER_CONTEXT, "team").length,
+    inProgress: tasks.filter((task) => task.status === TASK_STATUSES.IN_PROGRESS).length,
+    issues: tasks.filter((task) => [TASK_STATUSES.BLOCKED, TASK_STATUSES.SYNC_FAILED].includes(task.status)).length,
+  }), [tasks]);
 
   const changeFilter = (filterId) => {
     setActiveFilter(filterId);
-    createScanOpsEvent(SCANOPS_EVENT_TYPES.TASK_FILTER_CHANGED, {
-      source_module: "Tasks",
-      filter_id: filterId,
-      status: "filter_changed",
-    });
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.TASK_FILTER_CHANGED, buildTaskEventPayload({ taskId: "task_filter", title: "Task filter", taskType: "general_check" }, "viewed", { filter_id: filterId, sync_exempt: true }));
+  };
+
+  const recordAndSet = (task, nextStatus, eventType, extra = {}) => {
+    const updated = updateTaskStatus(tasks, task.taskId, nextStatus, extra);
+    setTasks(updated);
+    const nextTask = updated.find((row) => row.taskId === task.taskId) || task;
+    setSelectedTaskId(nextTask.taskId);
+    const event = createScanOpsEvent(eventType, buildTaskEventPayload(nextTask, nextStatus, extra));
+    setLastEvent(event);
+  };
+
+  const startTask = (task) => recordAndSet(task, TASK_STATUSES.IN_PROGRESS, SCANOPS_EVENT_TYPES.TASK_STARTED, { status: "in_progress" });
+  const blockTask = (task) => recordAndSet(task, TASK_STATUSES.BLOCKED, SCANOPS_EVENT_TYPES.TASK_BLOCKED, { status: "blocked", blocked_reason: "Operator marked blocked" });
+  const completeTask = (task) => recordAndSet(task, TASK_STATUSES.COMPLETED, SCANOPS_EVENT_TYPES.TASK_COMPLETED, { status: "completed", creates_sync_queue_item: true });
+
+  const openLinkedWorkflow = (task) => {
+    const workflow = getTaskLinkedWorkflow(task);
+    const event = createScanOpsEvent(SCANOPS_EVENT_TYPES.TASK_LINKED_ACTION_OPENED, buildTaskEventPayload(task, task.status, {
+      status: "workflow_opened",
+      linked_workflow: workflow.path,
+      linked_context: task.linkedContext,
+      sync_exempt: true,
+    }));
+    setLastEvent(event);
+    navigate(`${workflow.path}${workflow.search}`);
   };
 
   const resetForTesting = () => {
     const reset = resetTaskQueue();
     setTasks(reset);
     setSelectedTaskId(null);
+    setActiveFilter("mine");
+    setScope("mine");
     setLastEvent(null);
   };
 
   if (selectedTask) {
+    const workflow = getTaskLinkedWorkflow(selectedTask);
     return (
       <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
-        <PageHeader title="Task Detail" subtitle={selectedTask.itemName} />
-        <main className="flex-1 px-4 py-5 pb-8 space-y-4 overflow-y-auto overflow-x-hidden">
-          <TaskDetailHeader task={selectedTask} />
-          <TaskLinkedItem task={selectedTask} />
-          <DecisionRecommendationCard decision={taskDecision} onReject={() => rejectTaskRecommendation(selectedTask)} onMoreInfo={() => viewTaskReason(selectedTask)} />
-          <SupervisorNotice task={selectedTask} />
-          <section className="bg-card rounded-2xl border border-border p-4 space-y-3 min-w-0">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Actions</p>
+        <PageHeader title="Task Detail" subtitle="Open linked workflow without auto-submitting" />
+        <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 pb-8 space-y-4">
+          <section className="bg-card rounded-2xl border border-border p-5 space-y-4 min-w-0">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                <ClipboardCheck className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{getTaskTypeLabel(selectedTask.taskType)}</p>
+                <h2 className="text-lg font-black text-foreground mt-1 break-words">{selectedTask.title}</h2>
+                <p className="text-sm text-muted-foreground mt-1 break-words">{selectedTask.description}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <InfoPill label="Priority" value={getTaskPriority(selectedTask)} className={priorityClass(selectedTask.priority)} />
+              <InfoPill label="Status" value={getTaskStatusLabel(selectedTask.status)} className={statusClass(selectedTask.status)} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <InfoBlock label="Area" value={selectedTask.areaName} />
+              <InfoBlock label="Due" value={dueLabel(selectedTask.dueAt)} />
+            </div>
+            <InfoBlock label="Assigned to" value={selectedTask.assignedToName || "—"} />
+            <InfoBlock label="Instruction" value={selectedTask.description} />
+          </section>
+
+          <section className="bg-card rounded-2xl border border-border p-5 space-y-3 min-w-0">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Linked workflow</p>
+            <h3 className="text-base font-black text-foreground break-words">{workflow.label}</h3>
+            <p className="text-sm text-muted-foreground break-words">Context can prefill setup. It will not auto-add items, submit evidence, mutate stock, change price, or print tickets.</p>
+            <button onClick={() => openLinkedWorkflow(selectedTask)} className={BUTTON_PRIMARY}>
+              Open {getTaskTypeLabel(selectedTask.taskType)} <ArrowRight className="w-4 h-4" />
+            </button>
+          </section>
+
+          {selectedTask.status === TASK_STATUSES.BLOCKED && (
+            <section className="bg-amber-500/10 rounded-2xl border border-amber-500/20 p-4 min-w-0">
+              <div className="flex items-start gap-3">
+                <ShieldAlert className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
+                <div className="min-w-0">
+                  <p className="font-bold text-amber-800">Task is blocked</p>
+                  <p className="text-sm text-amber-800/80 mt-1 break-words">{selectedTask.blockedReason || "Operator marked this task blocked."}</p>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {lastEvent && <EventProof event={lastEvent} />}
+
+          <div className="space-y-3">
             <button onClick={() => startTask(selectedTask)} disabled={!canStartTask(selectedTask, SCANOPS_USER_CONTEXT)} className={BUTTON_PRIMARY}>
               <Play className="w-4 h-4" />Start Task
             </button>
-            <button onClick={() => openLinkedWorkflow(selectedTask)} className={BUTTON_SECONDARY}>
-              <ExternalLink className="w-4 h-4" />{selectedTask.linkedWorkflowLabel || "Open Linked Workflow"}
+            <button onClick={() => blockTask(selectedTask)} disabled={selectedTask.status === TASK_STATUSES.COMPLETED} className={BUTTON_SECONDARY}>
+              <Flag className="w-4 h-4" />Mark Blocked
             </button>
-            <button onClick={() => blockTask(selectedTask)} className={BUTTON_SECONDARY}>
-              <Ban className="w-4 h-4" />Mark Blocked
-            </button>
-            <button onClick={() => completeTask(selectedTask)} disabled={!canCompleteTask(selectedTask, SCANOPS_USER_CONTEXT)} className={BUTTON_PRIMARY}>
+            <button onClick={() => completeTask(selectedTask)} disabled={!canCompleteTask(selectedTask, SCANOPS_USER_CONTEXT)} className={BUTTON_SECONDARY}>
               <CheckCircle2 className="w-4 h-4" />Complete Task
             </button>
-            {canCancelTask(selectedTask, SCANOPS_USER_CONTEXT) && (
-              <button onClick={() => cancelTask(selectedTask)} className={BUTTON_DANGER}>
-                <Flag className="w-4 h-4" />Cancel Task
-              </button>
-            )}
-            <button onClick={() => setSelectedTaskId(null)} className={BUTTON_SECONDARY}>
-              <ArrowRight className="w-4 h-4 rotate-180" />Back to Tasks
-            </button>
-          </section>
-          {lastEvent && <EventProof event={lastEvent} />}
+            <button onClick={() => setSelectedTaskId(null)} className={BUTTON_MUTED}>Back to Tasks</button>
+          </div>
         </main>
       </div>
     );
@@ -239,34 +211,37 @@ export default function Tasks() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
-      <PageHeader title="Tasks" subtitle="Stage F · Open scanner work" />
-      <main className="flex-1 px-4 py-5 pb-8 space-y-4 overflow-y-auto overflow-x-hidden">
-        <section className="bg-card rounded-2xl border border-border p-4 min-w-0">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+      <PageHeader title="Tasks" subtitle="Assigned handheld work" />
+      <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 pb-8 space-y-4">
+        <section className="bg-card rounded-2xl border border-border p-5 min-w-0">
+          <div className="flex items-start gap-3">
+            <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
               <ListChecks className="w-5 h-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="font-bold text-foreground">Open operational work</h2>
-              <p className="text-sm text-muted-foreground mt-1 break-words">Tasks live here only. Home stays as a simple scanner launcher.</p>
+              <p className="text-xs font-bold text-primary uppercase tracking-wider">Stage R Tasks</p>
+              <h2 className="text-lg font-black text-foreground mt-1">Operator task list</h2>
+              <p className="text-sm text-muted-foreground mt-1 break-words">Start work, open the linked workflow, then complete the task. Workflow opening never auto-submits anything.</p>
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-2 mt-4">
-            <StatCard label="Open" value={openCount} />
-            <StatCard label="Urgent" value={urgentCount} />
-            <StatCard label="Review" value={supervisorCount} />
+          <div className="grid grid-cols-2 gap-2 mt-4">
+            <button onClick={() => setScope("mine")} className={`${CHIP_BUTTON} ${scope === "mine" ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-secondary-foreground border-border"}`}>My Tasks</button>
+            <button onClick={() => setScope("team")} className={`${CHIP_BUTTON} ${scope === "team" ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-secondary-foreground border-border"}`}>All Team Tasks</button>
           </div>
+        </section>
+
+        <section className="grid grid-cols-2 gap-3">
+          <StatCard label="Active" value={stats.active} />
+          <StatCard label="Due Today" value={stats.today} />
+          <StatCard label="In Progress" value={stats.inProgress} />
+          <StatCard label="Issues" value={stats.issues} />
         </section>
 
         <section className="bg-card rounded-2xl border border-border p-3 min-w-0">
           <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider px-1 mb-3">Filters</p>
           <div className="grid grid-cols-2 gap-2">
             {TASK_FILTERS.map((filter) => (
-              <button
-                key={filter.id}
-                onClick={() => changeFilter(filter.id)}
-                className={`${CHIP_BUTTON} ${activeFilter === filter.id ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-secondary-foreground border-border"}`}
-              >
+              <button key={filter.id} onClick={() => changeFilter(filter.id)} className={`${CHIP_BUTTON} ${activeFilter === filter.id ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-secondary-foreground border-border"}`}>
                 {filter.label}
               </button>
             ))}
@@ -275,12 +250,13 @@ export default function Tasks() {
 
         <section className="space-y-3 min-w-0">
           {filteredTasks.length === 0 ? (
-            <div className="bg-card rounded-2xl border border-border p-5 min-w-0">
-              <p className="font-bold text-foreground">No tasks in this filter</p>
-              <p className="text-sm text-muted-foreground mt-1">Change filter or scan another workflow to generate new work later.</p>
+            <div className="bg-card rounded-2xl border border-border p-5 min-w-0 text-center">
+              <Clock3 className="w-9 h-9 mx-auto text-muted-foreground" />
+              <p className="font-bold text-foreground mt-3">No tasks in this filter</p>
+              <p className="text-sm text-muted-foreground mt-1">Change filter or scope to see other assigned work.</p>
             </div>
           ) : (
-            filteredTasks.map((task) => <TaskCard key={task.id} task={task} onOpen={() => setSelectedTaskId(task.id)} />)
+            filteredTasks.map((task) => <TaskCard key={task.taskId} task={task} onOpen={() => setSelectedTaskId(task.taskId)} />)
           )}
         </section>
 
@@ -291,11 +267,11 @@ export default function Tasks() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="font-bold text-foreground">Testing helper</p>
-              <p className="text-sm text-muted-foreground mt-1 break-words">Reset only restores open Stage F work fixtures. It does not create fake completed history.</p>
+              <p className="text-sm text-muted-foreground mt-1 break-words">Reset restores only local task fixtures. It does not create completed workflow history.</p>
             </div>
           </div>
           <button onClick={resetForTesting} className={`${BUTTON_SECONDARY} mt-4`}>
-            <RotateCcw className="w-4 h-4" />Reset Open Tasks
+            <RotateCcw className="w-4 h-4" />Reset Tasks
           </button>
         </section>
       </main>
@@ -305,8 +281,8 @@ export default function Tasks() {
 
 function StatCard({ label, value }) {
   return (
-    <div className="rounded-2xl bg-secondary px-3 py-3 text-center min-w-0">
-      <p className="text-lg font-black text-foreground leading-none">{value}</p>
+    <div className="rounded-2xl bg-card border border-border px-3 py-4 text-center min-w-0">
+      <p className="text-2xl font-black text-foreground leading-none">{value}</p>
       <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide mt-1 truncate">{label}</p>
     </div>
   );
@@ -321,75 +297,17 @@ function TaskCard({ task, onOpen }) {
             <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${priorityClass(task.priority)}`}>{getTaskPriority(task)}</span>
             <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-black ${statusClass(task.status)}`}>{getTaskStatusLabel(task.status)}</span>
           </div>
-          <h3 className="text-base font-black text-foreground break-words">{task.itemName}</h3>
-          <p className="text-sm text-muted-foreground mt-1 break-words">{task.reason}</p>
+          <h3 className="text-base font-black text-foreground break-words">{task.title}</h3>
+          <p className="text-sm text-muted-foreground mt-1 break-words">{getTaskTypeLabel(task.taskType)} · {task.areaName} · Due {dueLabel(task.dueAt)}</p>
         </div>
-        {task.requiresSupervisor ? <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0" /> : <ClipboardCheck className="w-5 h-5 text-primary shrink-0" />}
+        <ClipboardCheck className="w-5 h-5 text-primary shrink-0" />
       </div>
       <div className="rounded-2xl bg-secondary px-4 py-3 min-w-0">
-        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Location</p>
-        <p className="text-sm font-bold text-foreground mt-1 break-words">{task.location}</p>
+        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Instruction</p>
+        <p className="text-sm font-bold text-foreground mt-1 break-words">{task.description}</p>
       </div>
-      <button onClick={onOpen} className={BUTTON_PRIMARY}>Open Task <ArrowRight className="w-4 h-4" /></button>
+      <button onClick={onOpen} className={BUTTON_PRIMARY}>{task.status === TASK_STATUSES.IN_PROGRESS ? "Continue" : "Open Task"} <ArrowRight className="w-4 h-4" /></button>
     </article>
-  );
-}
-
-function TaskDetailHeader({ task }) {
-  return (
-    <section className="bg-card rounded-2xl border border-border p-5 space-y-4 min-w-0">
-      <div className="flex items-start gap-3 min-w-0">
-        <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-          <ClipboardCheck className="w-5 h-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{getTaskTypeLabel(task.type)}</p>
-          <h2 className="text-lg font-black text-foreground mt-1 break-words">{task.itemName}</h2>
-          <p className="text-sm text-muted-foreground mt-1 break-words">{task.recommendation}</p>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <InfoPill label="Priority" value={task.priority} className={priorityClass(task.priority)} />
-        <InfoPill label="Status" value={task.status} className={statusClass(task.status)} />
-      </div>
-      <InfoBlock label="Location" value={task.location} />
-      <InfoBlock label="Reason" value={task.reason} />
-    </section>
-  );
-}
-
-function TaskLinkedItem({ task }) {
-  return (
-    <section className="bg-card rounded-2xl border border-border p-5 space-y-3 min-w-0">
-      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Linked item</p>
-      <div className="grid grid-cols-2 gap-2">
-        <InfoBlock label="SKU" value={task.sku} />
-        <InfoBlock label="Department" value={task.department} />
-      </div>
-      {task.currentPrice ? (
-        <div className="grid grid-cols-2 gap-2">
-          <InfoBlock label="Current price" value={`${task.currency || "₱"}${task.currentPrice}`} />
-          <InfoBlock label="Suggested" value={task.suggestedMarkdown || "No markdown"} />
-        </div>
-      ) : null}
-      <InfoBlock label="Linked workflow" value={task.linkedWorkflowLabel || task.linkedWorkflow} />
-    </section>
-  );
-}
-
-function SupervisorNotice({ task }) {
-  if (!task.requiresSupervisor) return null;
-  const elevated = ["Supervisor", "Manager", "Admin"].includes(SCANOPS_USER_CONTEXT.role);
-  return (
-    <section className="bg-amber-500/10 rounded-2xl border border-amber-500/20 p-4 min-w-0">
-      <div className="flex items-start gap-3">
-        <ShieldAlert className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-        <div className="min-w-0">
-          <p className="font-bold text-amber-800">Supervisor review required</p>
-          <p className="text-sm text-amber-800/80 mt-1 break-words">{elevated ? "This role can complete review tasks." : "Staff can start or block this task, but cannot complete it until a supervisor reviews it."}</p>
-        </div>
-      </div>
-    </section>
   );
 }
 
@@ -418,7 +336,7 @@ function EventProof({ event }) {
         <Clock3 className="w-5 h-5 text-primary shrink-0 mt-0.5" />
         <div className="min-w-0">
           <p className="font-bold text-foreground">Last task event</p>
-          <p className="text-sm text-muted-foreground mt-1 break-words">{event.event_type}</p>
+          <p className="text-sm text-muted-foreground mt-1 break-words">{String(event.event_type || "event").replaceAll("_", " ")}</p>
           <p className="text-xs text-muted-foreground mt-2 break-all">Trace: {event.trace_id}</p>
         </div>
       </div>

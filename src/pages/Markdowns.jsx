@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
 import {
@@ -50,10 +51,13 @@ function defaultRequestedPrice(currentPrice) {
 }
 
 export default function Markdowns() {
+  const location = useLocation();
+  const taskParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const taskReason = taskParams.get("reason");
   const savedDraft = useMemo(() => loadWorkflowDraft("markdown"), []);
   const [scanValue, setScanValue] = useState("");
   const [item, setItem] = useState(null);
-  const [reason, setReason] = useState("short_dated");
+  const [reason, setReason] = useState(() => MARKDOWN_REASON_OPTIONS.some((option) => option.id === taskReason) ? taskReason : "short_dated");
   const [markdownType, setMarkdownType] = useState("fixed_new_price");
   const [requestedPrice, setRequestedPrice] = useState("");
   const [requestedPercentOff, setRequestedPercentOff] = useState("25");

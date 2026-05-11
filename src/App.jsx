@@ -17,6 +17,7 @@ import Waste from './pages/Waste';
 import ExpiryCheck from './pages/ExpiryCheck';
 import Tasks from './pages/Tasks';
 import InventorySync from './pages/InventorySync';
+import SyncQueue from './pages/SyncQueue';
 import ShelfTickets from './pages/ShelfTickets';
 import Transfers from './pages/Transfers';
 
@@ -82,6 +83,7 @@ const AuthenticatedApp = () => {
         <Route path="/expiry-check" element={<ExpiryCheck />} />
         <Route path="/tasks" element={<Tasks />} />
         <Route path="/inventory-sync" element={<InventorySync />} />
+        <Route path="/sync-queue" element={<SyncQueue />} />
         <Route path="/shelf-tickets" element={<ShelfTickets />} />
         <Route path="/transfers" element={<Transfers />} />
         <Route path="*" element={<PageNotFound />} />

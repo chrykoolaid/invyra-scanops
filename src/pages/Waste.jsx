@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
 import {
@@ -42,11 +43,14 @@ function needsManagerReview(line) {
 }
 
 export default function Waste() {
+  const location = useLocation();
+  const taskParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const taskReason = taskParams.get("reason");
   const savedDraft = useMemo(() => loadWorkflowDraft("waste"), []);
   const [scanValue, setScanValue] = useState("");
   const [item, setItem] = useState(null);
   const [quantity, setQuantity] = useState(1);
-  const [reason, setReason] = useState("expired_short_dated");
+  const [reason, setReason] = useState(() => WASTE_REASON_OPTIONS.some((option) => option.id === taskReason) ? taskReason : "expired_short_dated");
   const [condition, setCondition] = useState("unsellable");
   const [disposalAction, setDisposalAction] = useState("discarded");
   const [notes, setNotes] = useState("");
