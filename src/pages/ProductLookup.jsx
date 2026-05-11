@@ -1,20 +1,70 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import PageHeader from "../components/scanner/PageHeader";
-import InfoRow from "../components/scanner/InfoRow";
-import BottomActionBar from "../components/scanner/BottomActionBar";
-import { Barcode, ClipboardList, Clock, DollarSign, MapPin, Package, Scale, Tags, Trash2 } from "lucide-react";
+import { ClipboardList, Tags, Trash2, ArrowRightLeft } from "lucide-react";
+import WorkflowHeader from "../components/scanner/WorkflowHeader";
+import { PageShell, WorkflowMain, ItemSummaryCard, SectionCard, MetricPill, ReadyCard } from "../components/scanner/WorkflowPrimitives";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { getIdentityDisplay } from "../lib/productIdentityResolver";
 
 export default function ProductLookup() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const product = resolveInventoryIdentity(id === "demo" ? "930000000004" : id) || resolveInventoryIdentity("4011");
-  const displayPrice = product?.pricePerKg ? `${product.currency}${product.pricePerKg}/kg` : `${product?.currency || "₱"}${product?.currentPrice ?? product?.current_price ?? "—"}`;
-  const shelfQty = product?.shelfStock ?? product?.shelf_stock ?? "—";
-  const backroomQty = product?.backroomStock ?? product?.backroom_stock ?? "—";
-  const stockUnit = product?.unitType || "each";
-  return <div className="min-h-screen bg-background flex flex-col overflow-x-hidden"><PageHeader title="Product Info" subtitle="Stage G · Inventory snapshot lookup" /><main className="flex-1 px-4 py-5 pb-28 space-y-4 overflow-y-auto overflow-x-hidden"><section className="bg-card rounded-2xl border border-border p-5 min-w-0"><h2 className="text-lg font-bold text-foreground leading-snug break-words">{product?.name || "Product not found"}</h2><p className="text-xs text-muted-foreground mt-1 font-mono break-all">{getIdentityDisplay(product)}</p><div className="mt-4 grid grid-cols-2 gap-3"><Metric label="Sell type" value={product?.sellType || "—"} /><Metric label="Unit" value={stockUnit} /><Metric label="Department" value={product?.department || "—"} /><Metric label="Category" value={product?.category || "—"} /></div></section><section className="bg-card rounded-2xl border border-border px-5 py-1"><InfoRow icon={DollarSign} label="Price" value={displayPrice} /></section><section className="bg-card rounded-2xl border border-border px-5 py-1"><div className="flex items-center gap-2 pt-3 pb-1"><Package className="w-4 h-4 text-muted-foreground" /><span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Stock from Inventory Snapshot</span></div><div className="divide-y divide-border"><div className="flex items-center justify-between gap-3 py-3"><span className="text-sm text-muted-foreground pl-7">Shelf</span><span className="text-sm font-semibold text-foreground text-right">{shelfQty} {stockUnit}</span></div><div className="flex items-center justify-between gap-3 py-3"><span className="text-sm text-muted-foreground pl-7">Backroom</span><span className="text-sm font-semibold text-foreground text-right">{backroomQty} {stockUnit}</span></div></div></section><section className="bg-card rounded-2xl border border-border px-5 py-1"><InfoRow icon={MapPin} label="Location" value={product?.shelfLocation || product?.location || "—"} /></section><section className="bg-card rounded-2xl border border-border px-5 py-1"><InfoRow icon={Barcode} label="Identity resolver" value={product?.plu ? "Resolved by PLU / scale code" : product?.gtin ? "Resolved by GTIN / barcode" : "Resolved by SKU / item ID"} /></section><section className="bg-card rounded-2xl border border-border px-5 py-1"><InfoRow icon={Clock} label="Freshness" value={product?.freshnessStatus || product?.expiry_status || "No date issue"} /></section>{product?.plu && <section className="bg-primary/5 rounded-2xl border border-primary/20 px-5 py-4 flex items-start gap-3 min-w-0"><Scale className="w-5 h-5 text-primary shrink-0 mt-0.5" /><div className="min-w-0"><p className="text-sm font-bold text-foreground">Produce / PLU item</p><p className="text-xs text-muted-foreground mt-1 break-words">Found by PLU {product.plu}, scale code {product.scaleCode}, or internal SKU {product.sku}.</p></div></section>}</main><BottomActionBar actions={[{ icon: ClipboardList, label: "Count", variant: "primary" }, { icon: Tags, label: "Shelf Ticket", onClick: () => navigate("/shelf-tickets") }, { icon: Trash2, label: "Waste" }]} /></div>;
+  const [scanValue, setScanValue] = useState(id === "demo" ? "" : decodeURIComponent(id || ""));
+  const product = resolveInventoryIdentity(id === "demo" ? "930000000004" : id) || resolveInventoryIdentity("930000000004");
+  const unit = product?.unitType || product?.unit_type || "each";
+  const price = product?.pricePerKg ? `${product.currency}${product.pricePerKg}/kg` : `${product?.currency || "₱"}${product?.currentPrice ?? product?.current_price ?? "—"}`;
+
+  const handleScan = (value) => {
+    const input = String(value || "").trim() || "demo";
+    navigate(`/product/${encodeURIComponent(input)}`);
+  };
+
+  return (
+    <PageShell>
+      <WorkflowHeader
+        title="Product Lookup"
+        subtitle="Instant item search"
+        scanValue={scanValue}
+        onScanValueChange={setScanValue}
+        onScan={handleScan}
+      />
+      <WorkflowMain>
+        {product ? (
+          <>
+            <ItemSummaryCard item={product}>
+              <p className="break-all font-mono text-[11px] text-muted-foreground">{getIdentityDisplay(product)}</p>
+            </ItemSummaryCard>
+            <SectionCard>
+              <div className="grid grid-cols-2 gap-2">
+                <MetricPill label="Price" value={price} />
+                <MetricPill label="Unit" value={unit} />
+                <MetricPill label="Department" value={product.department || "—"} />
+                <MetricPill label="Location" value={product.shelfLocation || product.location || "—"} />
+              </div>
+            </SectionCard>
+            <SectionCard>
+              <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Quick actions</p>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <ActionButton icon={ClipboardList} label="Stock Count" onClick={() => navigate("/stock-count")} />
+                <ActionButton icon={Tags} label="Shelf Ticket" onClick={() => navigate("/shelf-tickets")} />
+                <ActionButton icon={Trash2} label="Waste" onClick={() => navigate("/waste")} />
+                <ActionButton icon={ArrowRightLeft} label="Transfer" onClick={() => navigate("/transfers")} />
+              </div>
+            </SectionCard>
+          </>
+        ) : (
+          <ReadyCard title="Item not found" helper="Try a barcode, PLU, SKU, shelf label, or item name." />
+        )}
+      </WorkflowMain>
+    </PageShell>
+  );
 }
-function Metric({ label, value }) { return <div className="rounded-2xl bg-secondary/60 px-3 py-3 min-w-0"><p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{label}</p><p className="text-sm font-bold text-foreground mt-1 break-words">{value}</p></div>; }
+
+function ActionButton({ icon: Icon, label, onClick }) {
+  return (
+    <button type="button" onClick={onClick} className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border">
+      <Icon className="h-4 w-4" />
+      {label}
+    </button>
+  );
+}
