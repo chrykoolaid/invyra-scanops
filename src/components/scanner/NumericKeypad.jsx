@@ -1,16 +1,23 @@
 import React from "react";
 import { Delete } from "lucide-react";
 
-export default function NumericKeypad({ value, onChange }) {
+export default function NumericKeypad({ value, onChange, allowDecimal = false }) {
   const handleKey = (key) => {
     if (key === "del") {
       onChange(value.slice(0, -1));
-    } else if (value.length < 5) {
+      return;
+    }
+    if (key === ".") {
+      if (!allowDecimal || value.includes(".")) return;
+      onChange(value ? `${value}.` : "0.");
+      return;
+    }
+    if (value.length < 7) {
       onChange(value + key);
     }
   };
 
-  const keys = ["1","2","3","4","5","6","7","8","9","","0","del"];
+  const keys = allowDecimal ? ["1","2","3","4","5","6","7","8","9",".","0","del"] : ["1","2","3","4","5","6","7","8","9","","0","del"];
 
   return (
     <div className="grid grid-cols-3 gap-2">
