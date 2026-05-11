@@ -1,17 +1,18 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import PageHeader from "../components/scanner/PageHeader";
 import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
-import NumericKeypad from "../components/scanner/NumericKeypad";
-import { CheckCircle2, ChevronRight, Minus, Plus } from "lucide-react";
+import TouchSelect from "../components/scanner/TouchSelect";
+import { CheckCircle2, Minus, PackageCheck, Plus, RotateCw } from "lucide-react";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 
 const SUPPLIERS = [
-  { id: 1, name: "Fresh Fields Co.", ref: "PO-2847" },
-  { id: 2, name: "Dairy Direct Ltd.", ref: "PO-2848" },
-  { id: 3, name: "Green Harvest", ref: "PO-2849" },
+  { id: "Fresh Fields Co.", label: "Fresh Fields Co.", ref: "PO-2847" },
+  { id: "Dairy Direct Ltd.", label: "Dairy Direct Ltd.", ref: "PO-2848" },
+  { id: "Green Harvest", label: "Green Harvest", ref: "PO-2849" },
 ];
 
+const CONDITIONS = ["Good", "Damaged", "Short", "Over"];
 const RECEIVING_ITEM = resolveInventoryIdentity("930000000004");
 const MOCK_PRODUCT = {
   name: RECEIVING_ITEM?.name || "Greek Yoghurt 1kg",
@@ -21,266 +22,135 @@ const MOCK_PRODUCT = {
   expectedQty: RECEIVING_ITEM?.pendingDeliveryQty ?? RECEIVING_ITEM?.pending_delivery_qty ?? 24,
 };
 
-const ISSUES = ["Damaged", "Missing", "Extra"];
-
-const EXPIRY_OPTIONS = ["3 days", "7 days", "14 days", "1 month", "3 months", "6+ months"];
-
-const STEPS = {
-  SUPPLIER: "supplier",
-  SCAN: "scan",
-  QUANTITY: "quantity",
-  ISSUES: "issues",
-  EXPIRY: "expiry",
-  CONFIRM: "confirm",
-  DONE: "done",
-};
-
 export default function Receiving() {
-  const [step, setStep] = useState(STEPS.SUPPLIER);
-  const [supplier, setSupplier] = useState(null);
-  const [received, setReceived] = useState("");
-  const [selectedIssues, setSelectedIssues] = useState([]);
-  const [expiry, setExpiry] = useState(null);
+  const mainRef = useRef(null);
+  const [supplierName, setSupplierName] = useState(SUPPLIERS[0].id);
+  const [deliveryRef, setDeliveryRef] = useState(SUPPLIERS[0].ref);
+  const [scanned, setScanned] = useState(false);
+  const [received, setReceived] = useState(1);
+  const [condition, setCondition] = useState("Good");
+  const [doneState, setDoneState] = useState(null);
 
-  const receivedNum = parseInt(received, 10);
+  const supplier = SUPPLIERS.find((item) => item.id === supplierName) || SUPPLIERS[0];
 
-  const toggleIssue = (issue) => {
-    setSelectedIssues((prev) =>
-      prev.includes(issue) ? prev.filter((i) => i !== issue) : [...prev, issue]
-    );
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, [scanned, doneState]);
+
+  const updateSupplier = (next) => {
+    const selected = SUPPLIERS.find((item) => item.id === next);
+    setSupplierName(next);
+    setDeliveryRef(selected?.ref || "");
+    setDoneState(null);
   };
 
   const adjustQty = (delta) => {
-    const current = receivedNum || 0;
-    const next = Math.max(0, current + delta);
-    setReceived(String(next));
+    setReceived((current) => Math.max(0, Number(current || 0) + delta));
+    setDoneState(null);
   };
 
   const resetAll = () => {
-    setStep(STEPS.SUPPLIER);
-    setSupplier(null);
-    setReceived("");
-    setSelectedIssues([]);
-    setExpiry(null);
+    setScanned(false);
+    setReceived(1);
+    setCondition("Good");
+    setDoneState(null);
+  };
+
+  const confirmReceipt = () => {
+    if (!scanned) return;
+    const event = createScanOpsEvent(SCANOPS_EVENT_TYPES.RECEIVING_CONFIRMED, {
+      source_module: "Receiving",
+      supplier_name: supplier.name || supplier.label,
+      purchase_order_ref: deliveryRef || null,
+      sku: MOCK_PRODUCT.sku,
+      barcode: MOCK_PRODUCT.barcode,
+      internal_item_id: MOCK_PRODUCT.internalItemId,
+      item_name: MOCK_PRODUCT.name,
+      expected_quantity: MOCK_PRODUCT.expectedQty,
+      received_quantity: received,
+      condition,
+      receiving_issues: condition === "Good" ? [] : [condition],
+      status: condition === "Good" ? "received" : "received_with_condition",
+    });
+    setDoneState({ event, title: "Added to Receiving Batch", helper: "The item was staged for receiving review. Final inventory application remains a desktop/sync responsibility." });
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <PageHeader title="Receiving" />
+    <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
+      <PageHeader title="Receiving" subtitle="Stage L · Compact supplier receiving" />
+      <main ref={mainRef} data-scanops-scroll className="flex-1 px-4 py-4 pb-8 space-y-3 overflow-y-auto overflow-x-hidden">
+        <p className="scanops-helper-line">Select supplier, add an optional delivery reference, scan the item, then record quantity and condition.</p>
 
-      <main className="flex-1 px-4 py-5 overflow-y-auto pb-8">
+        <section className="scanops-compact-card space-y-3">
+          <TouchSelect label="Supplier" value={supplierName} onChange={updateSupplier} options={SUPPLIERS} placeholder="Select supplier" />
+          <label className="block">
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Delivery / PO</span>
+            <input
+              value={deliveryRef}
+              onChange={(event) => setDeliveryRef(event.target.value)}
+              placeholder="Optional PO / delivery reference"
+              className="mt-2 h-12 w-full rounded-2xl border border-border bg-card px-4 text-sm font-semibold text-foreground outline-none focus:ring-2 focus:ring-primary/25"
+            />
+          </label>
+        </section>
 
-        {/* SUPPLIER STEP */}
-        {step === STEPS.SUPPLIER && (
-          <div className="space-y-3">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Select Supplier</p>
-            {SUPPLIERS.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => { setSupplier(s); setStep(STEPS.SCAN); }}
-                className="w-full bg-card border border-border rounded-2xl px-5 py-4 flex items-center justify-between active:bg-secondary transition-all active:scale-[0.99]"
-              >
-                <div className="text-left">
-                  <p className="font-semibold text-foreground">{s.name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{s.ref}</p>
+        <ScanPlaceholder onSimulate={() => { setScanned(true); setDoneState(null); }} />
+
+        {scanned && (
+          <section className="scanops-compact-card space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><PackageCheck className="h-4 w-4" /></div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-mono text-muted-foreground break-all">{MOCK_PRODUCT.sku} · {MOCK_PRODUCT.barcode}</p>
+                <h2 className="mt-1 text-sm font-black text-foreground break-words">{MOCK_PRODUCT.name}</h2>
+                <p className="mt-1 text-xs text-muted-foreground">Expected: {MOCK_PRODUCT.expectedQty}</p>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Received quantity</p>
+              <div className="mt-2 flex items-center gap-3">
+                <button onClick={() => adjustQty(-1)} className="h-12 w-12 rounded-xl bg-secondary text-secondary-foreground flex items-center justify-center active:scale-[0.98]"><Minus className="h-4 w-4" /></button>
+                <div className="flex-1 rounded-xl bg-secondary/60 px-4 py-2.5 text-center">
+                  <p className="text-2xl font-black text-foreground">{received}</p>
+                  <p className="text-xs text-muted-foreground">each</p>
                 </div>
-                <ChevronRight className="w-5 h-5 text-muted-foreground" />
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* SCAN STEP */}
-        {step === STEPS.SCAN && (
-          <div className="space-y-4">
-            <div className="bg-card rounded-2xl border border-border px-5 py-3 flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Supplier</span>
-              <span className="text-sm font-semibold text-foreground">{supplier?.name}</span>
-            </div>
-            <ScanPlaceholder onSimulate={() => setStep(STEPS.QUANTITY)} />
-          </div>
-        )}
-
-        {/* QUANTITY STEP */}
-        {step === STEPS.QUANTITY && (
-          <div className="space-y-5">
-            <div className="bg-card rounded-2xl border border-border p-5">
-              <p className="text-xs text-muted-foreground font-mono">{MOCK_PRODUCT.sku}</p>
-              <h2 className="text-base font-bold text-foreground mt-1">{MOCK_PRODUCT.name}</h2>
-              <div className="mt-3 flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Expected Qty</span>
-                <span className="text-2xl font-bold text-foreground">{MOCK_PRODUCT.expectedQty}</span>
+                <button onClick={() => adjustQty(1)} className="h-12 w-12 rounded-xl bg-secondary text-secondary-foreground flex items-center justify-center active:scale-[0.98]"><Plus className="h-4 w-4" /></button>
               </div>
             </div>
 
-            <div className="bg-card rounded-2xl border border-border px-5 py-4">
-              <p className="text-xs text-muted-foreground mb-3">Received Qty</p>
-              <div className="flex items-center justify-between gap-4">
-                <button
-                  onClick={() => adjustQty(-1)}
-                  className="w-14 h-14 rounded-xl bg-secondary flex items-center justify-center active:bg-border active:scale-95 transition-all"
-                >
-                  <Minus className="w-5 h-5" />
-                </button>
-                <span className={`text-4xl font-bold flex-1 text-center ${received ? "text-foreground" : "text-muted-foreground/40"}`}>
-                  {received || "0"}
-                </span>
-                <button
-                  onClick={() => adjustQty(1)}
-                  className="w-14 h-14 rounded-xl bg-secondary flex items-center justify-center active:bg-border active:scale-95 transition-all"
-                >
-                  <Plus className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-
-            <NumericKeypad value={received} onChange={setReceived} />
-
-            <button
-              onClick={() => setStep(STEPS.ISSUES)}
-              disabled={!received}
-              className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm disabled:opacity-40 active:scale-[0.98] transition-all"
-            >
-              Next
-            </button>
-          </div>
-        )}
-
-        {/* ISSUES STEP */}
-        {step === STEPS.ISSUES && (
-          <div className="space-y-4">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Any Issues?</p>
-            <p className="text-sm text-muted-foreground -mt-2">Select all that apply, or skip</p>
-
-            <div className="space-y-2">
-              {ISSUES.map((issue) => {
-                const active = selectedIssues.includes(issue);
-                return (
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Condition</p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {CONDITIONS.map((option) => (
                   <button
-                    key={issue}
-                    onClick={() => toggleIssue(issue)}
-                    className={`w-full py-4 px-5 rounded-2xl border text-sm font-semibold text-left transition-all active:scale-[0.99]
-                      ${active
-                        ? "bg-destructive/10 border-destructive/30 text-destructive"
-                        : "bg-card border-border text-foreground"
-                      }`}
+                    key={option}
+                    type="button"
+                    onClick={() => { setCondition(option); setDoneState(null); }}
+                    className={`rounded-xl px-3 py-3 text-sm font-bold active:scale-[0.98] ${condition === option ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
                   >
-                    {issue}
+                    {option}
                   </button>
-                );
-              })}
+                ))}
+              </div>
             </div>
-
-            <button
-              onClick={() => setStep(STEPS.EXPIRY)}
-              className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm active:scale-[0.98] transition-all"
-            >
-              {selectedIssues.length > 0 ? "Continue" : "Skip — No Issues"}
-            </button>
-          </div>
+          </section>
         )}
 
-        {/* EXPIRY STEP */}
-        {step === STEPS.EXPIRY && (
-          <div className="space-y-4">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Expiry Date</p>
-            <p className="text-sm text-muted-foreground -mt-2">Select approximate shelf life</p>
-
-            <div className="grid grid-cols-2 gap-2">
-              {EXPIRY_OPTIONS.map((opt) => (
-                <button
-                  key={opt}
-                  onClick={() => setExpiry(opt)}
-                  className={`py-4 rounded-2xl border text-sm font-semibold transition-all active:scale-[0.99]
-                    ${expiry === opt
-                      ? "bg-primary border-primary text-primary-foreground"
-                      : "bg-card border-border text-foreground"
-                    }`}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-
-            <button
-              onClick={() => setStep(STEPS.CONFIRM)}
-              disabled={!expiry}
-              className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm disabled:opacity-40 active:scale-[0.98] transition-all"
-            >
-              Review
-            </button>
-          </div>
+        {doneState && (
+          <section className="rounded-2xl border border-accent/20 bg-accent/5 p-4 text-center min-w-0">
+            <CheckCircle2 className="mx-auto h-9 w-9 text-accent" />
+            <h2 className="mt-2 text-base font-black text-foreground">{doneState.title}</h2>
+            <p className="mt-1 text-xs leading-snug text-muted-foreground">{doneState.helper}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Event: {doneState.event?.event_type || "—"}</p>
+          </section>
         )}
 
-        {/* CONFIRM STEP */}
-        {step === STEPS.CONFIRM && (
-          <div className="space-y-4">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Review & Submit</p>
-
-            <div className="bg-card rounded-2xl border border-border divide-y divide-border">
-              <Row label="Supplier" value={supplier?.name} />
-              <Row label="Product" value={MOCK_PRODUCT.name} />
-              <Row label="Expected" value={MOCK_PRODUCT.expectedQty} />
-              <Row label="Received" value={received} />
-              {selectedIssues.length > 0 && <Row label="Issues" value={selectedIssues.join(", ")} highlight />}
-              <Row label="Expiry" value={expiry} />
-            </div>
-
-            <button
-              onClick={() => {
-                createScanOpsEvent(SCANOPS_EVENT_TYPES.RECEIVING_CONFIRMED, {
-                  source_module: "Receiving",
-                  supplier_id: supplier?.id,
-                  supplier_name: supplier?.name,
-                  purchase_order_ref: supplier?.ref,
-                  sku: MOCK_PRODUCT.sku,
-                  barcode: MOCK_PRODUCT.barcode,
-                  internal_item_id: MOCK_PRODUCT.internalItemId,
-                  item_name: MOCK_PRODUCT.name,
-                  expected_quantity: MOCK_PRODUCT.expectedQty,
-                  received_quantity: receivedNum,
-                  receiving_issues: selectedIssues,
-                  expiry_capture: expiry,
-                  status: selectedIssues.length ? "received_with_issues" : "received",
-                });
-                setStep(STEPS.DONE);
-              }}
-              className="w-full py-4 rounded-2xl bg-accent text-accent-foreground font-bold text-sm active:scale-[0.98] transition-all"
-            >
-              Confirm Receipt
-            </button>
-          </div>
-        )}
-
-        {/* DONE STEP */}
-        {step === STEPS.DONE && (
-          <div className="flex flex-col items-center justify-center py-16 space-y-5">
-            <div className="w-20 h-20 rounded-full bg-accent/10 flex items-center justify-center">
-              <CheckCircle2 className="w-10 h-10 text-accent" />
-            </div>
-            <div className="text-center">
-              <p className="text-lg font-bold text-foreground">Receipt Confirmed</p>
-              <p className="text-sm text-muted-foreground mt-1">{supplier?.name}</p>
-            </div>
-            <button
-              onClick={resetAll}
-              className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm active:scale-[0.98] transition-all"
-            >
-              Receive Another Item
-            </button>
-          </div>
-        )}
-
+        <div className="scanops-sticky-actions grid grid-cols-2 gap-3">
+          <button onClick={resetAll} className="rounded-2xl bg-secondary py-3 text-sm font-bold text-secondary-foreground active:scale-[0.98]"><RotateCw className="mr-1 inline h-4 w-4" />Reset</button>
+          <button onClick={confirmReceipt} disabled={!scanned || received <= 0} className="rounded-2xl bg-primary py-3 text-sm font-bold text-primary-foreground disabled:opacity-40 active:scale-[0.98]">Add to Receiving Batch</button>
+        </div>
       </main>
-    </div>
-  );
-}
-
-function Row({ label, value, highlight = false }) {
-  return (
-    <div className="flex items-start justify-between px-5 py-3.5 gap-4">
-      <span className="text-sm text-muted-foreground shrink-0">{label}</span>
-      <span className={`text-sm font-semibold text-right ${highlight ? "text-destructive" : "text-foreground"}`}>{value}</span>
     </div>
   );
 }

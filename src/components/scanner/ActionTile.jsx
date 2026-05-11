@@ -21,7 +21,7 @@ export default function ActionTile({ icon: Icon, label, to, active = false }) {
     <button
       onClick={handleTap}
       className={`
-        group flex h-[132px] min-h-[132px] w-full flex-col items-center justify-start rounded-2xl border px-3 pb-3 pt-5
+        group flex h-[108px] min-h-[108px] w-full flex-col items-center justify-start rounded-2xl border px-2.5 pb-2.5 pt-3
         text-center transition-all duration-150 active:scale-[0.98]
         ${active
           ? "bg-card border-border shadow-sm active:bg-secondary focus-visible:ring-2 focus-visible:ring-primary/35"
@@ -31,16 +31,16 @@ export default function ActionTile({ icon: Icon, label, to, active = false }) {
     >
       <span
         className={`
-          flex h-11 w-11 shrink-0 items-center justify-center rounded-xl
+          flex h-9 w-9 shrink-0 items-center justify-center rounded-xl
           ${active ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}
         `}
       >
-        <Icon className="h-5 w-5" strokeWidth={2} />
+        <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
       </span>
 
       <span
         className={`
-          mt-3 flex h-9 w-full max-w-[88px] items-center justify-center text-center text-[12px] font-semibold leading-[1.12]
+          mt-2 flex h-8 w-full max-w-[86px] items-center justify-center text-center text-[11.5px] font-semibold leading-[1.12]
           ${active ? "text-foreground" : "text-muted-foreground"}
         `}
       >

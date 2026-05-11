@@ -59,6 +59,7 @@ export default function GapScan() {
   const [step, setStep] = useState(STEPS.SCAN);
   const [item, setItem] = useState(null);
   const [doneState, setDoneState] = useState(null);
+  const [showTests, setShowTests] = useState(false);
   const classification = useMemo(() => classifyGap(item), [item]);
   const decision = useMemo(() => createDecisionRecommendation({ workflow: "gap_scan", item }), [item]);
 
@@ -195,11 +196,19 @@ export default function GapScan() {
               </div>
             </section>
             <ScanPlaceholder onSimulate={() => handleScan()} label="Scan shelf label, item barcode, or SKU" />
-            <section className="bg-card rounded-2xl border border-border p-4 space-y-3">
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Test scan outcomes</p>
-              <div className="grid grid-cols-2 gap-2">
-                {GAP_SCAN_SCENARIOS.map((scenario) => <button key={scenario.id} onClick={() => handleScan(scenario)} className={SOFT_BUTTON}>{scenario.buttonLabel}</button>)}
-              </div>
+            <section className="rounded-2xl border border-border bg-card p-3 min-w-0">
+              <button
+                type="button"
+                onClick={() => setShowTests((value) => !value)}
+                className="w-full rounded-xl bg-secondary px-3 py-2.5 text-sm font-bold text-secondary-foreground active:scale-[0.98]"
+              >
+                {showTests ? "Hide test scenarios" : "Show test scenarios"}
+              </button>
+              {showTests && (
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {GAP_SCAN_SCENARIOS.map((scenario) => <button key={scenario.id} onClick={() => handleScan(scenario)} className={SOFT_BUTTON}>{scenario.buttonLabel}</button>)}
+                </div>
+              )}
             </section>
           </div>
         )}

@@ -25,6 +25,7 @@ export default function ExpiryCheck() {
   const [expiryDate, setExpiryDate] = useState("");
   const [freshnessId, setFreshnessId] = useState("good");
   const [doneState, setDoneState] = useState(null);
+  const [showTests, setShowTests] = useState(false);
 
   const expiryStatus = useMemo(() => getExpiryStatus(expiryDate, TODAY), [expiryDate]);
   const recommendation = useMemo(() => getFreshnessRecommendation(item, expiryStatus, freshnessId), [item, expiryStatus, freshnessId]);
@@ -158,13 +159,21 @@ export default function ExpiryCheck() {
               </div>
             </section>
             <ScanPlaceholder onSimulate={() => startScan(EXPIRY_CHECK_SCAN_ITEM)} label="Scan product barcode or shelf label" />
-            <section className="bg-card rounded-2xl border border-border p-4 space-y-3 min-w-0">
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Test scenarios</p>
-              <div className="grid grid-cols-1 gap-2">
-                {EXPIRY_CHECK_SCENARIOS.map((scenario) => (
-                  <button key={scenario.id} onClick={() => startScan(scenario)} className={SOFT_BUTTON}>{scenario.buttonLabel}</button>
-                ))}
-              </div>
+            <section className="rounded-2xl border border-border bg-card p-3 min-w-0">
+              <button
+                type="button"
+                onClick={() => setShowTests((value) => !value)}
+                className="w-full rounded-xl bg-secondary px-3 py-2.5 text-sm font-bold text-secondary-foreground active:scale-[0.98]"
+              >
+                {showTests ? "Hide test scenarios" : "Show test scenarios"}
+              </button>
+              {showTests && (
+                <div className="mt-3 grid grid-cols-1 gap-2">
+                  {EXPIRY_CHECK_SCENARIOS.map((scenario) => (
+                    <button key={scenario.id} onClick={() => startScan(scenario)} className={SOFT_BUTTON}>{scenario.buttonLabel}</button>
+                  ))}
+                </div>
+              )}
             </section>
           </div>
         )}

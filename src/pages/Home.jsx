@@ -35,8 +35,8 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
       <AppHeader />
-      <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 pb-8">
-        <div className="grid grid-cols-3 items-stretch gap-3">
+      <main className="flex-1 overflow-y-auto overflow-x-hidden px-3.5 py-3 pb-14">
+        <div className="grid grid-cols-3 items-stretch gap-2.5">
           {tiles.map((tile) => (
             <ActionTile
               key={tile.label}
