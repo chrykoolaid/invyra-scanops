@@ -278,27 +278,38 @@ body {
   margin-bottom: -3.5rem;
 }
 
-/* Stage M.1.4 keyboard containment polish */
+/* Stage M.1.5 keyboard lift fix
+ * Base44/desktop phone previews can crop fixed bottom panels at the browser edge.
+ * Keep the fallback keyboard bottom-aligned to the app, but lift it above the
+ * preview edge so all rows remain visible.
+ */
 .scanops-keyboard-fallback {
   box-sizing: border-box;
-  max-height: min(8.35rem, 22dvh);
-  overflow: hidden;
+  bottom: max(3rem, env(safe-area-inset-bottom)) !important;
+  max-height: min(8.1rem, 24dvh);
+  overflow: visible;
+  border-radius: 1rem 1rem 0 0;
+}
+
+.scanops-keyboard-fallback > div {
+  max-height: 100%;
+  overflow: visible;
 }
 
 .scanops-kbd-key {
-  height: 1.28rem;
+  height: 1.22rem;
   line-height: 1;
 }
 
 .scanops-kbd-action {
-  height: 1.42rem;
+  height: 1.34rem;
   line-height: 1;
 }
 
 .scanops-keyboard-open .scanops-root-shell main {
-  padding-bottom: max(8.75rem, env(safe-area-inset-bottom)) !important;
+  padding-bottom: max(12rem, env(safe-area-inset-bottom)) !important;
 }
 
 .scanops-keyboard-open .scanops-root-shell .scanops-sticky-actions {
-  bottom: 7.35rem;
+  bottom: 10.25rem;
 }
