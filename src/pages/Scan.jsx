@@ -1,72 +1,49 @@
-import React, { useState } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
+import { Flashlight, Keyboard } from "lucide-react";
 import PageHeader from "../components/scanner/PageHeader";
-import { ScanLine, Flashlight, Keyboard } from "lucide-react";
-import { motion } from "framer-motion";
+import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
 
 export default function Scan() {
   const navigate = useNavigate();
-  const [isScanning] = useState(true);
 
   const handleSimulateScan = () => {
     navigate("/product/demo");
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <PageHeader title="Scanning..." subtitle="Product Lookup" />
+    <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
+      <PageHeader title="Scan Product" subtitle="Product Lookup" />
 
-      <main className="flex-1 flex flex-col px-4 py-5">
-        {/* Scanner Area */}
-        <div className="relative flex-1 min-h-[320px] max-h-[480px] bg-foreground/5 rounded-2xl border-2 border-dashed border-border overflow-hidden flex items-center justify-center">
-          {/* Simulated scanning frame */}
-          <div className="relative w-56 h-56">
-            {/* Corner brackets */}
-            <div className="absolute top-0 left-0 w-8 h-8 border-t-3 border-l-3 border-primary rounded-tl-lg" style={{ borderWidth: '3px' }} />
-            <div className="absolute top-0 right-0 w-8 h-8 border-t-3 border-r-3 border-primary rounded-tr-lg" style={{ borderWidth: '3px' }} />
-            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-3 border-l-3 border-primary rounded-bl-lg" style={{ borderWidth: '3px' }} />
-            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-3 border-r-3 border-primary rounded-br-lg" style={{ borderWidth: '3px' }} />
-            
-            {/* Animated scan line */}
-            {isScanning && (
-              <motion.div
-                className="absolute left-2 right-2 h-0.5 bg-primary rounded-full shadow-lg shadow-primary/30"
-                animate={{ top: ["10%", "90%", "10%"] }}
-                transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-              />
-            )}
+      <main className="flex-1 px-4 py-5 pb-8 space-y-4 overflow-y-auto overflow-x-hidden">
+        <ScanPlaceholder onSimulate={handleSimulateScan} label="Scan or enter a barcode, PLU, SKU, or shelf label." />
+
+        <section className="rounded-2xl border border-border bg-card p-4 min-w-0">
+          <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Scanner controls</p>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <button
+              type="button"
+              className="flex items-center justify-center gap-2 rounded-xl bg-secondary py-3.5 text-sm font-bold text-secondary-foreground transition-all active:scale-[0.98] active:bg-border"
+            >
+              <Flashlight className="h-4 w-4" />
+              Torch
+            </button>
+            <button
+              type="button"
+              className="flex items-center justify-center gap-2 rounded-xl bg-secondary py-3.5 text-sm font-bold text-secondary-foreground transition-all active:scale-[0.98] active:bg-border"
+            >
+              <Keyboard className="h-4 w-4" />
+              Manual
+            </button>
           </div>
+        </section>
 
-          {/* Icon overlay */}
-          <div className="absolute bottom-6 left-0 right-0 flex justify-center">
-            <ScanLine className="w-6 h-6 text-muted-foreground" />
-          </div>
-        </div>
-
-        {/* Instruction */}
-        <p className="text-center text-sm text-muted-foreground mt-4 mb-6">
-          Align barcode within frame
-        </p>
-
-        {/* Action buttons */}
-        <div className="flex gap-3 mb-4">
-          <button className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl bg-secondary text-secondary-foreground font-semibold text-sm active:scale-95 active:bg-border transition-all">
-            <Flashlight className="w-4 h-4" />
-            Torch
-          </button>
-          <button className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl bg-secondary text-secondary-foreground font-semibold text-sm active:scale-95 active:bg-border transition-all">
-            <Keyboard className="w-4 h-4" />
-            Manual
-          </button>
-        </div>
-
-        {/* Demo simulate button */}
-        <button
-          onClick={handleSimulateScan}
-          className="w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm active:scale-[0.98] transition-all"
-        >
-          Simulate Scan
-        </button>
+        <section className="rounded-2xl border border-primary/20 bg-primary/5 p-4 min-w-0">
+          <p className="text-xs font-bold uppercase tracking-wider text-primary">Handheld scanner ready</p>
+          <p className="mt-1 text-sm leading-snug text-muted-foreground">
+            Hardware trigger, keyboard wedge input, manual entry, and test scan flows use the same product lookup path. No stock is changed from this scan screen.
+          </p>
+        </section>
       </main>
     </div>
   );
