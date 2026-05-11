@@ -88,3 +88,63 @@
     @apply bg-background text-foreground font-inter;
   }
 }
+/*
+ * ScanOps global viewport guard
+ * Keeps every handheld page inside the available preview/device height and
+ * moves scrolling into the app workspace instead of the browser canvas.
+ */
+html,
+body,
+#root {
+  height: 100%;
+  min-height: 100%;
+  overflow: hidden;
+}
+
+body {
+  overscroll-behavior: none;
+}
+
+#root {
+  isolation: isolate;
+}
+
+@layer utilities {
+  .min-h-screen {
+    min-height: 100dvh;
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+}
+
+.min-h-screen,
+.h-dvh,
+.h-screen {
+  overflow: hidden;
+}
+
+.min-h-screen > header,
+.min-h-screen > [data-scanops-fixed-section],
+.h-dvh > header,
+.h-dvh > [data-scanops-fixed-section],
+.h-screen > header,
+.h-screen > [data-scanops-fixed-section] {
+  flex-shrink: 0;
+}
+
+.min-h-screen > main,
+.h-dvh > main,
+.h-screen > main {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.min-h-screen > *:not(main),
+.h-dvh > *:not(main),
+.h-screen > *:not(main) {
+  flex-shrink: 0;
+}
