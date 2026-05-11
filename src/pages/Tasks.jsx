@@ -2,7 +2,6 @@ import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "../components/scanner/PageHeader";
 import DecisionRecommendationCard from "../components/scanner/DecisionRecommendationCard";
-import { useToast } from "@/components/ui/use-toast";
 import {
   ArrowRight,
   Ban,
@@ -94,7 +93,6 @@ function sortTasks(a, b) {
 
 export default function Tasks() {
   const navigate = useNavigate();
-  const { toast } = useToast();
   const [tasks, setTasks] = useState(() => getInitialTaskQueue());
   const [activeFilter, setActiveFilter] = useState("all");
   const [selectedTaskId, setSelectedTaskId] = useState(null);
@@ -131,19 +129,16 @@ export default function Tasks() {
       status: "in_progress",
       ...buildDecisionLinkedPayload(decisionForTask, decisionEvent),
     });
-    toast({ description: "Task started", duration: 1500 });
   };
 
   const completeTask = (task) => {
     if (!canCompleteTask(task, SCANOPS_USER_CONTEXT)) {
-      toast({ description: "Supervisor review required before completion", duration: 1800 });
       return;
     }
     updateStatus(task, TASK_STATUSES.COMPLETED, SCANOPS_EVENT_TYPES.TASK_COMPLETED, {
       completed_at: new Date().toISOString(),
       status: "completed",
     });
-    toast({ description: "Task completed", duration: 1500 });
   };
 
   const blockTask = (task) => {
@@ -155,7 +150,6 @@ export default function Tasks() {
       status: "blocked",
       ...buildDecisionLinkedPayload(decisionForTask, decisionEvent),
     });
-    toast({ description: "Task blocked", duration: 1500 });
   };
 
   const cancelTask = (task) => {
@@ -165,7 +159,6 @@ export default function Tasks() {
       cancel_reason: "Manager/Admin cancelled from handheld",
       status: "cancelled",
     });
-    toast({ description: "Task cancelled", duration: 1500 });
   };
 
   const openLinkedWorkflow = (task) => {
@@ -183,13 +176,11 @@ export default function Tasks() {
     const decisionForTask = createDecisionRecommendation({ workflow: "task_priority", item: task, context: { task } });
     const event = recordDecisionEvent(decisionForTask, "rejected", { source_module: "Tasks", status: "rejected", task_id: task.id, rejection_reason: "Operator rejected task priority recommendation" });
     setLastEvent(event);
-    toast({ description: "Recommendation rejected", duration: 1500 });
   };
 
   const viewTaskReason = (task) => {
     const decisionForTask = createDecisionRecommendation({ workflow: "task_priority", item: task, context: { task } });
     recordDecisionEvent(decisionForTask, "reason_viewed", { source_module: "Tasks", status: "reason_viewed", task_id: task.id });
-    toast({ description: decisionForTask.reasonText, duration: 2500 });
   };
 
   const changeFilter = (filterId) => {
@@ -206,7 +197,6 @@ export default function Tasks() {
     setTasks(reset);
     setSelectedTaskId(null);
     setLastEvent(null);
-    toast({ description: "Task queue reset for testing", duration: 1500 });
   };
 
   if (selectedTask) {

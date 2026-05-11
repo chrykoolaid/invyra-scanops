@@ -85,7 +85,7 @@ export default function StockCount() {
       <WorkflowMain>
         {!started && <>
           <SectionCard className="space-y-3">
-            <TouchSelect label="Count mode" value={mode} onChange={setMode} options={STOCK_COUNT_TYPE_OPTIONS.map((option) => ({ id: option.id, label: option.title, helper: option.caption }))} />
+            <TouchSelect label="Count mode" value={mode} onChange={setMode} options={STOCK_COUNT_TYPE_OPTIONS.map((option) => ({ id: option.id, label: option.title }))} />
             {!modeMeta.enabled && <p className="text-xs font-bold text-muted-foreground">Governed placeholder.</p>}
           </SectionCard>
           <StickyActions leftLabel="Back" rightLabel={modeMeta.enabled ? "Start Count" : "Governed"} onLeft={() => {}} onRight={start} rightDisabled={!modeMeta.enabled} />

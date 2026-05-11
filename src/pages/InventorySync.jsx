@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from "react";
 import PageHeader from "../components/scanner/PageHeader";
-import { useToast } from "@/components/ui/use-toast";
 import { CheckCircle2, Database, Eye, RefreshCw, RotateCw, Wifi, WifiOff } from "lucide-react";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { getInventoryConnection, getLocalInventorySnapshot, pullInventorySnapshot } from "../lib/inventorySystemAdapter";
@@ -13,7 +12,6 @@ function formatTime(value) { if (!value) return "Never"; try { return new Date(v
 function statusTone(status) { if (status === SYNC_STATUSES.SYNCED) return "bg-accent/10 border-accent/20 text-accent"; if ([SYNC_STATUSES.FAILED, SYNC_STATUSES.CONFLICT, SYNC_STATUSES.NEEDS_REVIEW].includes(status)) return "bg-destructive/10 border-destructive/20 text-destructive"; if ([SYNC_STATUSES.QUEUED, SYNC_STATUSES.SYNCING].includes(status)) return "bg-primary/10 border-primary/20 text-primary"; return "bg-secondary border-border text-muted-foreground"; }
 
 export default function InventorySync() {
-  const { toast } = useToast();
   const [queue, setQueue] = useState(() => getSyncQueue());
   const [connection, setConnection] = useState(() => getInventoryConnection());
   const [snapshot, setSnapshot] = useState(() => getLocalInventorySnapshot());
@@ -23,10 +21,10 @@ export default function InventorySync() {
   const shelfTicketEventCount = useMemo(() => queue.filter((record) => String(record.eventType || "").startsWith("SHELF_TICKET_")).length, [queue]);
   const transferEventCount = useMemo(() => queue.filter((record) => String(record.eventType || "").startsWith("TRANSFER_")).length, [queue]);
   const refreshState = () => { setQueue(getSyncQueue()); setConnection(getInventoryConnection()); setSnapshot(getLocalInventorySnapshot()); };
-  const handleMode = (mode) => { const next = setNetworkMode(mode); setConnection(next); createScanOpsEvent(mode === "offline" ? SCANOPS_EVENT_TYPES.OFFLINE_MODE_ENTERED : SCANOPS_EVENT_TYPES.ONLINE_MODE_RESTORED, { source_module: "Inventory Sync", status: mode, adapter: next.adapterName }); toast({ description: mode === "offline" ? "Demo offline mode enabled" : "Demo online mode restored", duration: 1500 }); refreshState(); };
-  const handlePull = () => { createScanOpsEvent(SCANOPS_EVENT_TYPES.INVENTORY_PULL_STARTED, { source_module: "Inventory Sync", status: "started" }); const result = pullInventorySnapshot(); createScanOpsEvent(result.ok ? SCANOPS_EVENT_TYPES.INVENTORY_PULL_SUCCEEDED : SCANOPS_EVENT_TYPES.INVENTORY_PULL_FAILED, { source_module: "Inventory Sync", status: result.ok ? "synced" : "failed", reason: result.error, item_count: result.snapshot?.items?.length }); toast({ description: result.ok ? "Inventory snapshot pulled" : "Pull failed while offline", duration: 1500 }); refreshState(); };
-  const handleRetry = (id) => { createScanOpsEvent(SCANOPS_EVENT_TYPES.SYNC_RETRY_REQUESTED, { source_module: "Inventory Sync", status: "requested", sync_record_id: id }); const result = retrySyncEvent(id); setSelected(result || selected); refreshState(); toast({ description: result?.status === SYNC_STATUSES.SYNCED ? "Event synced" : "Retry completed", duration: 1500 }); };
-  const handleRetryAll = () => { createScanOpsEvent(SCANOPS_EVENT_TYPES.INVENTORY_PUSH_STARTED, { source_module: "Inventory Sync", status: "started" }); const results = retryAllSyncEvents(); const synced = results.filter((item) => item?.status === SYNC_STATUSES.SYNCED).length; createScanOpsEvent(synced > 0 ? SCANOPS_EVENT_TYPES.INVENTORY_PUSH_SUCCEEDED : SCANOPS_EVENT_TYPES.INVENTORY_PUSH_FAILED, { source_module: "Inventory Sync", status: synced > 0 ? "synced" : "failed_or_waiting", synced_count: synced, attempted_count: results.length }); refreshState(); toast({ description: synced > 0 ? `${synced} event${synced === 1 ? "" : "s"} synced` : "No events synced", duration: 1500 }); };
+  const handleMode = (mode) => { const next = setNetworkMode(mode); setConnection(next); createScanOpsEvent(mode === "offline" ? SCANOPS_EVENT_TYPES.OFFLINE_MODE_ENTERED : SCANOPS_EVENT_TYPES.ONLINE_MODE_RESTORED, { source_module: "Inventory Sync", status: mode, adapter: next.adapterName }); refreshState(); };
+  const handlePull = () => { createScanOpsEvent(SCANOPS_EVENT_TYPES.INVENTORY_PULL_STARTED, { source_module: "Inventory Sync", status: "started" }); const result = pullInventorySnapshot(); createScanOpsEvent(result.ok ? SCANOPS_EVENT_TYPES.INVENTORY_PULL_SUCCEEDED : SCANOPS_EVENT_TYPES.INVENTORY_PULL_FAILED, { source_module: "Inventory Sync", status: result.ok ? "synced" : "failed", reason: result.error, item_count: result.snapshot?.items?.length }); refreshState(); };
+  const handleRetry = (id) => { createScanOpsEvent(SCANOPS_EVENT_TYPES.SYNC_RETRY_REQUESTED, { source_module: "Inventory Sync", status: "requested", sync_record_id: id }); const result = retrySyncEvent(id); setSelected(result || selected); refreshState(); };
+  const handleRetryAll = () => { createScanOpsEvent(SCANOPS_EVENT_TYPES.INVENTORY_PUSH_STARTED, { source_module: "Inventory Sync", status: "started" }); const results = retryAllSyncEvents(); const synced = results.filter((item) => item?.status === SYNC_STATUSES.SYNCED).length; createScanOpsEvent(synced > 0 ? SCANOPS_EVENT_TYPES.INVENTORY_PUSH_SUCCEEDED : SCANOPS_EVENT_TYPES.INVENTORY_PUSH_FAILED, { source_module: "Inventory Sync", status: synced > 0 ? "synced" : "failed_or_waiting", synced_count: synced, attempted_count: results.length }); refreshState(); };
   if (selected) return <SyncDetail record={selected} onBack={() => { setSelected(null); refreshState(); }} onRetry={() => handleRetry(selected.id)} />;
   return (
     <div className="min-h-screen bg-background flex flex-col overflow-x-hidden"><PageHeader title="Inventory Sync" subtitle="Stage I · Sync queue for tickets, transfers, and scanner events" /><main className="flex-1 px-4 py-5 pb-8 space-y-4 overflow-y-auto overflow-x-hidden">
