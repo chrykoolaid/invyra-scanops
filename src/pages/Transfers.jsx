@@ -56,7 +56,7 @@ export default function Transfers() {
 
   return (
     <PageShell>
-      <WorkflowHeader title="Transfers" subtitle={`Step ${step} of 6 · ${STEP_LABELS[step - 1]}`} scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} />
+      <WorkflowHeader title="Transfers" subtitle={`Step ${step} of 6 · ${STEP_LABELS[step - 1]}`} scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} showSearch={step === 3 && !done} />
       <WorkflowMain>
         <Progress step={step} />
         {done ? (
@@ -65,7 +65,7 @@ export default function Transfers() {
           <>
             {step === 1 && <SectionCard className="space-y-3"><TouchSelect label="Transfer type" value={transferType} onChange={(v) => { setTransferType(v); setReason(""); }} options={TRANSFER_TYPE_OPTIONS} /><TouchSelect label="Reason" value={reason || reasonOptions[0]?.id} onChange={setReason} options={reasonOptions} /></SectionCard>}
             {step === 2 && <SectionCard><TouchSelect label="Source location" value={source} onChange={setSource} options={LOCATION_OPTIONS} /></SectionCard>}
-            {step === 3 && <SectionCard><p className="text-sm font-bold text-foreground">Scan or search the transfer item in the header.</p><p className="mt-1 text-xs leading-snug text-muted-foreground">Hardware trigger and manual search use the same lookup path.</p></SectionCard>}
+            {step === 3 && <SectionCard><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Context</p><p className="mt-1 text-sm font-bold text-foreground">Source: {getLocationLabel(source)}</p><p className="mt-0.5 text-xs leading-snug text-muted-foreground">Type: {getTransferTypeLabel(transferType)}</p></SectionCard>}
             {step === 4 && <>{item ? <ItemSummaryCard item={item} /> : <SectionCard><p className="text-sm font-bold text-foreground">No item selected yet.</p></SectionCard>}<SectionCard><QuantityStepper label="Quantity / weight" value={quantity} onChange={setQuantity} unit={unit} min={1} /></SectionCard></>}
             {step === 5 && <SectionCard><TouchSelect label="Destination location" value={destination} onChange={setDestination} options={LOCATION_OPTIONS} /></SectionCard>}
             {step === 6 && <SectionCard className="space-y-2">
@@ -79,7 +79,7 @@ export default function Transfers() {
               <InfoLine label="Reason" value={reasonOptions.find((option) => option.id === (reason || reasonOptions[0]?.id))?.label || "Standard transfer"} />
               <InfoLine label="Stock mutation" value="No direct stock mutation" />
             </SectionCard>}
-            <StickyActions leftLabel={step === 1 ? "Cancel" : "Back"} rightLabel={step === 6 ? "Confirm Transfer" : "Continue"} onLeft={step === 1 ? () => setDone(false) : back} onRight={step === 6 ? confirm : next} rightDisabled={step === 6 && !item} />
+            <StickyActions leftLabel={step === 1 ? "Cancel" : "Back"} rightLabel={step === 6 ? "Confirm Transfer Request" : "Continue"} onLeft={step === 1 ? () => setDone(false) : back} onRight={step === 6 ? confirm : next} rightDisabled={step === 6 && !item} />
           </>
         )}
       </WorkflowMain>

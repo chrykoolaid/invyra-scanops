@@ -47,9 +47,9 @@ export default function Replenish() {
 
   return (
     <PageShell>
-      <WorkflowHeader title="Replenish" subtitle="Shelf to backroom replenishment" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} />
+      <WorkflowHeader title="Replenish" subtitle="Create shelf replenish action" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} />
       <WorkflowMain>
-        {!item && <ReadyCard title="Scan shelf item or label" helper="Shelf, backroom, and pending delivery positions appear after scan." />}
+        {!item && <ReadyCard title="Ready to scan" helper="Use hardware trigger or tap search above." />}
         {item && <>
           <ItemSummaryCard item={item} />
           <SectionCard className="space-y-3">

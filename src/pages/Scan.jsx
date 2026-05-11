@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
-import { PageShell, ReadyCard, WorkflowMain, SectionCard } from "../components/scanner/WorkflowPrimitives";
+import { PageShell, ReadyCard, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 
 export default function Scan() {
   const navigate = useNavigate();
@@ -16,19 +16,13 @@ export default function Scan() {
     <PageShell>
       <WorkflowHeader
         title="Product Lookup"
-        subtitle="Scan, PLU, SKU, shelf label, or item name"
+        subtitle="Scan, PLU, SKU, shelf label, or name"
         scanValue={scanValue}
         onScanValueChange={setScanValue}
         onScan={handleScan}
       />
       <WorkflowMain>
-        <ReadyCard title="Ready to scan" helper="Use the hardware trigger or search above. Product lookup does not change stock." />
-        <SectionCard>
-          <p className="text-xs font-black uppercase tracking-wider text-primary">Scanner-first flow</p>
-          <p className="mt-1 text-sm leading-snug text-muted-foreground">
-            Hardware scan, keyboard wedge input, and manual lookup now use the same header search path.
-          </p>
-        </SectionCard>
+        <ReadyCard title="Ready to scan" helper="Use hardware trigger or tap search above. Product lookup does not change stock." />
       </WorkflowMain>
     </PageShell>
   );

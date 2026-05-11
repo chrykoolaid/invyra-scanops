@@ -46,7 +46,7 @@ export default function ExpiryCheck() {
     <PageShell>
       <WorkflowHeader title="Expiry Check" subtitle="Capture date and freshness truth" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} />
       <WorkflowMain>
-        {!item && <ReadyCard title="Scan item to check expiry" helper="Date, freshness, and recommended action appear after scan." />}
+        {!item && <ReadyCard title="Ready to scan" helper="Use hardware trigger or tap search above." />}
         {item && <>
           <ItemSummaryCard item={item} />
           <SectionCard className="space-y-3">
@@ -56,7 +56,7 @@ export default function ExpiryCheck() {
               <MetricPill label="Expiry" value={expiryStatus.label} />
               <MetricPill label="Action" value={recommendation.action?.label || recommendation.actionLabel || recommendation.title || "Review"} />
             </div>
-            <div className="rounded-2xl bg-secondary/60 p-3 text-xs leading-snug text-muted-foreground">Test scenarios remain development-only and are no longer part of the default operator path.</div>
+            <div className="rounded-2xl bg-secondary/60 p-3 text-xs leading-snug text-muted-foreground">Show test scenarios is development-only and collapsed from the operator path.</div>
           </SectionCard>
           {done && <DoneCard title="Expiry check saved" helper="Freshness/expiry truth was recorded on device for sync and review." rows={[{ label: "Expiry", value: expiryStatus.label }, { label: "Condition", value: FRESHNESS_CONDITIONS.find((c) => c.id === condition)?.label || condition }]} />}
           <StickyActions leftLabel="Review" rightLabel="Save Check" onLeft={() => setDone(null)} onRight={save} />

@@ -60,7 +60,7 @@ export default function ShelfTickets() {
           <TouchSelect label="Ticket type" value={ticketType} onChange={setTicketType} options={SHELF_TICKET_TYPE_OPTIONS} />
           <TouchSelect label="Ticket reason" value={ticketReason} onChange={setTicketReason} options={SHELF_TICKET_REASON_OPTIONS} />
         </SectionCard>
-        {!item && !batch.length && <ReadyCard title="Scan items into batch" helper="Ticket setup stays compact. No real printing is claimed from the handheld." />}
+        {!item && !batch.length && <ReadyCard title="Ready to scan" helper="Use hardware trigger or tap search above. Desktop request only." />}
         {item && <>
           <ItemSummaryCard item={item}>
             <p className="text-xs font-bold text-muted-foreground">Ticket: {typeLabel} · {reasonLabel}</p>

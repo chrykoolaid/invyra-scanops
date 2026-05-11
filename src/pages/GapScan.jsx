@@ -43,13 +43,13 @@ export default function GapScan() {
 
   return (
     <PageShell>
-      <WorkflowHeader title="Gap Scan" subtitle="Check shelf gap and stock truth" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} />
+      <WorkflowHeader title="Gap Scan" subtitle="Capture shelf gap evidence" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} />
       <WorkflowMain>
-        {!item && <ReadyCard title="Scan shelf gap" helper="Scan shelf label, item barcode, PLU, SKU, or item name." />}
+        {!item && <ReadyCard title="Ready to scan" helper="Use hardware trigger or tap search above." />}
         {item && <>
           <ItemSummaryCard item={item} />
           <SectionCard className="space-y-3">
-            <TouchSelect label="Gap outcome" value={outcome} onChange={setOutcome} options={OUTCOMES} />
+            <TouchSelect label="Gap reason" value={outcome} onChange={setOutcome} options={OUTCOMES} />
             <div className="rounded-2xl bg-secondary/60 p-3">
               <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Action</p>
               <p className="mt-1 text-sm font-bold text-foreground">{classification.title || "Review gap"}</p>

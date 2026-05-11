@@ -40,9 +40,9 @@ export default function Waste() {
 
   return (
     <PageShell>
-      <WorkflowHeader title="Waste" subtitle="Record damaged, expired, or shrink items" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} />
+      <WorkflowHeader title="Waste" subtitle="Record waste and shrink" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} />
       <WorkflowMain>
-        {!item && <ReadyCard title="Scan item to record waste" helper="The reason, quantity, and review route appear after the item is selected." />}
+        {!item && <ReadyCard title="Ready to scan" helper="Use hardware trigger or tap search above." />}
         {item && <>
           <ItemSummaryCard item={item} />
           <SectionCard className="space-y-3">

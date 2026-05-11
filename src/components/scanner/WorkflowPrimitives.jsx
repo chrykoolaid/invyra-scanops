@@ -17,14 +17,16 @@ export function SectionCard({ children, className = "" }) {
   return <section className={`scanops-work-card ${className}`}>{children}</section>;
 }
 
-export function ReadyCard({ title = "Ready to scan", helper = "Use the hardware trigger or search bar above." }) {
+export function ReadyCard({ title = "Ready to scan", helper = "Use hardware trigger or tap search above." }) {
   return (
-    <SectionCard className="text-center">
-      <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-        <Search className="h-5 w-5" />
+    <SectionCard className="flex items-start gap-3">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <Search className="h-4 w-4" />
       </div>
-      <h2 className="mt-3 text-base font-black text-foreground">{title}</h2>
-      <p className="mt-1 text-sm leading-snug text-muted-foreground">{helper}</p>
+      <div className="min-w-0">
+        <h2 className="text-sm font-black leading-tight text-foreground">{title}</h2>
+        <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{helper}</p>
+      </div>
     </SectionCard>
   );
 }

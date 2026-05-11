@@ -45,9 +45,9 @@ export default function Markdowns() {
 
   return (
     <PageShell>
-      <WorkflowHeader title="Markdowns" subtitle="Apply price reduction workflow" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} />
+      <WorkflowHeader title="Markdowns" subtitle="Apply markdown workflow" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} />
       <WorkflowMain>
-        {!item && <ReadyCard title="Scan item to markdown" helper="Choose the reason and discount after item lookup." />}
+        {!item && <ReadyCard title="Ready to scan" helper="Use hardware trigger or tap search above." />}
         {item && <>
           <ItemSummaryCard item={item} />
           <SectionCard className="space-y-3">
@@ -64,7 +64,7 @@ export default function Markdowns() {
               <MetricPill label="Current" value={`${currency}${currentPrice || "—"}`} />
               <MetricPill label="New" value={`${currency}${newPrice || "—"}`} />
             </div>
-            <div className="rounded-2xl bg-secondary/60 p-3 text-sm font-bold text-foreground">Markdown shelf ticket will be requested after save.</div>
+            <div className="rounded-2xl bg-secondary/60 p-3 text-sm font-bold text-foreground">☑ Create markdown shelf ticket request</div>
           </SectionCard>
           {done && <DoneCard title="Markdown requested" helper="The scanner created a markdown event and shelf-ticket request. No desktop price file was changed in this stage." rows={[{ label: "Discount", value: `${discount}%` }, { label: "New price", value: `${currency}${newPrice}` }]} />}
           <StickyActions leftLabel="Review Markdown" rightLabel="Add Markdown" onLeft={() => setDone(null)} onRight={addMarkdown} />

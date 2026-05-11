@@ -81,7 +81,7 @@ export default function StockCount() {
 
   return (
     <PageShell>
-      <WorkflowHeader title="Stock Count" subtitle={started ? `${modeMeta.title} · scanner-first count` : "Choose count mode, then scan"} scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} />
+      <WorkflowHeader title="Stock Count" subtitle={started ? "Count stock by scan or search" : "Choose count mode, then scan"} scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} showSearch={started} />
       <WorkflowMain>
         {!started && <>
           <SectionCard className="space-y-3">
@@ -94,7 +94,7 @@ export default function StockCount() {
           </SectionCard>
           <StickyActions leftLabel="Back" rightLabel={modeMeta.enabled ? "Start Count" : "Governed"} onLeft={() => {}} onRight={start} rightDisabled={!modeMeta.enabled} />
         </>}
-        {started && !item && !done && <ReadyCard title="Scan item to count" helper="Use header scan/search for barcode, PLU, SKU, shelf label, or item name." />}
+        {started && !item && !done && <ReadyCard title="Ready to scan" helper="Use hardware trigger or tap search above." />}
         {item && <>
           <ItemSummaryCard item={item} />
           <SectionCard className="space-y-3">
@@ -106,7 +106,7 @@ export default function StockCount() {
             {variance !== 0 && <TouchSelect label="Variance reason" value={reason} onChange={setReason} options={VARIANCE_REASONS} />}
             <TextInputField label="Note" value={note} onChange={setNote} placeholder="Optional count note" />
           </SectionCard>
-          <StickyActions leftLabel="Review Lines" rightLabel="Save Count Line" onLeft={() => setItem(null)} onRight={saveLine} />
+          <StickyActions leftLabel="Review Lines" rightLabel="Save Count" onLeft={() => setItem(null)} onRight={saveLine} />
         </>}
         {lines.length > 0 && !item && <SectionCard>
           <div className="flex items-center justify-between gap-3">
