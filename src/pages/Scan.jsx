@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
-import { PageShell, ReadyCard, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
+import { EmptyState, PageShell, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 
 export default function Scan() {
   const navigate = useNavigate();
@@ -22,7 +22,7 @@ export default function Scan() {
         onScan={handleScan}
       />
       <WorkflowMain>
-        <ReadyCard title="Ready to scan" helper="Use hardware trigger or tap search above. Product lookup does not change stock." />
+        <EmptyState title="No item selected." />
       </WorkflowMain>
     </PageShell>
   );

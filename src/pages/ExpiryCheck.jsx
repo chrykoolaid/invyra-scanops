@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
-import { DoneCard, ItemSummaryCard, MetricPill, PageShell, ReadyCard, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
+import { DoneCard, EmptyState, ItemSummaryCard, MetricPill, PageShell, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { EXPIRY_CHECK_SCAN_ITEM } from "../lib/scanOpsInventoryFixtures";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
@@ -46,7 +46,7 @@ export default function ExpiryCheck() {
     <PageShell>
       <WorkflowHeader title="Expiry Check" subtitle="Capture date and freshness truth" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} />
       <WorkflowMain>
-        {!item && <ReadyCard title="Ready to scan" helper="Use hardware trigger or tap search above." />}
+        {!item && <EmptyState title="No item selected." />}
         {item && <>
           <ItemSummaryCard item={item} />
           <SectionCard className="space-y-3">

@@ -1,9 +1,10 @@
 import React, { useState } from "react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
-import { DoneCard, ItemSummaryCard, PageShell, QuantityStepper, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
+import { BatchList, EmptyState, ItemSummaryCard, PageShell, QuantityStepper, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
+import { makeWorkflowBatchItem, removeWorkflowBatchItem, upsertWorkflowBatchItem } from "../lib/scanOpsWorkflowBatch";
 
 const SUPPLIERS = [
   { id: "Fresh Fields Co.", label: "Fresh Fields Co.", helper: "Fresh produce and dairy" },
@@ -24,18 +25,19 @@ export default function Receiving() {
   const [item, setItem] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const [condition, setCondition] = useState("Good");
-  const [done, setDone] = useState(false);
+  const [batch, setBatch] = useState([]);
   const unit = item?.unitType || item?.unit_type || "each";
 
   const scan = (value) => {
     const found = resolveInventoryIdentity(String(value || "").trim() || "930000000004") || resolveInventoryIdentity("930000000004");
     setItem(found);
     setQuantity(1);
-    setDone(false);
   };
 
   const add = () => {
     if (!item) return;
+    const line = makeWorkflowBatchItem({ workflowType: "receiving", item, quantity, condition, meta: { supplierId: supplier, poReference: deliveryRef || null } });
+    setBatch((current) => upsertWorkflowBatchItem(current, line));
     createScanOpsEvent(SCANOPS_EVENT_TYPES.RECEIVING_CONFIRMED, {
       source_module: "Receiving",
       supplier_name: supplier,
@@ -46,9 +48,12 @@ export default function Receiving() {
       received_quantity: quantity,
       unit_type: unit,
       condition,
-      status: condition === "Good" ? "received" : "received_with_condition",
+      status: condition === "Good" ? "added_to_receiving_batch" : "added_with_condition",
+      applies_stock_directly: false,
     });
-    setDone(true);
+    setItem(null);
+    setScanValue("");
+    setQuantity(1);
   };
 
   return (
@@ -59,7 +64,7 @@ export default function Receiving() {
           <TouchSelect label="Supplier" value={supplier} onChange={setSupplier} options={SUPPLIERS} />
           <TextInputField label="Delivery / PO" value={deliveryRef} onChange={setDeliveryRef} placeholder="Optional PO or delivery reference" />
         </SectionCard>
-        {item && <>
+        {item ? <>
           <ItemSummaryCard item={item}>
             <p className="text-xs font-bold text-muted-foreground">Expected: {item.pendingDeliveryQty ?? item.pending_delivery_qty ?? 24} {unit}</p>
           </ItemSummaryCard>
@@ -67,9 +72,15 @@ export default function Receiving() {
             <QuantityStepper label="Received quantity" value={quantity} onChange={setQuantity} unit={unit} min={0} />
             <TouchSelect label="Condition" value={condition} onChange={setCondition} options={CONDITIONS} />
           </SectionCard>
-          {done && <DoneCard title="Added to Receiving Batch" helper="The item is staged for receiving review. Final inventory application remains desktop/sync-side." rows={[{ label: "Supplier", value: supplier }, { label: "Quantity", value: `${quantity} ${unit}` }, { label: "Condition", value: condition }]} />}
-        </>}
-        <StickyActions leftLabel="Reset" rightLabel="Add to Receiving Batch" onLeft={() => { setItem(null); setDone(false); }} onRight={add} rightDisabled={!item} />
+        </> : <EmptyState title="No item selected." />}
+        <BatchList
+          title="Current receiving batch"
+          items={batch}
+          emptyText="Batch is empty."
+          renderMeta={(line) => `${line.condition || "Good"} · ${line.supplierId || supplier}${line.poReference ? ` · ${line.poReference}` : ""}`}
+          onRemove={(id) => setBatch((current) => removeWorkflowBatchItem(current, id))}
+        />
+        <StickyActions leftLabel="Clear Item" rightLabel="Add to Batch" onLeft={() => { setItem(null); setScanValue(""); }} onRight={add} rightDisabled={!item} />
       </WorkflowMain>
     </PageShell>
   );

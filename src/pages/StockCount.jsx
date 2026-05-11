@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from "react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
-import { DoneCard, InfoLine, ItemSummaryCard, PageShell, QuantityStepper, ReadyCard, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
+import { BatchList, EmptyState, InfoLine, ItemSummaryCard, PageShell, QuantityStepper, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { getLocalInventorySnapshot, resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { calculateVariance, STOCK_COUNT_TYPES, STOCK_COUNT_TYPE_OPTIONS } from "../lib/scanOpsStockCount";
+import { makeWorkflowBatchItem, removeWorkflowBatchItem } from "../lib/scanOpsWorkflowBatch";
 
 const VARIANCE_REASONS = [
   { id: "shelf_count_mismatch", label: "Shelf count mismatch" },
@@ -22,6 +23,14 @@ function findProduct(input) {
   return getLocalInventorySnapshot().items.find((item) => item.name?.toLowerCase().includes(value.toLowerCase())) || null;
 }
 
+function upsertCountLine(current, nextLine) {
+  const key = nextLine.item?.itemId;
+  const exists = current.some((line) => line.item?.itemId === key);
+  return exists
+    ? current.map((line) => line.item?.itemId === key ? { ...line, ...nextLine, batchItemId: line.batchItemId, createdAt: line.createdAt } : line)
+    : [nextLine, ...current];
+}
+
 export default function StockCount() {
   const [scanValue, setScanValue] = useState("");
   const [mode, setMode] = useState(STOCK_COUNT_TYPES.QUICK_COUNT);
@@ -31,16 +40,17 @@ export default function StockCount() {
   const [reason, setReason] = useState("shelf_count_mismatch");
   const [note, setNote] = useState("");
   const [lines, setLines] = useState([]);
-  const [done, setDone] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const modeMeta = STOCK_COUNT_TYPE_OPTIONS.find((option) => option.id === mode) || STOCK_COUNT_TYPE_OPTIONS[0];
   const expected = Number(item?.stockOnHand ?? item?.stock_on_hand ?? item?.shelfStock ?? item?.shelf_stock ?? 0);
   const variance = useMemo(() => calculateVariance(expected, Number(counted || 0)), [expected, counted]);
   const unit = item?.unitType || item?.unit_type || "each";
+  const reasonLabel = VARIANCE_REASONS.find((option) => option.id === reason)?.label || reason;
 
   const start = () => {
     if (!modeMeta.enabled) return;
     setStarted(true);
-    setDone(false);
+    setSubmitted(false);
     createScanOpsEvent(SCANOPS_EVENT_TYPES.STOCK_COUNT_SESSION_STARTED, { source_module: "Stock Count", count_type: mode, status: "in_progress", sync_exempt: true });
   };
 
@@ -49,13 +59,19 @@ export default function StockCount() {
     const found = findProduct(value || "930000000010");
     setItem(found);
     setCounted(Number(found?.stockOnHand ?? found?.stock_on_hand ?? found?.shelfStock ?? found?.shelf_stock ?? 1));
-    setDone(false);
+    setSubmitted(false);
   };
 
   const saveLine = () => {
     if (!item) return;
-    const line = { id: `${item.sku || item.barcode}-${Date.now()}`, item, counted, expected, variance, reason, note };
-    setLines((current) => [line, ...current]);
+    const line = makeWorkflowBatchItem({
+      workflowType: "stock_count",
+      item,
+      quantity: counted,
+      reason: variance !== 0 ? reasonLabel : "Matched",
+      meta: { expected, variance, note, countedQuantity: counted, expectedQuantity: expected },
+    });
+    setLines((current) => upsertCountLine(current, line));
     createScanOpsEvent(variance ? SCANOPS_EVENT_TYPES.STOCK_COUNT_VARIANCE_REVIEW_REQUIRED : SCANOPS_EVENT_TYPES.STOCK_COUNT_LINE_SAVED, {
       source_module: "Stock Count",
       count_type: mode,
@@ -65,18 +81,20 @@ export default function StockCount() {
       expected_quantity: expected,
       counted_quantity: counted,
       variance_quantity: variance,
-      variance_reason: reason,
+      variance_reason: variance !== 0 ? reason : null,
       note,
+      applies_stock_directly: false,
       status: variance ? "variance_review_required" : "line_saved",
     });
     setItem(null);
     setScanValue("");
+    setNote("");
   };
 
   const submit = () => {
     if (!lines.length) return;
-    createScanOpsEvent(SCANOPS_EVENT_TYPES.STOCK_COUNT_SUBMITTED, { source_module: "Stock Count", count_type: mode, counted_items: lines.length, variance_items: lines.filter((line) => line.variance).length, status: "submitted_for_review" });
-    setDone(true);
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.STOCK_COUNT_SUBMITTED, { source_module: "Stock Count", count_type: mode, counted_items: lines.length, variance_items: lines.filter((line) => line.variance).length, applies_stock_directly: false, status: "submitted_for_review" });
+    setSubmitted(true);
   };
 
   return (
@@ -90,31 +108,29 @@ export default function StockCount() {
           </SectionCard>
           <StickyActions leftLabel="Back" rightLabel={modeMeta.enabled ? "Start Count" : "Governed"} onLeft={() => {}} onRight={start} rightDisabled={!modeMeta.enabled} />
         </>}
+        {started && !item && <EmptyState title="No item selected." helper={lines.length ? "Scan another item or submit the count evidence." : ""} />}
         {item && <>
           <ItemSummaryCard item={item} />
           <SectionCard className="space-y-3">
             <QuantityStepper label="Counted quantity" value={counted} onChange={setCounted} unit={unit} min={0} />
             <div className="rounded-2xl bg-secondary/60 p-3 space-y-2">
               <InfoLine label="Expected" value={`${expected} ${unit}`} />
-              <InfoLine label="Variance" value={`${variance ?? 0} ${unit}`} />
+              <InfoLine label="Counted" value={`${counted} ${unit}`} />
+              <InfoLine label="Difference" value={`${variance ?? 0} ${unit}`} />
             </div>
             {variance !== 0 && <TouchSelect label="Variance reason" value={reason} onChange={setReason} options={VARIANCE_REASONS} />}
             <TextInputField label="Note" value={note} onChange={setNote} placeholder="Optional count note" />
           </SectionCard>
-          <StickyActions leftLabel="Review Lines" rightLabel="Save Count" onLeft={() => setItem(null)} onRight={saveLine} />
         </>}
-        {lines.length > 0 && !item && <SectionCard>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Count review</p>
-              <p className="mt-1 text-2xl font-black text-foreground">{lines.length} lines</p>
-            </div>
-            <p className="text-right text-xs font-bold text-muted-foreground">{lines.filter((line) => line.variance).length} variance lines</p>
-          </div>
-          <div className="mt-3 space-y-2">{lines.slice(0, 3).map((line) => <div key={line.id} className="rounded-2xl bg-secondary/60 p-3 text-sm font-bold text-foreground">{line.item.name} · {line.counted} {unit}</div>)}</div>
-        </SectionCard>}
-        {started && !item && !done && <StickyActions leftLabel="Reset" rightLabel="Submit Count" onLeft={() => { setStarted(false); setLines([]); }} onRight={submit} rightDisabled={!lines.length} />}
-        {done && <DoneCard title="Count submitted" helper="Stock count lines were submitted as scanner events. Variance approval remains governed by Inventory." rows={[{ label: "Lines", value: String(lines.length) }, { label: "Variance lines", value: String(lines.filter((line) => line.variance).length) }]} />}
+        <BatchList
+          title="Current count"
+          items={lines}
+          emptyText="Current count is empty."
+          renderMeta={(line) => `Expected ${line.expectedQuantity} · Counted ${line.countedQuantity} · Diff ${line.variance ?? 0}${line.reason && line.reason !== "Matched" ? ` · ${line.reason}` : ""}`}
+          onRemove={(id) => setLines((current) => removeWorkflowBatchItem(current, id))}
+        />
+        {submitted && <SectionCard className="border-primary/20 bg-primary/5"><p className="text-sm font-black text-foreground">Count evidence submitted</p><p className="mt-1 text-xs font-bold text-muted-foreground">{lines.length} lines · {lines.filter((line) => line.variance).length} variance lines · no direct stock mutation</p></SectionCard>}
+        {started && <StickyActions leftLabel={item ? "Review Lines" : "Reset"} rightLabel={item ? "Save Count" : "Submit Count"} onLeft={() => item ? setItem(null) : (setStarted(false), setLines([]), setSubmitted(false))} onRight={item ? saveLine : submit} rightDisabled={item ? false : !lines.length} />}
       </WorkflowMain>
     </PageShell>
   );

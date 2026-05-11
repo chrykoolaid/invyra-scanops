@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ClipboardList, Tags, Trash2, ArrowRightLeft } from "lucide-react";
+import { ClipboardList, RefreshCcw, Tags, Trash2, BadgePercent } from "lucide-react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
-import { PageShell, WorkflowMain, ItemSummaryCard, SectionCard, MetricPill, ReadyCard } from "../components/scanner/WorkflowPrimitives";
+import { EmptyState, ItemSummaryCard, MetricPill, PageShell, SectionCard, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { getIdentityDisplay } from "../lib/productIdentityResolver";
 
@@ -15,7 +15,7 @@ export default function ProductLookup() {
   const unit = product?.unitType || product?.unit_type || "each";
   const price = useMemo(() => {
     if (!product) return "—";
-    return product.pricePerKg ? `${product.currency}${product.pricePerKg}/kg` : `${product.currency || "₱"}${product.currentPrice ?? product.current_price ?? "—"}`;
+    return product.pricePerKg ? `${product.currency || "₱"}${product.pricePerKg}/kg` : `${product.currency || "₱"}${product.currentPrice ?? product.current_price ?? "—"}`;
   }, [product]);
 
   const handleScan = (value) => {
@@ -54,14 +54,15 @@ export default function ProductLookup() {
               <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Quick actions</p>
               <div className="mt-3 grid grid-cols-2 gap-2">
                 <ActionButton icon={ClipboardList} label="Count" onClick={() => navigate("/stock-count")} />
-                <ActionButton icon={Tags} label="Shelf Ticket" onClick={() => navigate("/shelf-tickets")} />
+                <ActionButton icon={RefreshCcw} label="Replenish" onClick={() => navigate("/replenish")} />
+                <ActionButton icon={BadgePercent} label="Markdown" onClick={() => navigate("/markdowns")} />
                 <ActionButton icon={Trash2} label="Waste" onClick={() => navigate("/waste")} />
-                <ActionButton icon={ArrowRightLeft} label="Transfer" onClick={() => navigate("/transfers")} />
+                <ActionButton icon={Tags} label="Shelf Ticket" onClick={() => navigate("/shelf-tickets")} />
               </div>
             </SectionCard>
           </>
         ) : (
-          <ReadyCard title="Ready to scan" helper="Use hardware trigger or tap search above." />
+          <EmptyState title="No item selected." />
         )}
       </WorkflowMain>
     </PageShell>

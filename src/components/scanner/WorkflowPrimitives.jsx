@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle2, Minus, Package, Plus } from "lucide-react";
+import { CheckCircle2, Minus, Package, Plus, Trash2 } from "lucide-react";
 
 export function PageShell({ children }) {
   return <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">{children}</div>;
@@ -18,9 +18,17 @@ export function SectionCard({ children, className = "" }) {
 }
 
 export function ReadyCard() {
-  // Stage M.1.2: idle workflows should not show large "Ready to scan" explainer walls.
-  // The header search field is the instruction surface. Keep the body clear until an item is selected.
+  // Idle workflow bodies intentionally stay quiet. Header search is the instruction surface.
   return null;
+}
+
+export function EmptyState({ title = "No item selected.", helper = "" }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-border bg-card/70 px-4 py-3 text-sm font-bold text-muted-foreground">
+      <p>{title}</p>
+      {helper && <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground/80">{helper}</p>}
+    </div>
+  );
 }
 
 export function ItemSummaryCard({ item, children }) {
@@ -29,6 +37,8 @@ export function ItemSummaryCard({ item, children }) {
   const shelf = item.shelfStock ?? item.shelf_stock;
   const backroom = item.backroomStock ?? item.backroom_stock;
   const soh = item.stockOnHand ?? item.stock_on_hand;
+  const identity = [item.sku && `SKU ${item.sku}`, item.barcode && `Barcode ${item.barcode}`, (item.plu || item.scaleCode) && `PLU ${item.plu || item.scaleCode}`].filter(Boolean).join(" · ");
+  const location = [item.department, item.category, item.shelfLocation || item.location].filter(Boolean).join(" · ");
   return (
     <SectionCard>
       <div className="flex items-start gap-3">
@@ -37,9 +47,8 @@ export function ItemSummaryCard({ item, children }) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="break-words text-base font-black leading-tight text-foreground">{item.name || item.item_name || "Scanned item"}</p>
-          <p className="mt-1 break-all font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
-            {item.sku || item.barcode || item.plu || item.internalItemId || "No barcode"}
-          </p>
+          {identity && <p className="mt-1 break-all font-mono text-[11px] uppercase tracking-wide text-muted-foreground">{identity}</p>}
+          {location && <p className="mt-1 truncate text-xs font-bold text-muted-foreground">{location}</p>}
         </div>
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2">
@@ -116,6 +125,48 @@ export function InfoLine({ label, value }) {
       <span className="text-xs font-bold text-muted-foreground">{label}</span>
       <span className="break-words text-right text-xs font-black text-foreground">{value}</span>
     </div>
+  );
+}
+
+export function BatchList({ title = "Current batch", items = [], emptyText = "Batch is empty.", renderMeta, onRemove }) {
+  return (
+    <SectionCard>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">{title}</p>
+          <p className="mt-1 text-2xl font-black text-foreground">{items.length} {items.length === 1 ? "item" : "items"}</p>
+        </div>
+      </div>
+      {items.length ? (
+        <div className="mt-3 space-y-2">
+          {items.map((line) => {
+            const item = line.item?.raw || line.item || {};
+            const name = line.item?.itemName || item.name || item.item_name || "Scanned item";
+            const unit = line.item?.unit || item.unitType || item.unit_type || "each";
+            const qtyLabel = line.quantity !== undefined ? `x ${line.quantity} ${unit}` : "";
+            const meta = renderMeta ? renderMeta(line) : [line.reason, line.condition, line.markdownPercent && `${line.markdownPercent}%`, line.ticketType, line.ticketReason].filter(Boolean).join(" · ");
+            return (
+              <div key={line.batchItemId || line.id} className="rounded-2xl bg-secondary/60 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-black text-foreground">{name}</p>
+                    {meta && <p className="mt-1 break-words text-xs font-bold text-muted-foreground">{meta}</p>}
+                  </div>
+                  {qtyLabel && <p className="shrink-0 text-xs font-black text-foreground">{qtyLabel}</p>}
+                </div>
+                {onRemove && (
+                  <button type="button" onClick={() => onRemove(line.batchItemId || line.id)} className="mt-2 inline-flex min-h-8 items-center gap-1 rounded-xl bg-card px-3 text-xs font-black text-muted-foreground active:bg-border">
+                    <Trash2 className="h-3.5 w-3.5" /> Remove
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="mt-3 rounded-2xl bg-secondary/50 px-3 py-2 text-sm font-bold text-muted-foreground">{emptyText}</p>
+      )}
+    </SectionCard>
   );
 }
 

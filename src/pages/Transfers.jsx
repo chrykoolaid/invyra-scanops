@@ -60,13 +60,13 @@ export default function Transfers() {
       <WorkflowMain>
         <Progress step={step} />
         {done ? (
-          <DoneCard title="Transfer Request Queued" helper="No direct stock mutation was applied. Invyra Inventory applies official movement after sync/review." rows={[{ label: "Item", value: item?.name }, { label: "Quantity", value: `${quantity} ${unit}` }, { label: "Stock mutation", value: "No direct stock mutation" }]} />
+          <DoneCard title="Transfer Request Queued" helper="No direct stock mutation was applied. Inventory posts movement after sync/review." rows={[{ label: "Item", value: item?.name }, { label: "Quantity", value: `${quantity} ${unit}` }, { label: "Stock mutation", value: "No direct stock mutation" }]} />
         ) : (
           <>
             {step === 1 && <SectionCard className="space-y-3"><TouchSelect label="Transfer type" value={transferType} onChange={(v) => { setTransferType(v); setReason(""); }} options={TRANSFER_TYPE_OPTIONS} /><TouchSelect label="Reason" value={reason || reasonOptions[0]?.id} onChange={setReason} options={reasonOptions} /></SectionCard>}
             {step === 2 && <SectionCard><TouchSelect label="Source location" value={source} onChange={setSource} options={LOCATION_OPTIONS} /></SectionCard>}
-            {step === 3 && <SectionCard><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Context</p><p className="mt-1 text-sm font-bold text-foreground">Source: {getLocationLabel(source)}</p><p className="mt-0.5 text-xs leading-snug text-muted-foreground">Type: {getTransferTypeLabel(transferType)}</p></SectionCard>}
-            {step === 4 && <>{item && <ItemSummaryCard item={item} />}<SectionCard><QuantityStepper label="Quantity / weight" value={quantity} onChange={setQuantity} unit={unit} min={1} /></SectionCard></>}
+            {step === 3 && <SectionCard><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Context</p><p className="mt-1 text-sm font-bold text-foreground">{getLocationLabel(source)} → choose item</p><p className="mt-0.5 text-xs font-bold text-muted-foreground">{getTransferTypeLabel(transferType)}</p></SectionCard>}
+            {step === 4 && <>{item && <ItemSummaryCard item={item}><p className="text-xs font-bold text-muted-foreground">Available in source: {available ?? "—"} {unit}</p></ItemSummaryCard>}<SectionCard><QuantityStepper label="Quantity / weight" value={quantity} onChange={setQuantity} unit={unit} min={1} /></SectionCard></>}
             {step === 5 && <SectionCard><TouchSelect label="Destination location" value={destination} onChange={setDestination} options={LOCATION_OPTIONS} /></SectionCard>}
             {step === 6 && <SectionCard className="space-y-2">
               <h2 className="text-base font-black text-foreground">Transfer Request Review</h2>
