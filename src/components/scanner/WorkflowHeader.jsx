@@ -23,10 +23,86 @@ export default function WorkflowHeader({
   const [manualFocused, setManualFocused] = useState(false);
   const [matches, setMatches] = useState([]);
   const [lookupState, setLookupState] = useState("idle");
+  const [showKeyboardFallback, setShowKeyboardFallback] = useState(false);
+  const inputRef = useRef(null);
+  const keyboardFallbackTimer = useRef(null);
+  const focusViewportHeight = useRef(null);
   const scannerBuffer = useRef("");
   const scannerTimer = useRef(null);
   const debounceTimer = useRef(null);
   const currentValue = scanValue || "";
+
+  const requestNativeKeyboard = useCallback(() => {
+    if (disabled || !showSearch) return;
+    const input = inputRef.current;
+    if (!input) return;
+    input.focus({ preventScroll: true });
+    try {
+      navigator?.virtualKeyboard?.show?.();
+    } catch {
+      // Native keyboard APIs are best-effort only; desktop browsers often ignore them.
+    }
+  }, [disabled, showSearch]);
+
+  const scheduleKeyboardFallback = useCallback(() => {
+    window.clearTimeout(keyboardFallbackTimer.current);
+    setShowKeyboardFallback(false);
+    focusViewportHeight.current = window.visualViewport?.height || window.innerHeight;
+    keyboardFallbackTimer.current = window.setTimeout(() => {
+      const before = focusViewportHeight.current || window.innerHeight;
+      const after = window.visualViewport?.height || window.innerHeight;
+      const nativeKeyboardLikelyOpen = before - after > 90;
+      if (!nativeKeyboardLikelyOpen && document.activeElement === inputRef.current) {
+        setShowKeyboardFallback(true);
+      }
+    }, 450);
+  }, []);
+
+  const handleManualFocus = useCallback(() => {
+    setManualFocused(true);
+    scheduleKeyboardFallback();
+    try {
+      navigator?.virtualKeyboard?.show?.();
+    } catch {
+      // Ignore browsers that do not expose the VirtualKeyboard API.
+    }
+  }, [scheduleKeyboardFallback]);
+
+  const appendKeyboardText = (text) => {
+    const input = inputRef.current;
+    const start = input?.selectionStart ?? currentValue.length;
+    const end = input?.selectionEnd ?? currentValue.length;
+    const next = `${currentValue.slice(0, start)}${text}${currentValue.slice(end)}`;
+    updateValue(next);
+    requestAnimationFrame(() => {
+      requestNativeKeyboard();
+      const caret = start + text.length;
+      inputRef.current?.setSelectionRange?.(caret, caret);
+    });
+  };
+
+  const backspaceKeyboardText = () => {
+    const input = inputRef.current;
+    const start = input?.selectionStart ?? currentValue.length;
+    const end = input?.selectionEnd ?? currentValue.length;
+    if (start !== end) {
+      const next = `${currentValue.slice(0, start)}${currentValue.slice(end)}`;
+      updateValue(next);
+      requestAnimationFrame(() => {
+        requestNativeKeyboard();
+        inputRef.current?.setSelectionRange?.(start, start);
+      });
+      return;
+    }
+    if (start <= 0) return;
+    const next = `${currentValue.slice(0, start - 1)}${currentValue.slice(start)}`;
+    updateValue(next);
+    requestAnimationFrame(() => {
+      requestNativeKeyboard();
+      const caret = start - 1;
+      inputRef.current?.setSelectionRange?.(caret, caret);
+    });
+  };
 
   const clearResults = useCallback(() => {
     setMatches([]);
@@ -130,7 +206,10 @@ export default function WorkflowHeader({
     };
   }, [disabled, onScanValueChange, runLookup, showSearch]);
 
-  useEffect(() => () => window.clearTimeout(debounceTimer.current), []);
+  useEffect(() => () => {
+    window.clearTimeout(debounceTimer.current);
+    window.clearTimeout(keyboardFallbackTimer.current);
+  }, []);
 
   return (
     <header className="scanops-workflow-header bg-card border-b border-border px-4 py-3">
@@ -159,18 +238,34 @@ export default function WorkflowHeader({
 
       {showSearch && (
         <>
-          <form onSubmit={submit} className="mt-3 flex min-w-0 items-center gap-2 rounded-2xl border border-input bg-background px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-primary/20">
+          <form
+            onSubmit={submit}
+            onPointerDown={(event) => {
+              if (event.target.closest("button")) return;
+              requestAnimationFrame(requestNativeKeyboard);
+            }}
+            className="mt-3 flex min-w-0 items-center gap-2 rounded-2xl border border-input bg-background px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-primary/20"
+          >
             <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
             <input
+              ref={inputRef}
               value={currentValue}
               onChange={(event) => updateValue(event.target.value)}
-              onFocus={() => setManualFocused(true)}
-              onBlur={() => window.setTimeout(() => setManualFocused(false), 120)}
+              onFocus={handleManualFocus}
+              onClick={requestNativeKeyboard}
+              onBlur={() => window.setTimeout(() => {
+                setManualFocused(false);
+                setShowKeyboardFallback(false);
+                window.clearTimeout(keyboardFallbackTimer.current);
+              }, 120)}
               placeholder={placeholder}
               disabled={disabled}
               inputMode="search"
               enterKeyHint="search"
               autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
               className="min-w-0 flex-1 bg-transparent py-1.5 text-sm font-semibold text-foreground placeholder:text-muted-foreground outline-none disabled:opacity-60"
             />
             {currentValue ? (
@@ -221,6 +316,98 @@ export default function WorkflowHeader({
                   <p className="mt-0.5 text-xs leading-snug text-muted-foreground">Check barcode, PLU, SKU, shelf label, or try item name.</p>
                 </div>
               )}
+            </div>
+          )}
+
+
+          {showKeyboardFallback && manualFocused && (
+            <div
+              className="mt-2 rounded-2xl border border-border bg-background p-2 shadow-sm"
+              aria-label="On-screen search keyboard"
+              onMouseDown={(event) => event.preventDefault()}
+            >
+              <div className="mb-2 flex items-center justify-between gap-2 px-1">
+                <p className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">Keyboard</p>
+                <p className="text-[11px] font-semibold text-muted-foreground">Manual search only</p>
+              </div>
+              {[
+                ["Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P"],
+                ["A", "S", "D", "F", "G", "H", "J", "K", "L"],
+                ["Z", "X", "C", "V", "B", "N", "M"],
+              ].map((row, rowIndex) => (
+                <div key={rowIndex} className="mb-1.5 flex justify-center gap-1">
+                  {row.map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className="flex h-8 min-w-0 flex-1 items-center justify-center rounded-lg bg-secondary px-1 text-[11px] font-black text-foreground active:bg-border"
+                      onPointerDown={(event) => {
+                        event.preventDefault();
+                        appendKeyboardText(key.toLowerCase());
+                      }}
+                    >
+                      {key}
+                    </button>
+                  ))}
+                </div>
+              ))}
+              <div className="mb-1.5 grid grid-cols-10 gap-1">
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className="flex h-8 items-center justify-center rounded-lg bg-secondary text-[11px] font-black text-foreground active:bg-border"
+                    onPointerDown={(event) => {
+                      event.preventDefault();
+                      appendKeyboardText(key);
+                    }}
+                  >
+                    {key}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-[1fr_2fr_1fr_1fr] gap-1">
+                <button
+                  type="button"
+                  className="h-9 rounded-lg bg-secondary px-2 text-xs font-black text-foreground active:bg-border"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    appendKeyboardText("-");
+                  }}
+                >
+                  -
+                </button>
+                <button
+                  type="button"
+                  className="h-9 rounded-lg bg-secondary px-2 text-xs font-black text-foreground active:bg-border"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    appendKeyboardText(" ");
+                  }}
+                >
+                  Space
+                </button>
+                <button
+                  type="button"
+                  className="h-9 rounded-lg bg-secondary px-2 text-xs font-black text-foreground active:bg-border"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    backspaceKeyboardText();
+                  }}
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  className="h-9 rounded-lg bg-primary px-2 text-xs font-black text-primary-foreground active:opacity-90"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    submit(event);
+                  }}
+                >
+                  Search
+                </button>
+              </div>
             </div>
           )}
         </>
