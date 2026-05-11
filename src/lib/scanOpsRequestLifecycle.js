@@ -124,7 +124,7 @@ export function getOptionLabel(options, id, fallback = "—") {
   return options.find((option) => option.id === id)?.label || id || fallback;
 }
 
-export function normalizeReceivingLine({ item, quantity, condition, discrepancy, supplierId, supplierName, poReference, receivingMode }) {
+export function normalizeReceivingLine({ item, quantity, condition, discrepancy, supplierId, supplierName, poReference, receivingMode, attributeSnapshot }) {
   const selected = normalizeSelectedScanItem(item, "manual_search");
   const expectedQty = Number(item?.pendingDeliveryQty ?? item?.pending_delivery_qty ?? 24);
   const receivedQty = Number(quantity || 0);
@@ -149,6 +149,10 @@ export function normalizeReceivingLine({ item, quantity, condition, discrepancy,
     backroomStock: item?.backroomStock ?? item?.backroom_stock,
     stockOnHand: item?.stockOnHand ?? item?.stock_on_hand,
     shelfLocation: item?.shelfLocation || item?.location || item?.shelf,
+    expiryDateEvidence: attributeSnapshot?.expiry_snapshot?.expiry_date || undefined,
+    lotBatchEvidence: attributeSnapshot?.lot_batch_snapshot?.lot_batch_value || undefined,
+    weightedEvidence: attributeSnapshot?.weighted_snapshot || undefined,
+    attributeSnapshot,
     rawItem: selected,
     createdAt: nowIso(),
     updatedAt: nowIso(),
@@ -156,7 +160,7 @@ export function normalizeReceivingLine({ item, quantity, condition, discrepancy,
 }
 
 export function getReceivingLineKey(line) {
-  return [line.itemId, line.condition || "good", line.discrepancy || "none"].join("|");
+  return [line.itemId, line.condition || "good", line.discrepancy || "none", line.expiryDateEvidence || "", line.lotBatchEvidence || "", line.attributeSnapshot?.attributeKey || ""].join("|");
 }
 
 export function upsertReceivingLine(current = [], nextLine) {
@@ -170,6 +174,10 @@ export function upsertReceivingLine(current = [], nextLine) {
       ...line,
       receivedQty: Number(receivedQty.toFixed(3)),
       quantity: Number(receivedQty.toFixed(3)),
+      attributeSnapshot: nextLine.attributeSnapshot || line.attributeSnapshot,
+      expiryDateEvidence: nextLine.expiryDateEvidence || line.expiryDateEvidence,
+      lotBatchEvidence: nextLine.lotBatchEvidence || line.lotBatchEvidence,
+      weightedEvidence: nextLine.weightedEvidence || line.weightedEvidence,
       updatedAt: nowIso(),
     };
   });
@@ -337,7 +345,7 @@ export function getCurrencySymbol(item) {
   return item?.currency || "₱";
 }
 
-export function normalizeWasteRequestLine({ item, quantity, reason, condition, disposalAction, notes }) {
+export function normalizeWasteRequestLine({ item, quantity, reason, condition, disposalAction, notes, attributeSnapshot }) {
   const selected = normalizeSelectedScanItem(item, "manual_search");
   const qty = Number(quantity || 0);
   return {
@@ -357,6 +365,10 @@ export function normalizeWasteRequestLine({ item, quantity, reason, condition, d
     stockOnHand: item?.stockOnHand ?? item?.stock_on_hand,
     expiryDate: item?.expiryDate || item?.expiry_date || undefined,
     freshnessStatus: item?.freshnessStatus || item?.expiry_status || undefined,
+    expiryDateEvidence: attributeSnapshot?.expiry_snapshot?.expiry_date || undefined,
+    lotBatchEvidence: attributeSnapshot?.lot_batch_snapshot?.lot_batch_value || undefined,
+    weightedEvidence: attributeSnapshot?.weighted_snapshot || undefined,
+    attributeSnapshot,
     rawItem: selected,
     createdAt: nowIso(),
     updatedAt: nowIso(),
@@ -364,7 +376,7 @@ export function normalizeWasteRequestLine({ item, quantity, reason, condition, d
 }
 
 export function getWasteLineKey(line) {
-  return [line.itemId, line.reason || "", line.condition || "", line.disposalAction || ""].join("|");
+  return [line.itemId, line.reason || "", line.condition || "", line.disposalAction || "", line.expiryDateEvidence || "", line.lotBatchEvidence || "", line.attributeSnapshot?.attributeKey || ""].join("|");
 }
 
 export function upsertWasteRequestLine(current = [], nextLine) {
@@ -378,6 +390,10 @@ export function upsertWasteRequestLine(current = [], nextLine) {
       ...line,
       quantity: Number(quantity.toFixed(3)),
       notes: nextLine.notes || line.notes,
+      attributeSnapshot: nextLine.attributeSnapshot || line.attributeSnapshot,
+      expiryDateEvidence: nextLine.expiryDateEvidence || line.expiryDateEvidence,
+      lotBatchEvidence: nextLine.lotBatchEvidence || line.lotBatchEvidence,
+      weightedEvidence: nextLine.weightedEvidence || line.weightedEvidence,
       updatedAt: nowIso(),
     };
   });
@@ -411,7 +427,7 @@ export function getWasteRequests() {
   return safeRead(WASTE_STORAGE_KEY);
 }
 
-export function normalizeMarkdownRequestLine({ item, reason, markdownType, requestedPrice, requestedPercentOff, requestedAmountOff, ticketRequired, notes }) {
+export function normalizeMarkdownRequestLine({ item, reason, markdownType, requestedPrice, requestedPercentOff, requestedAmountOff, ticketRequired, notes, attributeSnapshot }) {
   const selected = normalizeSelectedScanItem(item, "manual_search");
   const currentPrice = getCurrentPriceSnapshot(item);
   const price = requestedPrice === "" || requestedPrice == null ? null : Number(requestedPrice);
@@ -434,6 +450,10 @@ export function normalizeMarkdownRequestLine({ item, reason, markdownType, reque
     notes: notes || undefined,
     expiryDate: item?.expiryDate || item?.expiry_date || undefined,
     freshnessStatus: item?.freshnessStatus || item?.expiry_status || undefined,
+    expiryDateEvidence: attributeSnapshot?.expiry_snapshot?.expiry_date || undefined,
+    lotBatchEvidence: attributeSnapshot?.lot_batch_snapshot?.lot_batch_value || undefined,
+    weightedEvidence: attributeSnapshot?.weighted_snapshot || undefined,
+    attributeSnapshot,
     stockOnHand: item?.stockOnHand ?? item?.stock_on_hand,
     rawItem: selected,
     createdAt: nowIso(),
@@ -442,7 +462,7 @@ export function normalizeMarkdownRequestLine({ item, reason, markdownType, reque
 }
 
 export function getMarkdownLineKey(line) {
-  return [line.itemId, line.reason || "", line.markdownType || "", line.ticketRequired ? "ticket" : "no_ticket"].join("|");
+  return [line.itemId, line.reason || "", line.markdownType || "", line.ticketRequired ? "ticket" : "no_ticket", line.expiryDateEvidence || "", line.lotBatchEvidence || "", line.attributeSnapshot?.attributeKey || ""].join("|");
 }
 
 export function upsertMarkdownRequestLine(current = [], nextLine) {

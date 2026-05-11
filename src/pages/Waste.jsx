@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
+import AttributeEvidenceFields from "../components/scanner/AttributeEvidenceFields";
 import TouchSelect from "../components/scanner/TouchSelect";
 import {
   DoneCard,
@@ -16,6 +17,14 @@ import {
 } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
+import {
+  buildWorkflowItemAttributeSnapshot,
+  getDefaultExpiryDate,
+  getDefaultLotBatch,
+  getDefaultQuantityType,
+  saveWorkflowItemAttributeSnapshot,
+  summarizeAttributeSnapshot,
+} from "../lib/scanOpsItemAttributes";
 import {
   buildWasteRequest,
   clearWorkflowDraft,
@@ -53,6 +62,11 @@ export default function Waste() {
   const [reason, setReason] = useState(() => WASTE_REASON_OPTIONS.some((option) => option.id === taskReason) ? taskReason : "expired_short_dated");
   const [condition, setCondition] = useState("unsellable");
   const [disposalAction, setDisposalAction] = useState("discarded");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [lotBatch, setLotBatch] = useState("");
+  const [quantityType, setQuantityType] = useState("each");
+  const [enteredWeight, setEnteredWeight] = useState("");
+  const [weightSource, setWeightSource] = useState("label_weight");
   const [notes, setNotes] = useState("");
   const [batch, setBatch] = useState(savedDraft?.items || []);
   const [view, setView] = useState(savedDraft?.items?.length ? "entry" : "entry");
@@ -70,11 +84,17 @@ export default function Waste() {
   const scan = (value) => {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
     if (!found) return;
+    const rawScanValue = typeof value === "object" ? value?._searchMatch?.matchedValue || value?.barcode || value?.gtin || "" : String(value || "").trim();
     setItem(found);
     setQuantity((found?.unitType || found?.unit_type) === "kg" ? 1 : 1);
     setReason(found?.wasteReviewRequired ? "spoiled_temperature_concern" : "expired_short_dated");
     setCondition(found?.wasteReviewRequired ? "temperature_concern" : "unsellable");
     setDisposalAction(found?.wasteReviewRequired ? "quarantine_food_safety_hold" : "discarded");
+    setExpiryDate(getDefaultExpiryDate(found));
+    setLotBatch(getDefaultLotBatch(found));
+    setQuantityType(getDefaultQuantityType(found));
+    setEnteredWeight("");
+    setWeightSource(rawScanValue?.startsWith("2") ? "label_weight" : "manual_entry");
     setNotes("");
     setView("entry");
     setSubmittedRequest(null);
@@ -82,8 +102,36 @@ export default function Waste() {
 
   const addWaste = () => {
     if (!item || quantity <= 0 || !reason || !condition || !disposalAction) return;
-    const line = normalizeWasteRequestLine({ item, quantity, reason, condition, disposalAction, notes });
+    const attributeSnapshot = buildWorkflowItemAttributeSnapshot({
+      workflowType: "waste",
+      item,
+      scanValue,
+      expiryDate,
+      lotBatch,
+      quantityType,
+      enteredQuantity: enteredWeight || quantity,
+      weightSource,
+      source: "waste_evidence_card",
+    });
+    saveWorkflowItemAttributeSnapshot(attributeSnapshot);
+    const line = normalizeWasteRequestLine({ item, quantity, reason, condition, disposalAction, notes, attributeSnapshot });
     setBatch((current) => upsertWasteRequestLine(current, line));
+    createScanOpsEvent(attributeSnapshot.weighted_snapshot ? SCANOPS_EVENT_TYPES.WEIGHTED_ITEM_EVIDENCE_CAPTURED : SCANOPS_EVENT_TYPES.ATTRIBUTE_EVIDENCE_CAPTURED, {
+      source_module: "Waste",
+      item_name: line.itemName,
+      sku: line.sku,
+      barcode: line.barcode,
+      workflow_type: "waste",
+      expiry_date: attributeSnapshot.expiry_snapshot?.expiry_date || null,
+      lot_batch: attributeSnapshot.lot_batch_snapshot?.lot_batch_value || null,
+      weighted_candidate: Boolean(attributeSnapshot.weighted_snapshot?.weighted_candidate),
+      raw_barcode: attributeSnapshot.weighted_snapshot?.raw_barcode || scanValue || null,
+      quantity_type: attributeSnapshot.weighted_snapshot?.quantity_type || null,
+      entered_quantity: attributeSnapshot.weighted_snapshot?.entered_quantity || null,
+      applies_stock_directly: false,
+      applies_price_directly: false,
+      status: "attribute_evidence_saved",
+    });
     createScanOpsEvent(SCANOPS_EVENT_TYPES.WASTE_RECORDED, {
       source_module: "Waste",
       item_name: line.itemName,
@@ -99,6 +147,9 @@ export default function Waste() {
       condition_label: getOptionLabel(WASTE_CONDITION_OPTIONS, condition),
       disposal_action: disposalAction,
       disposal_action_label: getOptionLabel(WASTE_DISPOSAL_ACTION_OPTIONS, disposalAction),
+      expiry_date: attributeSnapshot.expiry_snapshot?.expiry_date || null,
+      lot_batch: attributeSnapshot.lot_batch_snapshot?.lot_batch_value || null,
+      weighted_candidate: Boolean(attributeSnapshot.weighted_snapshot?.weighted_candidate),
       supervisor_review_required: needsManagerReview(line),
       applies_stock_directly: false,
       status: "draft_waste_evidence_added",
@@ -106,6 +157,9 @@ export default function Waste() {
     setItem(null);
     setScanValue("");
     setQuantity(1);
+    setExpiryDate("");
+    setLotBatch("");
+    setEnteredWeight("");
     setNotes("");
   };
 
@@ -131,6 +185,9 @@ export default function Waste() {
     setItem(null);
     setScanValue("");
     setBatch([]);
+    setExpiryDate("");
+    setLotBatch("");
+    setEnteredWeight("");
     clearWorkflowDraft("waste");
   };
 
@@ -191,6 +248,7 @@ export default function Waste() {
                           {getOptionLabel(WASTE_CONDITION_OPTIONS, line.condition)} · {getOptionLabel(WASTE_DISPOSAL_ACTION_OPTIONS, line.disposalAction)}
                         </p>
                         {line.notes && <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">Note: {line.notes}</p>}
+                        {line.attributeSnapshot && <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">{summarizeAttributeSnapshot(line.attributeSnapshot)}</p>}
                       </div>
                       <button type="button" onClick={() => removeLine(line.requestItemId)} className="shrink-0 rounded-xl bg-secondary px-3 py-2 text-xs font-black text-secondary-foreground">
                         Remove
@@ -213,6 +271,20 @@ export default function Waste() {
                 </ItemSummaryCard>
                 <SectionCard className="space-y-3">
                   <QuantityStepper label="Waste qty" value={quantity} onChange={setQuantity} unit={unit} min={1} />
+                  <AttributeEvidenceFields
+                    item={item}
+                    scanValue={scanValue}
+                    expiryDate={expiryDate}
+                    onExpiryDateChange={setExpiryDate}
+                    lotBatch={lotBatch}
+                    onLotBatchChange={setLotBatch}
+                    quantityType={quantityType}
+                    onQuantityTypeChange={setQuantityType}
+                    enteredQuantity={enteredWeight}
+                    onEnteredQuantityChange={setEnteredWeight}
+                    weightSource={weightSource}
+                    onWeightSourceChange={setWeightSource}
+                  />
                   <TouchSelect label="Waste reason" value={reason} onChange={setReason} options={WASTE_REASON_OPTIONS} />
                   <TouchSelect label="Condition" value={condition} onChange={setCondition} options={WASTE_CONDITION_OPTIONS} />
                   <TouchSelect label="Disposal action" value={disposalAction} onChange={setDisposalAction} options={WASTE_DISPOSAL_ACTION_OPTIONS} />
@@ -246,6 +318,7 @@ export default function Waste() {
                       <p className="mt-1 break-words text-xs font-bold text-muted-foreground">
                         Qty {line.quantity} {line.unit} · {getOptionLabel(WASTE_REASON_OPTIONS, line.reason)} · {getOptionLabel(WASTE_DISPOSAL_ACTION_OPTIONS, line.disposalAction)}
                       </p>
+                      {line.attributeSnapshot && <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">{summarizeAttributeSnapshot(line.attributeSnapshot)}</p>}
                     </div>
                   ))}
                 </div>

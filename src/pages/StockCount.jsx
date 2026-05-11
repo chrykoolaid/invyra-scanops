@@ -1,10 +1,20 @@
 import React, { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import AttributeEvidenceFields from "../components/scanner/AttributeEvidenceFields";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
 import { BatchList, DoneCard, EmptyState, InfoLine, ItemSummaryCard, MetricPill, PageShell, QuantityStepper, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
+import {
+  buildWorkflowItemAttributeSnapshot,
+  COUNT_CONDITION_NOTE_OPTIONS,
+  getDefaultExpiryDate,
+  getDefaultLotBatch,
+  getDefaultQuantityType,
+  saveWorkflowItemAttributeSnapshot,
+  summarizeAttributeSnapshot,
+} from "../lib/scanOpsItemAttributes";
 import { calculateVariance, createCountSession, getSessionVarianceSummary, STOCK_COUNT_AREA_OPTIONS, STOCK_COUNT_MODE_OPTIONS, STOCK_COUNT_TYPES, STOCK_COUNT_TYPE_OPTIONS, STOCK_COUNT_VARIANCE_REASONS } from "../lib/scanOpsStockCount";
 import { makeWorkflowBatchItem, removeWorkflowBatchItem } from "../lib/scanOpsWorkflowBatch";
 
@@ -14,7 +24,8 @@ function findProduct(input) {
 }
 
 function itemKey(line) {
-  return line.item?.itemId || line.item?.raw?.internalItemId || line.item?.raw?.id || line.item?.raw?.sku || line.item?.raw?.barcode;
+  const base = line.item?.itemId || line.item?.raw?.internalItemId || line.item?.raw?.id || line.item?.raw?.sku || line.item?.raw?.barcode;
+  return `${base || "unknown"}|${line.attributeSnapshot?.attributeKey || "none"}`;
 }
 
 function upsertCountLine(current, nextLine) {
@@ -71,6 +82,7 @@ function ReviewLine({ line, onReasonChange, onRemove }) {
         <div className="min-w-0">
           <p className="break-words text-sm font-black text-foreground">{line.item?.itemName || "Scanned item"}</p>
           <p className="mt-1 text-xs font-bold text-muted-foreground">Expected {line.expectedQuantity} · Counted {line.countedQuantity} · Diff {variance}</p>
+          {line.attributeSnapshot && <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">{summarizeAttributeSnapshot(line.attributeSnapshot)}</p>}
         </div>
         <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide ${variance === 0 ? "bg-secondary text-muted-foreground" : "bg-primary/10 text-primary"}`}>
           {variance === 0 ? "Matched" : "Variance"}
@@ -109,6 +121,12 @@ export default function StockCount() {
   const [item, setItem] = useState(null);
   const [counted, setCounted] = useState(1);
   const [reason, setReason] = useState("shelf_empty_unknown");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [lotBatch, setLotBatch] = useState("");
+  const [conditionNote, setConditionNote] = useState("normal");
+  const [quantityType, setQuantityType] = useState("each");
+  const [enteredWeight, setEnteredWeight] = useState("");
+  const [weightSource, setWeightSource] = useState("label_weight");
   const [note, setNote] = useState("");
   const [lines, setLines] = useState([]);
   const expected = Number(item?.stockOnHand ?? item?.stock_on_hand ?? item?.shelfStock ?? item?.shelf_stock ?? 0);
@@ -126,6 +144,10 @@ export default function StockCount() {
     setItem(null);
     setCounted(1);
     setReason("shelf_empty_unknown");
+    setExpiryDate("");
+    setLotBatch("");
+    setConditionNote("normal");
+    setEnteredWeight("");
     setNote("");
     setLines([]);
   };
@@ -158,15 +180,36 @@ export default function StockCount() {
   const scan = (value) => {
     const found = findProduct(value);
     if (!found) return;
+    const rawScanValue = typeof value === "object" ? value?._searchMatch?.matchedValue || value?.barcode || value?.gtin || "" : String(value || "").trim();
     setItem(found);
     setCounted(Number(found?.stockOnHand ?? found?.stock_on_hand ?? found?.shelfStock ?? found?.shelf_stock ?? 1));
     setReason("shelf_empty_unknown");
+    setExpiryDate(getDefaultExpiryDate(found));
+    setLotBatch(getDefaultLotBatch(found));
+    setConditionNote("normal");
+    setQuantityType(getDefaultQuantityType(found));
+    setEnteredWeight("");
+    setWeightSource(rawScanValue?.startsWith("2") ? "label_weight" : "manual_entry");
     setNote("");
   };
 
   const saveLine = () => {
     if (!item || !session) return;
     const isVariance = Number(variance || 0) !== 0;
+    const attributeSnapshot = buildWorkflowItemAttributeSnapshot({
+      workflowType: "stock_count",
+      workflowItemId: session.count_session_id,
+      item,
+      scanValue,
+      expiryDate,
+      lotBatch,
+      quantityType,
+      enteredQuantity: enteredWeight || counted,
+      weightSource,
+      conditionNote,
+      source: "stock_count_evidence_card",
+    });
+    saveWorkflowItemAttributeSnapshot(attributeSnapshot);
     const line = makeWorkflowBatchItem({
       workflowType: "stock_count",
       item,
@@ -185,11 +228,34 @@ export default function StockCount() {
         variance,
         varianceReasonId: isVariance ? reason : null,
         varianceReasonLabel: isVariance ? reasonLabel : null,
+        expiryDateEvidence: attributeSnapshot.expiry_snapshot?.expiry_date || undefined,
+        lotBatchEvidence: attributeSnapshot.lot_batch_snapshot?.lot_batch_value || undefined,
+        weightedEvidence: attributeSnapshot.weighted_snapshot || undefined,
+        attributeSnapshot,
+        conditionNote,
         note,
         reviewStatus: isVariance ? "variance_review_required" : "matched",
       },
     });
     setLines((current) => upsertCountLine(current, line));
+    createScanOpsEvent(attributeSnapshot.weighted_snapshot ? SCANOPS_EVENT_TYPES.WEIGHTED_ITEM_EVIDENCE_CAPTURED : SCANOPS_EVENT_TYPES.ATTRIBUTE_EVIDENCE_CAPTURED, {
+      source_module: "Stock Count",
+      count_session_id: session.count_session_id,
+      item_name: item.name,
+      sku: item.sku,
+      barcode: item.barcode,
+      workflow_type: "stock_count",
+      expiry_date: attributeSnapshot.expiry_snapshot?.expiry_date || null,
+      lot_batch: attributeSnapshot.lot_batch_snapshot?.lot_batch_value || null,
+      condition_note: conditionNote,
+      weighted_candidate: Boolean(attributeSnapshot.weighted_snapshot?.weighted_candidate),
+      raw_barcode: attributeSnapshot.weighted_snapshot?.raw_barcode || scanValue || null,
+      quantity_type: attributeSnapshot.weighted_snapshot?.quantity_type || null,
+      entered_quantity: attributeSnapshot.weighted_snapshot?.entered_quantity || null,
+      applies_stock_directly: false,
+      applies_price_directly: false,
+      status: "attribute_evidence_saved",
+    });
     createScanOpsEvent(isVariance ? SCANOPS_EVENT_TYPES.STOCK_COUNT_VARIANCE_REVIEW_REQUIRED : SCANOPS_EVENT_TYPES.STOCK_COUNT_LINE_SAVED, {
       source_module: "Stock Count",
       count_session_id: session.count_session_id,
@@ -206,12 +272,20 @@ export default function StockCount() {
       variance_quantity: variance,
       variance_reason: isVariance ? reason : null,
       variance_reason_label: isVariance ? reasonLabel : null,
+      expiry_date: attributeSnapshot.expiry_snapshot?.expiry_date || null,
+      lot_batch: attributeSnapshot.lot_batch_snapshot?.lot_batch_value || null,
+      condition_note: conditionNote,
+      weighted_candidate: Boolean(attributeSnapshot.weighted_snapshot?.weighted_candidate),
       note,
       applies_stock_directly: false,
       status: isVariance ? "variance_review_required" : "line_saved",
     });
     setItem(null);
     setScanValue("");
+    setExpiryDate("");
+    setLotBatch("");
+    setConditionNote("normal");
+    setEnteredWeight("");
     setNote("");
   };
 
@@ -291,6 +365,22 @@ export default function StockCount() {
               <InfoLine label="Difference" value={`${variance ?? 0} ${unit}`} />
             </div>
             {variance !== 0 && <TouchSelect label="Variance reason" value={reason} onChange={setReason} options={STOCK_COUNT_VARIANCE_REASONS} />}
+            <AttributeEvidenceFields
+              item={item}
+              scanValue={scanValue}
+              expiryDate={expiryDate}
+              onExpiryDateChange={setExpiryDate}
+              lotBatch={lotBatch}
+              onLotBatchChange={setLotBatch}
+              quantityType={quantityType}
+              onQuantityTypeChange={setQuantityType}
+              enteredQuantity={enteredWeight}
+              onEnteredQuantityChange={setEnteredWeight}
+              weightSource={weightSource}
+              onWeightSourceChange={setWeightSource}
+              expiryLabel="Expiry note"
+            />
+            <TouchSelect label="Condition note" value={conditionNote} onChange={setConditionNote} options={COUNT_CONDITION_NOTE_OPTIONS} />
             <TextInputField label="Note" value={note} onChange={setNote} placeholder="Optional count note" />
           </SectionCard>
         </>
@@ -299,7 +389,7 @@ export default function StockCount() {
         title="Current count"
         items={lines}
         emptyText="Current count is empty."
-        renderMeta={(line) => `Expected ${line.expectedQuantity} · Counted ${line.countedQuantity} · Diff ${line.variance ?? 0}${line.varianceReasonLabel ? ` · ${line.varianceReasonLabel}` : ""}`}
+        renderMeta={(line) => `Expected ${line.expectedQuantity} · Counted ${line.countedQuantity} · Diff ${line.variance ?? 0}${line.varianceReasonLabel ? ` · ${line.varianceReasonLabel}` : ""}${line.attributeSnapshot ? ` · ${summarizeAttributeSnapshot(line.attributeSnapshot)}` : ""}`}
         onRemove={(id) => setLines((current) => removeWorkflowBatchItem(current, id))}
       />
       <StickyActions
@@ -352,7 +442,7 @@ export default function StockCount() {
         title="Submitted count"
         items={lines}
         emptyText="No submitted lines."
-        renderMeta={(line) => `Expected ${line.expectedQuantity} · Counted ${line.countedQuantity} · Diff ${line.variance ?? 0}${line.varianceReasonLabel ? ` · ${line.varianceReasonLabel}` : ""}`}
+        renderMeta={(line) => `Expected ${line.expectedQuantity} · Counted ${line.countedQuantity} · Diff ${line.variance ?? 0}${line.varianceReasonLabel ? ` · ${line.varianceReasonLabel}` : ""}${line.attributeSnapshot ? ` · ${summarizeAttributeSnapshot(line.attributeSnapshot)}` : ""}`}
       />
       <StickyActions leftLabel="Review" rightLabel="New Count" onLeft={() => setView("review")} onRight={resetSession} />
     </>

@@ -5,6 +5,7 @@ import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import { EmptyState, ItemSummaryCard, MetricPill, PageShell, SectionCard, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { getItemEntryPrimaryValue } from "../lib/scanOpsItemEntry";
+import { getDefaultExpiryDate, getDefaultLotBatch, isWeightedItem, needsWeightedEvidence } from "../lib/scanOpsItemAttributes";
 import { getIdentityDisplay, getMatchReasonDisplay } from "../lib/productIdentityResolver";
 
 export default function ProductLookup() {
@@ -51,6 +52,15 @@ export default function ProductLookup() {
                 <MetricPill label="Department" value={product.department || "—"} />
                 <MetricPill label="Location" value={product.shelfLocation || product.location || "—"} />
               </div>
+            </SectionCard>
+            <SectionCard>
+              <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Attribute capture available</p>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <MetricPill label="Expiry" value={getDefaultExpiryDate(product) || "Available"} />
+                <MetricPill label="Lot / Batch" value={getDefaultLotBatch(product) || "Available"} />
+                <MetricPill label="Weighted" value={needsWeightedEvidence(product, scanValue) || isWeightedItem(product) ? "Evidence" : "Optional"} />
+              </div>
+              <p className="mt-2 text-xs font-semibold leading-snug text-muted-foreground">Capture happens inside Waste, Markdown, Receiving, or Stock Count.</p>
             </SectionCard>
             <SectionCard>
               <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Quick actions</p>

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
+import AttributeEvidenceFields from "../components/scanner/AttributeEvidenceFields";
 import TouchSelect from "../components/scanner/TouchSelect";
 import {
   DoneCard,
@@ -15,6 +16,14 @@ import {
 } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
+import {
+  buildWorkflowItemAttributeSnapshot,
+  getDefaultExpiryDate,
+  getDefaultLotBatch,
+  getDefaultQuantityType,
+  saveWorkflowItemAttributeSnapshot,
+  summarizeAttributeSnapshot,
+} from "../lib/scanOpsItemAttributes";
 import {
   buildReceivingRequest,
   getOptionLabel,
@@ -61,6 +70,11 @@ export default function Receiving() {
   const [quantity, setQuantity] = useState(6);
   const [condition, setCondition] = useState("good");
   const [discrepancy, setDiscrepancy] = useState("none");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [lotBatch, setLotBatch] = useState("");
+  const [quantityType, setQuantityType] = useState("each");
+  const [enteredWeight, setEnteredWeight] = useState("");
+  const [weightSource, setWeightSource] = useState("label_weight");
   const [batch, setBatch] = useState([]);
   const [view, setView] = useState("entry");
   const [submittedRequest, setSubmittedRequest] = useState(null);
@@ -75,17 +89,35 @@ export default function Receiving() {
   const scan = (value) => {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
     if (!found) return;
+    const rawScanValue = typeof value === "object" ? value?._searchMatch?.matchedValue || value?.barcode || value?.gtin || "" : String(value || "").trim();
     setItem(found);
     const defaultQty = Math.min(6, Math.max(1, getExpectedQty(found)));
     setQuantity(defaultQty);
     setCondition("good");
     setDiscrepancy("none");
+    setExpiryDate(getDefaultExpiryDate(found));
+    setLotBatch(getDefaultLotBatch(found));
+    setQuantityType(getDefaultQuantityType(found));
+    setEnteredWeight("");
+    setWeightSource(rawScanValue?.startsWith("2") ? "label_weight" : "manual_entry");
     setView("entry");
     setSubmittedRequest(null);
   };
 
   const addToBatch = () => {
     if (!item || !setupReady) return;
+    const attributeSnapshot = buildWorkflowItemAttributeSnapshot({
+      workflowType: "receiving",
+      item,
+      scanValue,
+      expiryDate,
+      lotBatch,
+      quantityType,
+      enteredQuantity: enteredWeight || quantity,
+      weightSource,
+      source: "receiving_evidence_card",
+    });
+    saveWorkflowItemAttributeSnapshot(attributeSnapshot);
     const line = normalizeReceivingLine({
       item,
       quantity,
@@ -95,8 +127,25 @@ export default function Receiving() {
       supplierName,
       poReference: poReference || "",
       receivingMode,
+      attributeSnapshot,
     });
     setBatch((current) => upsertReceivingLine(current, line));
+    createScanOpsEvent(attributeSnapshot.weighted_snapshot ? SCANOPS_EVENT_TYPES.WEIGHTED_ITEM_EVIDENCE_CAPTURED : SCANOPS_EVENT_TYPES.ATTRIBUTE_EVIDENCE_CAPTURED, {
+      source_module: "Receiving",
+      item_name: line.itemName,
+      sku: line.sku,
+      barcode: line.barcode,
+      workflow_type: "receiving",
+      expiry_date: attributeSnapshot.expiry_snapshot?.expiry_date || null,
+      lot_batch: attributeSnapshot.lot_batch_snapshot?.lot_batch_value || null,
+      weighted_candidate: Boolean(attributeSnapshot.weighted_snapshot?.weighted_candidate),
+      raw_barcode: attributeSnapshot.weighted_snapshot?.raw_barcode || scanValue || null,
+      quantity_type: attributeSnapshot.weighted_snapshot?.quantity_type || null,
+      entered_quantity: attributeSnapshot.weighted_snapshot?.entered_quantity || null,
+      applies_stock_directly: false,
+      applies_price_directly: false,
+      status: "attribute_evidence_saved",
+    });
     createScanOpsEvent(SCANOPS_EVENT_TYPES.RECEIVING_ITEM_ADDED, {
       source_module: "Receiving",
       supplier_id: supplierId,
@@ -113,6 +162,9 @@ export default function Receiving() {
       unit_type: line.unit,
       condition,
       discrepancy,
+      expiry_date: attributeSnapshot.expiry_snapshot?.expiry_date || null,
+      lot_batch: attributeSnapshot.lot_batch_snapshot?.lot_batch_value || null,
+      weighted_candidate: Boolean(attributeSnapshot.weighted_snapshot?.weighted_candidate),
       status: "draft_line_added",
       applies_stock_directly: false,
     });
@@ -121,6 +173,9 @@ export default function Receiving() {
     setQuantity(6);
     setCondition("good");
     setDiscrepancy("none");
+    setExpiryDate("");
+    setLotBatch("");
+    setEnteredWeight("");
   };
 
   const removeLine = (requestItemId) => {
@@ -243,6 +298,7 @@ export default function Receiving() {
                           Condition: {getOptionLabel(RECEIVING_CONDITION_OPTIONS, line.condition)}
                           {line.discrepancy !== "none" ? ` · Discrepancy: ${getOptionLabel(RECEIVING_DISCREPANCY_OPTIONS, line.discrepancy)}` : ""}
                         </p>
+                        {line.attributeSnapshot && <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">{summarizeAttributeSnapshot(line.attributeSnapshot)}</p>}
                       </div>
                       <button type="button" onClick={() => removeLine(line.requestItemId)} className="shrink-0 rounded-xl bg-secondary px-2 py-1 text-[11px] font-black text-muted-foreground active:bg-border">
                         Remove
@@ -265,6 +321,20 @@ export default function Receiving() {
                 </ItemSummaryCard>
                 <SectionCard className="space-y-3">
                   <QuantityStepper label="Received qty" value={quantity} onChange={setQuantity} unit={unit} min={0} />
+                  <AttributeEvidenceFields
+                    item={item}
+                    scanValue={scanValue}
+                    expiryDate={expiryDate}
+                    onExpiryDateChange={setExpiryDate}
+                    lotBatch={lotBatch}
+                    onLotBatchChange={setLotBatch}
+                    quantityType={quantityType}
+                    onQuantityTypeChange={setQuantityType}
+                    enteredQuantity={enteredWeight}
+                    onEnteredQuantityChange={setEnteredWeight}
+                    weightSource={weightSource}
+                    onWeightSourceChange={setWeightSource}
+                  />
                   <TouchSelect label="Condition" value={condition} onChange={setCondition} options={RECEIVING_CONDITION_OPTIONS} />
                   <TouchSelect label="Discrepancy" value={discrepancy} onChange={setDiscrepancy} options={RECEIVING_DISCREPANCY_OPTIONS} />
                 </SectionCard>
@@ -292,6 +362,7 @@ export default function Receiving() {
                             Expected {line.expectedQty ?? "—"} · Received {line.receivedQty} · {getOptionLabel(RECEIVING_CONDITION_OPTIONS, line.condition)}
                             {line.discrepancy !== "none" ? ` · ${getOptionLabel(RECEIVING_DISCREPANCY_OPTIONS, line.discrepancy)}` : ""}
                           </p>
+                          {line.attributeSnapshot && <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">{summarizeAttributeSnapshot(line.attributeSnapshot)}</p>}
                         </div>
                         <p className="shrink-0 text-xs font-black text-foreground">x {line.receivedQty} {line.unit}</p>
                       </div>

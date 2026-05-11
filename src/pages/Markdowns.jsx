@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
+import AttributeEvidenceFields from "../components/scanner/AttributeEvidenceFields";
 import TouchSelect from "../components/scanner/TouchSelect";
 import {
   DoneCard,
@@ -16,6 +17,14 @@ import {
 } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
+import {
+  buildWorkflowItemAttributeSnapshot,
+  getDefaultExpiryDate,
+  getDefaultLotBatch,
+  getDefaultQuantityType,
+  saveWorkflowItemAttributeSnapshot,
+  summarizeAttributeSnapshot,
+} from "../lib/scanOpsItemAttributes";
 import {
   buildMarkdownRequest,
   clearWorkflowDraft,
@@ -63,6 +72,11 @@ export default function Markdowns() {
   const [requestedPercentOff, setRequestedPercentOff] = useState("25");
   const [requestedAmountOff, setRequestedAmountOff] = useState("20");
   const [ticketRequired, setTicketRequired] = useState(true);
+  const [expiryDate, setExpiryDate] = useState("");
+  const [lotBatch, setLotBatch] = useState("");
+  const [quantityType, setQuantityType] = useState("each");
+  const [enteredWeight, setEnteredWeight] = useState("");
+  const [weightSource, setWeightSource] = useState("label_weight");
   const [notes, setNotes] = useState("");
   const [batch, setBatch] = useState(savedDraft?.items || []);
   const [view, setView] = useState("entry");
@@ -81,6 +95,7 @@ export default function Markdowns() {
   const scan = (value) => {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
     if (!found) return;
+    const rawScanValue = typeof value === "object" ? value?._searchMatch?.matchedValue || value?.barcode || value?.gtin || "" : String(value || "").trim();
     const price = getCurrentPriceSnapshot(found);
     setItem(found);
     setReason(found?.markdownEligible ? "short_dated" : "manager_instruction");
@@ -89,6 +104,11 @@ export default function Markdowns() {
     setRequestedPercentOff("25");
     setRequestedAmountOff("20");
     setTicketRequired(true);
+    setExpiryDate(getDefaultExpiryDate(found));
+    setLotBatch(getDefaultLotBatch(found));
+    setQuantityType(getDefaultQuantityType(found));
+    setEnteredWeight("");
+    setWeightSource(rawScanValue?.startsWith("2") ? "label_weight" : "manual_entry");
     setNotes("");
     setView("entry");
     setSubmittedRequest(null);
@@ -103,6 +123,18 @@ export default function Markdowns() {
 
   const addMarkdown = () => {
     if (!item || !reason || !markdownType || (requiresValue && !valueReady)) return;
+    const attributeSnapshot = buildWorkflowItemAttributeSnapshot({
+      workflowType: "markdown",
+      item,
+      scanValue,
+      expiryDate,
+      lotBatch,
+      quantityType,
+      enteredQuantity: enteredWeight,
+      weightSource,
+      source: "markdown_evidence_card",
+    });
+    saveWorkflowItemAttributeSnapshot(attributeSnapshot);
     const line = normalizeMarkdownRequestLine({
       item,
       reason,
@@ -112,8 +144,25 @@ export default function Markdowns() {
       requestedAmountOff: markdownType === "amount_off" ? requestedAmountOff : null,
       ticketRequired,
       notes,
+      attributeSnapshot,
     });
     setBatch((current) => upsertMarkdownRequestLine(current, line));
+    createScanOpsEvent(attributeSnapshot.weighted_snapshot ? SCANOPS_EVENT_TYPES.WEIGHTED_ITEM_EVIDENCE_CAPTURED : SCANOPS_EVENT_TYPES.ATTRIBUTE_EVIDENCE_CAPTURED, {
+      source_module: "Markdowns",
+      item_name: line.itemName,
+      sku: line.sku,
+      barcode: line.barcode,
+      workflow_type: "markdown",
+      expiry_date: attributeSnapshot.expiry_snapshot?.expiry_date || null,
+      lot_batch: attributeSnapshot.lot_batch_snapshot?.lot_batch_value || null,
+      weighted_candidate: Boolean(attributeSnapshot.weighted_snapshot?.weighted_candidate),
+      raw_barcode: attributeSnapshot.weighted_snapshot?.raw_barcode || scanValue || null,
+      quantity_type: attributeSnapshot.weighted_snapshot?.quantity_type || null,
+      entered_quantity: attributeSnapshot.weighted_snapshot?.entered_quantity || null,
+      applies_stock_directly: false,
+      applies_price_directly: false,
+      status: "attribute_evidence_saved",
+    });
     createScanOpsEvent(SCANOPS_EVENT_TYPES.MARKDOWN_APPLIED, {
       source_module: "Markdowns",
       item_name: line.itemName,
@@ -129,11 +178,17 @@ export default function Markdowns() {
       requested_percent_off: line.requestedPercentOff,
       requested_amount_off: line.requestedAmountOff,
       ticket_required: line.ticketRequired,
+      expiry_date: attributeSnapshot.expiry_snapshot?.expiry_date || null,
+      lot_batch: attributeSnapshot.lot_batch_snapshot?.lot_batch_value || null,
+      weighted_candidate: Boolean(attributeSnapshot.weighted_snapshot?.weighted_candidate),
       applies_price_directly: false,
       status: "draft_markdown_request_added",
     });
     setItem(null);
     setScanValue("");
+    setExpiryDate("");
+    setLotBatch("");
+    setEnteredWeight("");
     setNotes("");
   };
 
@@ -159,6 +214,9 @@ export default function Markdowns() {
     setItem(null);
     setScanValue("");
     setBatch([]);
+    setExpiryDate("");
+    setLotBatch("");
+    setEnteredWeight("");
     clearWorkflowDraft("markdown");
   };
 
@@ -217,6 +275,7 @@ export default function Markdowns() {
                           {getOptionLabel(MARKDOWN_REASON_OPTIONS, line.reason)} · {getOptionLabel(MARKDOWN_TYPE_OPTIONS, line.markdownType)} · Ticket: {line.ticketRequired ? "Required" : "Not required"}
                         </p>
                         {line.notes && <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">Note: {line.notes}</p>}
+                        {line.attributeSnapshot && <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">{summarizeAttributeSnapshot(line.attributeSnapshot)}</p>}
                       </div>
                       <button type="button" onClick={() => removeLine(line.requestItemId)} className="shrink-0 rounded-xl bg-secondary px-3 py-2 text-xs font-black text-secondary-foreground">
                         Remove
@@ -240,6 +299,20 @@ export default function Markdowns() {
                 </ItemSummaryCard>
                 <SectionCard className="space-y-3">
                   <TouchSelect label="Markdown reason" value={reason} onChange={setReason} options={MARKDOWN_REASON_OPTIONS} />
+                  <AttributeEvidenceFields
+                    item={item}
+                    scanValue={scanValue}
+                    expiryDate={expiryDate}
+                    onExpiryDateChange={setExpiryDate}
+                    lotBatch={lotBatch}
+                    onLotBatchChange={setLotBatch}
+                    quantityType={quantityType}
+                    onQuantityTypeChange={setQuantityType}
+                    enteredQuantity={enteredWeight}
+                    onEnteredQuantityChange={setEnteredWeight}
+                    weightSource={weightSource}
+                    onWeightSourceChange={setWeightSource}
+                  />
                   <TouchSelect label="Markdown type" value={markdownType} onChange={setMarkdownType} options={MARKDOWN_TYPE_OPTIONS} />
                   {markdownType === "fixed_new_price" && <TextInputField label="New price" value={requestedPrice} onChange={setRequestedPrice} type="number" placeholder="0.00" />}
                   {markdownType === "percentage_discount" && <TextInputField label="Percentage discount" value={requestedPercentOff} onChange={setRequestedPercentOff} type="number" placeholder="25" />}
@@ -281,6 +354,7 @@ export default function Markdowns() {
                       <p className="mt-1 break-words text-xs font-bold text-muted-foreground">
                         {getRequestedSummary(line)} · {getOptionLabel(MARKDOWN_REASON_OPTIONS, line.reason)} · Ticket: {line.ticketRequired ? "Required" : "No"}
                       </p>
+                      {line.attributeSnapshot && <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">{summarizeAttributeSnapshot(line.attributeSnapshot)}</p>}
                     </div>
                   ))}
                 </div>
