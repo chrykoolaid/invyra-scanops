@@ -236,10 +236,10 @@ export default function StockCount() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
+    <div className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-background">
       <PageHeader title={pageTitle} subtitle={pageSubtitle} />
 
-      <main className="flex-1 px-4 py-5 overflow-y-auto overflow-x-hidden pb-8">
+      <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-4 py-4 pb-[calc(5rem+env(safe-area-inset-bottom))]">
         {screen !== SCREENS.MODES && (
           <button
             type="button"
@@ -303,22 +303,22 @@ export default function StockCount() {
 
 function ModeSelector({ onSelect }) {
   return (
-    <div className="space-y-4">
-      <div className="rounded-2xl border border-border bg-card p-4">
+    <div className="space-y-3">
+      <div className="rounded-2xl border border-border bg-card p-3 shadow-sm">
         <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <ClipboardList className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-base font-bold text-foreground">Start a Count</h2>
-            <p className="mt-1 text-sm leading-snug text-muted-foreground">
-              Stocktake stays inside Stock Count as a formal count type, not a separate launcher tile.
+            <h2 className="text-[15px] font-extrabold leading-tight text-foreground">Start a Count</h2>
+            <p className="mt-1 text-[12px] leading-snug text-muted-foreground">
+              Stocktake stays inside Stock Count as a formal count type.
             </p>
           </div>
         </div>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2.5">
         {STOCK_COUNT_TYPE_OPTIONS.map((mode) => {
           const Icon = MODE_ICONS[mode.id] || ClipboardCheck;
           return (
@@ -326,18 +326,18 @@ function ModeSelector({ onSelect }) {
               key={mode.id}
               type="button"
               onClick={() => onSelect(mode.id)}
-              className="w-full rounded-2xl border border-border bg-card p-4 text-left shadow-sm active:scale-[0.99]"
+              className="w-full rounded-2xl border border-border bg-card p-3 text-left shadow-sm active:scale-[0.99]"
             >
               <div className="flex items-center gap-3">
-                <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${mode.governed ? "bg-accent/10 text-accent" : "bg-primary/10 text-primary"}`}>
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${mode.governed ? "bg-accent/10 text-accent" : "bg-primary/10 text-primary"}`}>
                   <Icon className="h-5 w-5" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-bold text-foreground">{mode.title}</p>
-                    {!mode.enabled && <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold uppercase text-muted-foreground">Governed</span>}
+                  <div className="flex min-w-0 items-start gap-2">
+                    <p className="min-w-0 flex-1 text-[13px] font-extrabold leading-tight text-foreground">{mode.title}</p>
+                    {!mode.enabled && <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[9px] font-extrabold uppercase leading-tight text-muted-foreground">Governed</span>}
                   </div>
-                  <p className="mt-1 text-xs leading-snug text-muted-foreground">{mode.helper}</p>
+                  <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{mode.helper}</p>
                 </div>
                 <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
               </div>
