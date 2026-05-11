@@ -17,7 +17,7 @@ function optionLabel(option) {
   return String(option.label ?? option.name ?? option.id ?? option.value ?? "Option");
 }
 
-export default function TouchSelect({ label, value, onChange, options = [], helper, placeholder = "Select" }) {
+export default function TouchSelect({ label, value, onChange, options = [], helper = "", placeholder = "Select" }) {
   return (
     <div className="block min-w-0">
       <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</label>

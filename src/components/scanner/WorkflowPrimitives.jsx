@@ -31,7 +31,7 @@ export function EmptyState({ title = "No item selected.", helper = "" }) {
   );
 }
 
-export function ItemSummaryCard({ item, children }) {
+export function ItemSummaryCard({ item, children = null }) {
   if (!item) return null;
   const unit = item.unitType || item.unit_type || "each";
   const shelf = item.shelfStock ?? item.shelf_stock;
@@ -128,7 +128,7 @@ export function InfoLine({ label, value }) {
   );
 }
 
-export function BatchList({ title = "Current batch", items = [], emptyText = "Batch is empty.", renderMeta, onRemove }) {
+export function BatchList({ title = "Current batch", items = [], emptyText = "Batch is empty.", renderMeta = null, onRemove = null }) {
   return (
     <SectionCard>
       <div className="flex items-center justify-between gap-3">
@@ -170,7 +170,7 @@ export function BatchList({ title = "Current batch", items = [], emptyText = "Ba
   );
 }
 
-export function TextInputField({ label, value, onChange, placeholder, type = "text" }) {
+export function TextInputField({ label, value, onChange, placeholder = "", type = "text" }) {
   return (
     <label className="block min-w-0">
       <span className="text-xs font-black uppercase tracking-wider text-muted-foreground">{label}</span>

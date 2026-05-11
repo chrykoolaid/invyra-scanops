@@ -38,7 +38,7 @@ export function normalizeSelectedScanItem(item, scanSource = "manual_search") {
   };
 }
 
-export function makeWorkflowBatchItem({ workflowType, item, quantity, reason, condition, markdownPercent, ticketType, ticketReason, sourceLocation, destinationLocation, meta = {} }) {
+export function makeWorkflowBatchItem({ workflowType, item, quantity = undefined, reason = undefined, condition = undefined, markdownPercent = undefined, ticketType = undefined, ticketReason = undefined, sourceLocation = undefined, destinationLocation = undefined, meta = {} }) {
   const session = getScanOpsSession();
   const selected = normalizeSelectedScanItem(item, meta.scanSource || "manual_search");
   const createdAt = nowIso();
