@@ -3,7 +3,6 @@ import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
 import { DoneCard, EmptyState, ItemSummaryCard, MetricPill, PageShell, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
-import { EXPIRY_CHECK_SCAN_ITEM } from "../lib/scanOpsInventoryFixtures";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { FRESHNESS_CONDITIONS, getExpiryStatus, getFreshnessRecommendation } from "../lib/scanOpsRules";
 
@@ -19,7 +18,8 @@ export default function ExpiryCheck() {
   const recommendation = useMemo(() => getFreshnessRecommendation(item, expiryStatus, condition), [item, expiryStatus, condition]);
 
   const scan = (value) => {
-    const found = resolveInventoryIdentity(String(value || "").trim() || "930000000004") || EXPIRY_CHECK_SCAN_ITEM;
+    const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
+    if (!found) return;
     setItem(found);
     setExpiryDate(found.expiryDate || found.expiry_date || "2026-05-06");
     setCondition(found.freshness_default || "near_expiry");
@@ -33,6 +33,8 @@ export default function ExpiryCheck() {
       item_name: item.name,
       sku: item.sku,
       barcode: item.barcode,
+      plu: item.plu || item.scaleCode,
+      match_reason: item._searchMatch?.displayReason || null,
       expiry_date: expiryDate,
       expiry_status: expiryStatus.label,
       freshness_condition: condition,

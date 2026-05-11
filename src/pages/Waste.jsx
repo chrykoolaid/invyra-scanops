@@ -68,9 +68,10 @@ export default function Waste() {
   }, [batch, view]);
 
   const scan = (value) => {
-    const found = resolveInventoryIdentity(String(value || "").trim() || "930000000008") || resolveInventoryIdentity("930000000008");
+    const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
+    if (!found) return;
     setItem(found);
-    setQuantity(1);
+    setQuantity((found?.unitType || found?.unit_type) === "kg" ? 1 : 1);
     setReason(found?.wasteReviewRequired ? "spoiled_temperature_concern" : "expired_short_dated");
     setCondition(found?.wasteReviewRequired ? "temperature_concern" : "unsellable");
     setDisposalAction(found?.wasteReviewRequired ? "quarantine_food_safety_hold" : "discarded");
@@ -88,6 +89,8 @@ export default function Waste() {
       item_name: line.itemName,
       sku: line.sku,
       barcode: line.barcode,
+      plu: item.plu || item.scaleCode,
+      match_reason: item._searchMatch?.displayReason || null,
       quantity: line.quantity,
       unit_type: line.unit,
       reason_code: reason,

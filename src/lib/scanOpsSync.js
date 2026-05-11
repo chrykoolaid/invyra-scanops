@@ -54,6 +54,7 @@ const SUBMISSION_EVENT_HINTS = [
   "MARKDOWN_APPLIED",
   "SHELF_TICKET_BATCH_SENT_TO_DESKTOP",
   "TASK_COMPLETED",
+  "UNKNOWN_ITEM_EVIDENCE_CREATED",
 ];
 
 function readKey(key) {
@@ -127,6 +128,7 @@ function titleFromEvent(event) {
   if (String(event?.event_type || "").startsWith("MARKDOWN")) return "Markdown request";
   if (String(event?.event_type || "").startsWith("SHELF_TICKET")) return "Shelf ticket request";
   if (String(event?.event_type || "").startsWith("TASK")) return "Task update";
+  if (String(event?.event_type || "") === "UNKNOWN_ITEM_EVIDENCE_CREATED") return "Unknown item evidence";
   return `${source} ${type}`.trim();
 }
 
@@ -139,6 +141,7 @@ function sourceRequestIdFromEvent(event) {
     || event?.transfer_request_id
     || event?.count_session_id
     || event?.task_id
+    || event?.unknown_item_evidence_id
     || event?.event_id
     || makeId("source");
 }
@@ -153,13 +156,14 @@ function sourceWorkflowFromEvent(event) {
   if (source.includes("markdown") || type.startsWith("MARKDOWN")) return "markdown";
   if (source.includes("shelf") || type.startsWith("SHELF_TICKET")) return "shelf_tickets";
   if (source.includes("task") || type.startsWith("TASK")) return "task";
+  if (type === "UNKNOWN_ITEM_EVIDENCE_CREATED") return "unknown_item_evidence";
   return "scanops";
 }
 
 function summaryFromEvent(event) {
   const itemCount = event?.item_count ?? event?.counted_items ?? event?.line_count ?? null;
   const variance = event?.variance_items ?? event?.discrepancy_count ?? event?.review_required_count ?? null;
-  const item = event?.item_name || event?.itemName || event?.sku || event?.barcode || event?.plu || event?.task_id || "local record";
+  const item = event?.entered_code ? `Unknown ${event.entered_code}` : (event?.item_name || event?.itemName || event?.sku || event?.barcode || event?.plu || event?.task_id || "local record");
   const bits = [];
   if (itemCount != null) bits.push(`${itemCount} item${Number(itemCount) === 1 ? "" : "s"}`);
   if (variance != null) bits.push(`${variance} exception${Number(variance) === 1 ? "" : "s"}`);

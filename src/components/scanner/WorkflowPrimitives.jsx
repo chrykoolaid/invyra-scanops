@@ -37,8 +37,9 @@ export function ItemSummaryCard({ item, children = null }) {
   const shelf = item.shelfStock ?? item.shelf_stock;
   const backroom = item.backroomStock ?? item.backroom_stock;
   const soh = item.stockOnHand ?? item.stock_on_hand;
-  const identity = [item.sku && `SKU ${item.sku}`, item.barcode && `Barcode ${item.barcode}`, (item.plu || item.scaleCode) && `PLU ${item.plu || item.scaleCode}`].filter(Boolean).join(" · ");
+  const identity = [item.sku && `SKU ${item.sku}`, item.barcode && `Barcode ${item.barcode}`, (item.plu || item.scaleCode) && `PLU ${item.plu || item.scaleCode}`, (item.isWeighted || item.unitType === "kg" || item.unit === "kg") && "Weighed item"].filter(Boolean).join(" · ");
   const location = [item.department, item.category, item.shelfLocation || item.location].filter(Boolean).join(" · ");
+  const matchReason = item._searchMatch?.displayReason;
   return (
     <SectionCard>
       <div className="flex items-start gap-3">
@@ -49,6 +50,7 @@ export function ItemSummaryCard({ item, children = null }) {
           <p className="break-words text-base font-black leading-tight text-foreground">{item.name || item.item_name || "Scanned item"}</p>
           {identity && <p className="mt-1 break-all font-mono text-[11px] uppercase tracking-wide text-muted-foreground">{identity}</p>}
           {location && <p className="mt-1 truncate text-xs font-bold text-muted-foreground">{location}</p>}
+          {matchReason && <p className="mt-2 inline-flex rounded-full bg-secondary px-2 py-1 text-[10px] font-black uppercase tracking-wide text-muted-foreground">{matchReason}</p>}
         </div>
       </div>
       <div className="mt-3 grid grid-cols-3 gap-2">

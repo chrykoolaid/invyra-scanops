@@ -73,7 +73,8 @@ export default function Transfers() {
   };
 
   const scan = (value) => {
-    const found = resolveInventoryIdentity(String(value || "").trim() || "930000000004") || resolveInventoryIdentity("930000000004");
+    const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
+    if (!found) return;
     setItem(found);
     const available = getAvailableAtSource(found, sourceLocationId);
     setQuantity(Math.min(6, Math.max(1, Number(available || 1))));
@@ -87,6 +88,8 @@ export default function Transfers() {
       item_name: found?.name,
       sku: found?.sku,
       barcode: found?.barcode,
+      plu: found?.plu || found?.scaleCode,
+      match_reason: found?._searchMatch?.displayReason || null,
       available_at_source: available,
       applies_stock_directly: false,
     });
@@ -128,6 +131,7 @@ export default function Transfers() {
       item_name: item.name,
       sku: item.sku,
       barcode: item.barcode,
+      plu: item.plu || item.scaleCode,
       requested_qty: quantity,
       available_at_source: availableAtSource,
       unit_type: unit,

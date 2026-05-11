@@ -73,7 +73,8 @@ export default function Receiving() {
   const batchDiscrepancyCount = useMemo(() => batch.filter((line) => line.discrepancy && line.discrepancy !== "none").length, [batch]);
 
   const scan = (value) => {
-    const found = resolveInventoryIdentity(String(value || "").trim() || "930000000004") || resolveInventoryIdentity("930000000004");
+    const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
+    if (!found) return;
     setItem(found);
     const defaultQty = Math.min(6, Math.max(1, getExpectedQty(found)));
     setQuantity(defaultQty);
@@ -105,6 +106,8 @@ export default function Receiving() {
       item_name: line.itemName,
       sku: line.sku,
       barcode: line.barcode,
+      plu: item.plu || item.scaleCode,
+      match_reason: item._searchMatch?.displayReason || null,
       expected_qty: line.expectedQty,
       received_qty: line.receivedQty,
       unit_type: line.unit,

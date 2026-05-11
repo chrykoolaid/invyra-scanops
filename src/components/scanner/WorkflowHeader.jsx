@@ -3,7 +3,8 @@ import { ChevronLeft, ScanLine, Search, Wifi, WifiOff, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { getNetworkMode, getSyncSummary } from "../../lib/scanOpsSync";
 import { useScanOpsSession } from "../../lib/scanOpsSession";
-import { getItemEntryPrimaryValue, getItemEntrySecondaryLabel, resolveItemEntry, searchItemEntries } from "../../lib/scanOpsItemEntry";
+import { getItemEntryMatchLabel, getItemEntryPrimaryValue, getItemEntrySecondaryLabel, resolveItemEntry, searchItemEntries } from "../../lib/scanOpsItemEntry";
+import { createUnknownItemEvidence } from "../../lib/scanOpsUnknownItems";
 
 export default function WorkflowHeader({
   title,
@@ -11,7 +12,7 @@ export default function WorkflowHeader({
   scanValue,
   onScanValueChange,
   onScan,
-  placeholder = "Search or scan item",
+  placeholder = "Search / scan item, PLU, SKU, barcode...",
   disabled = false,
   showSearch = true,
 }) {
@@ -119,17 +120,14 @@ export default function WorkflowHeader({
       return;
     }
 
-    const exact = resolveItemEntry(value);
-    if (exact) {
-      clearResults();
-      onScan?.(value);
-      return;
-    }
+    const nextMatches = searchItemEntries(value, 6);
+    const firstMatch = nextMatches[0] || resolveItemEntry(value);
+    const matchType = firstMatch?._searchMatch?.matchType;
+    const autoLoadTypes = new Set(["barcode_exact", "barcode_alias", "plu_exact", "sku_exact", "supplier_code"]);
 
-    const nextMatches = searchItemEntries(value, 5);
-    if (nextMatches.length === 1 && source !== "manualTyping") {
+    if (firstMatch && nextMatches.length === 1 && source !== "manualTyping" && autoLoadTypes.has(matchType)) {
       clearResults();
-      onScan?.(getItemEntryPrimaryValue(nextMatches[0]));
+      onScan?.(firstMatch);
       return;
     }
 
@@ -162,7 +160,14 @@ export default function WorkflowHeader({
     const value = getItemEntryPrimaryValue(item);
     onScanValueChange?.(value);
     clearResults();
-    onScan?.(value);
+    onScan?.(item);
+  };
+
+  const attachUnknownEvidence = () => {
+    const evidence = createUnknownItemEvidence({ enteredCode: currentValue, sourceWorkflow: title });
+    if (!evidence) return;
+    setMatches([]);
+    setLookupState("evidence_created");
   };
 
   const clearField = () => {
@@ -299,30 +304,59 @@ export default function WorkflowHeader({
             )}
           </form>
 
-          {(manualFocused || matches.length > 0 || lookupState === "none") && lookupState !== "idle" && (
+          {(manualFocused || matches.length > 0 || lookupState === "none" || lookupState === "evidence_created") && lookupState !== "idle" && (
             <div className="mt-2 rounded-2xl border border-border bg-background p-2 shadow-sm">
               {matches.length > 0 ? (
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <p className="px-2 pb-1 text-[11px] font-black uppercase tracking-wider text-muted-foreground">
-                    {lookupState === "multiple" ? "Multiple matches found" : "Suggestions"}
+                    {lookupState === "multiple" ? "Search results" : "Suggestions"}
                   </p>
                   {matches.map((item) => (
-                    <button
-                      key={item.internalItemId || item.sku || item.barcode || item.name}
-                      type="button"
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => selectMatch(item)}
-                      className="w-full min-w-0 rounded-xl px-2 py-2 text-left active:bg-secondary"
+                    <div
+                      key={item.internalItemId || item.sku || item.barcode || item.plu || item.name}
+                      className="w-full min-w-0 rounded-xl bg-secondary/50 px-3 py-2"
                     >
-                      <span className="block truncate text-sm font-black text-foreground">{item.name || item.item_name}</span>
-                      <span className="mt-0.5 block truncate text-[11px] font-semibold text-muted-foreground">{getItemEntrySecondaryLabel(item)}</span>
-                    </button>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <span className="block break-words text-sm font-black text-foreground">{item.name || item.item_name}</span>
+                          <span className="mt-0.5 block break-words text-[11px] font-semibold text-muted-foreground">{getItemEntrySecondaryLabel(item)}</span>
+                          <span className="mt-1 inline-flex rounded-full bg-card px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-muted-foreground">{getItemEntryMatchLabel(item)}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => selectMatch(item)}
+                          className="shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-black text-primary-foreground active:scale-[0.98]"
+                        >
+                          Select
+                        </button>
+                      </div>
+                    </div>
                   ))}
                 </div>
+              ) : lookupState === "evidence_created" ? (
+                <div className="px-2 py-2">
+                  <p className="text-sm font-black text-foreground">Unknown item evidence saved</p>
+                  <p className="mt-0.5 text-xs leading-snug text-muted-foreground">It is queued for review only. No product, stock, price, markdown, transfer, or ticket action was created.</p>
+                </div>
               ) : (
-                <div className="px-2 py-1.5">
-                  <p className="text-sm font-black text-foreground">No matching item found</p>
-                  <p className="mt-0.5 text-xs leading-snug text-muted-foreground">Check barcode, PLU, SKU, shelf label, or try item name.</p>
+                <div className="px-2 py-2">
+                  <p className="text-sm font-black text-foreground">No item found</p>
+                  <p className="mt-0.5 text-xs leading-snug text-muted-foreground">Check barcode, PLU, SKU, shelf label, or try item name / department.</p>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={attachUnknownEvidence}
+                      disabled={!String(currentValue || "").trim()}
+                      className="min-h-10 rounded-xl bg-primary px-3 text-xs font-black text-primary-foreground disabled:opacity-40"
+                    >
+                      Attach Unknown Item Evidence
+                    </button>
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={clearField} className="min-h-10 rounded-xl bg-secondary px-3 text-xs font-black text-secondary-foreground">
+                      Clear Search
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

@@ -4,15 +4,13 @@ import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
 import { BatchList, DoneCard, EmptyState, InfoLine, ItemSummaryCard, MetricPill, PageShell, QuantityStepper, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
-import { getLocalInventorySnapshot, resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
+import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { calculateVariance, createCountSession, getSessionVarianceSummary, STOCK_COUNT_AREA_OPTIONS, STOCK_COUNT_MODE_OPTIONS, STOCK_COUNT_TYPES, STOCK_COUNT_TYPE_OPTIONS, STOCK_COUNT_VARIANCE_REASONS } from "../lib/scanOpsStockCount";
 import { makeWorkflowBatchItem, removeWorkflowBatchItem } from "../lib/scanOpsWorkflowBatch";
 
 function findProduct(input) {
-  const value = String(input || "").trim();
-  const direct = resolveInventoryIdentity(value || "930000000010");
-  if (direct) return direct;
-  return getLocalInventorySnapshot().items.find((item) => item.name?.toLowerCase().includes(value.toLowerCase())) || null;
+  if (!input) return null;
+  return typeof input === "object" ? input : resolveInventoryIdentity(String(input || "").trim());
 }
 
 function itemKey(line) {
@@ -158,7 +156,8 @@ export default function StockCount() {
   };
 
   const scan = (value) => {
-    const found = findProduct(value || "930000000010");
+    const found = findProduct(value);
+    if (!found) return;
     setItem(found);
     setCounted(Number(found?.stockOnHand ?? found?.stock_on_hand ?? found?.shelfStock ?? found?.shelf_stock ?? 1));
     setReason("shelf_empty_unknown");
@@ -200,6 +199,8 @@ export default function StockCount() {
       item_name: item.name,
       sku: item.sku,
       barcode: item.barcode,
+      plu: item.plu || item.scaleCode,
+      match_reason: item._searchMatch?.displayReason || null,
       expected_quantity: expected,
       counted_quantity: Number(counted || 0),
       variance_quantity: variance,

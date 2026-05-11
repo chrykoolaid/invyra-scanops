@@ -79,7 +79,8 @@ export default function Markdowns() {
   }, [batch, view]);
 
   const scan = (value) => {
-    const found = resolveInventoryIdentity(String(value || "").trim() || "930000000004") || resolveInventoryIdentity("930000000004");
+    const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
+    if (!found) return;
     const price = getCurrentPriceSnapshot(found);
     setItem(found);
     setReason(found?.markdownEligible ? "short_dated" : "manager_instruction");
@@ -118,6 +119,8 @@ export default function Markdowns() {
       item_name: line.itemName,
       sku: line.sku,
       barcode: line.barcode,
+      plu: item.plu || item.scaleCode,
+      match_reason: item._searchMatch?.displayReason || null,
       reason_code: reason,
       reason_label: getOptionLabel(MARKDOWN_REASON_OPTIONS, reason),
       markdown_type: markdownType,

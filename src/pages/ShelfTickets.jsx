@@ -71,7 +71,8 @@ export default function ShelfTickets() {
   }, [batch, view]);
 
   const scan = (value) => {
-    const found = resolveInventoryIdentity(String(value || "").trim() || "930000000004") || resolveInventoryIdentity("930000000004");
+    const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
+    if (!found) return;
     setItem(found);
     setTicketType("standard_shelf_ticket");
     setPaperSize("small_shelf_edge");
@@ -91,6 +92,8 @@ export default function ShelfTickets() {
       item_name: line.itemName,
       sku: line.sku,
       barcode: line.barcode,
+      plu: item.plu || item.scaleCode,
+      match_reason: item._searchMatch?.displayReason || null,
       ticket_type: ticketType,
       ticket_type_label: getOptionLabel(SHELF_TICKET_REQUEST_TYPE_OPTIONS, ticketType),
       paper_size: paperSize,

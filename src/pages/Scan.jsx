@@ -2,13 +2,15 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import { EmptyState, PageShell, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
+import { getItemEntryPrimaryValue } from "../lib/scanOpsItemEntry";
 
 export default function Scan() {
   const navigate = useNavigate();
   const [scanValue, setScanValue] = useState("");
 
   const handleScan = (value) => {
-    const input = String(value || "").trim() || "demo";
+    const input = typeof value === "object" ? getItemEntryPrimaryValue(value) : String(value || "").trim();
+    if (!input) return;
     navigate(`/product/${encodeURIComponent(input)}`);
   };
 

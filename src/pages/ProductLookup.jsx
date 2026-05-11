@@ -4,7 +4,8 @@ import { ClipboardList, RefreshCcw, Tags, Trash2, BadgePercent } from "lucide-re
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import { EmptyState, ItemSummaryCard, MetricPill, PageShell, SectionCard, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
-import { getIdentityDisplay } from "../lib/productIdentityResolver";
+import { getItemEntryPrimaryValue } from "../lib/scanOpsItemEntry";
+import { getIdentityDisplay, getMatchReasonDisplay } from "../lib/productIdentityResolver";
 
 export default function ProductLookup() {
   const navigate = useNavigate();
@@ -19,12 +20,12 @@ export default function ProductLookup() {
   }, [product]);
 
   const handleScan = (value) => {
-    const input = String(value || "").trim();
-    if (!input) return;
-    const found = resolveInventoryIdentity(input);
+    const input = typeof value === "object" ? getItemEntryPrimaryValue(value) : String(value || "").trim();
+    if (!input && typeof value !== "object") return;
+    const found = typeof value === "object" ? value : resolveInventoryIdentity(input);
     if (!found) return;
     setProduct(found);
-    setScanValue(input);
+    setScanValue(getItemEntryPrimaryValue(found));
   };
 
   return (
@@ -41,6 +42,7 @@ export default function ProductLookup() {
           <>
             <ItemSummaryCard item={product}>
               <p className="break-all font-mono text-[11px] text-muted-foreground">{getIdentityDisplay(product)}</p>
+              <p className="mt-1 inline-flex rounded-full bg-secondary px-2 py-1 text-[10px] font-black uppercase tracking-wide text-muted-foreground">{getMatchReasonDisplay(product)}</p>
             </ItemSummaryCard>
             <SectionCard>
               <div className="grid grid-cols-2 gap-2">

@@ -23,7 +23,8 @@ export default function GapScan() {
   const outcomeLabel = OUTCOMES.find((option) => option.id === outcome)?.label || outcome;
 
   const scan = (value) => {
-    const found = resolveInventoryIdentity(String(value || "").trim() || "930000000001") || resolveInventoryIdentity("930000000001");
+    const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
+    if (!found) return;
     setItem(found);
     setOutcome(classifyGap(found).gap_type || GAP_TYPES.BACKROOM_AVAILABLE);
   };

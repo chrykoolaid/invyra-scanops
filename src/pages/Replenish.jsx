@@ -24,7 +24,8 @@ export default function Replenish() {
   const issueLabel = ISSUE_OPTIONS.find((option) => option.id === issue)?.label || issue;
 
   const scan = (value) => {
-    const found = resolveInventoryIdentity(String(value || "").trim() || "930000000001") || resolveInventoryIdentity("930000000001");
+    const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
+    if (!found) return;
     setItem(found);
     setQuantity(Math.min(6, Math.max(1, Number(found?.backroomStock ?? found?.backroom_stock ?? 6))));
   };
@@ -38,6 +39,8 @@ export default function Replenish() {
       item_name: item.name,
       sku: item.sku,
       barcode: item.barcode,
+      plu: item.plu || item.scaleCode,
+      match_reason: item._searchMatch?.displayReason || null,
       issue_reason: issue,
       quantity,
       unit_type: unit,
