@@ -330,16 +330,16 @@ export default function WorkflowHeader({
 
           {showKeyboardFallback && manualFocused && (
             <div
-              className="scanops-keyboard-fallback fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/98 px-3 pt-2 shadow-[0_-10px_30px_rgba(15,23,42,0.12)] backdrop-blur"
+              className="scanops-keyboard-fallback fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background/98 px-2 pt-1.5 shadow-[0_-10px_30px_rgba(15,23,42,0.12)] backdrop-blur"
               aria-label="On-screen search keyboard"
               onMouseDown={(event) => event.preventDefault()}
             >
-              <div className="mx-auto w-full max-w-[480px] pb-[max(0.6rem,env(safe-area-inset-bottom))]">
-                <div className="mb-2 flex items-center justify-between gap-2 px-1">
+              <div className="mx-auto w-full max-w-[480px] pb-[max(0.35rem,env(safe-area-inset-bottom))]">
+                <div className="mb-1 flex items-center justify-between gap-2 px-1">
                   <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Manual search</p>
                   <button
                     type="button"
-                    className="rounded-full bg-secondary px-3 py-1 text-[10px] font-black text-muted-foreground active:bg-border"
+                    className="rounded-full bg-secondary px-2.5 py-0.5 text-[10px] font-black text-muted-foreground active:bg-border"
                     onPointerDown={(event) => {
                       event.preventDefault();
                       setShowKeyboardFallback(false);
@@ -354,14 +354,14 @@ export default function WorkflowHeader({
                   ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
                   ["z", "x", "c", "v", "b", "n", "m"],
                 ].map((row, rowIndex) => (
-                  <div key={rowIndex} className="mb-1.5 flex justify-center gap-1">
+                  <div key={rowIndex} className="mb-1 flex justify-center gap-0.5">
                     {row.map((key) => {
                       const visibleKey = keyboardCaps ? key.toUpperCase() : key;
                       return (
                         <button
                           key={key}
                           type="button"
-                          className="flex h-9 min-w-0 flex-1 items-center justify-center rounded-xl bg-secondary px-1 text-sm font-black text-foreground active:bg-border"
+                          className="flex h-7 min-w-0 flex-1 items-center justify-center rounded-lg bg-secondary px-0.5 text-xs font-black text-foreground active:bg-border"
                           onPointerDown={(event) => {
                             event.preventDefault();
                             appendKeyboardText(visibleKey);
@@ -373,12 +373,12 @@ export default function WorkflowHeader({
                     })}
                   </div>
                 ))}
-                <div className="mb-1.5 grid grid-cols-10 gap-1">
+                <div className="mb-1 grid grid-cols-10 gap-0.5">
                   {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((key) => (
                     <button
                       key={key}
                       type="button"
-                      className="flex h-9 items-center justify-center rounded-xl bg-secondary text-sm font-black text-foreground active:bg-border"
+                      className="flex h-7 items-center justify-center rounded-lg bg-secondary text-xs font-black text-foreground active:bg-border"
                       onPointerDown={(event) => {
                         event.preventDefault();
                         appendKeyboardText(key);
@@ -388,11 +388,11 @@ export default function WorkflowHeader({
                     </button>
                   ))}
                 </div>
-                <div className="grid grid-cols-[0.9fr_0.9fr_2.1fr_1.1fr_1.15fr] gap-1">
+                <div className="grid grid-cols-[0.9fr_0.9fr_2.1fr_1.1fr_1.15fr] gap-0.5">
                   <button
                     type="button"
                     aria-pressed={keyboardCaps}
-                    className={`h-10 rounded-xl px-2 text-xs font-black active:bg-border ${keyboardCaps ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"}`}
+                    className={`h-8 rounded-lg px-1 text-[11px] font-black active:bg-border ${keyboardCaps ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"}`}
                     onPointerDown={(event) => {
                       event.preventDefault();
                       setKeyboardCaps((value) => !value);
@@ -402,7 +402,7 @@ export default function WorkflowHeader({
                   </button>
                   <button
                     type="button"
-                    className="h-10 rounded-xl bg-secondary px-2 text-xs font-black text-foreground active:bg-border"
+                    className="h-8 rounded-lg bg-secondary px-1 text-[11px] font-black text-foreground active:bg-border"
                     onPointerDown={(event) => {
                       event.preventDefault();
                       appendKeyboardText("-");
@@ -412,7 +412,7 @@ export default function WorkflowHeader({
                   </button>
                   <button
                     type="button"
-                    className="h-10 rounded-xl bg-secondary px-2 text-xs font-black text-foreground active:bg-border"
+                    className="h-8 rounded-lg bg-secondary px-1 text-[11px] font-black text-foreground active:bg-border"
                     onPointerDown={(event) => {
                       event.preventDefault();
                       appendKeyboardText(" ");
@@ -422,7 +422,7 @@ export default function WorkflowHeader({
                   </button>
                   <button
                     type="button"
-                    className="h-10 rounded-xl bg-secondary px-2 text-xs font-black text-foreground active:bg-border"
+                    className="h-8 rounded-lg bg-secondary px-1 text-[11px] font-black text-foreground active:bg-border"
                     onPointerDown={(event) => {
                       event.preventDefault();
                       backspaceKeyboardText();
@@ -432,7 +432,7 @@ export default function WorkflowHeader({
                   </button>
                   <button
                     type="button"
-                    className="h-10 rounded-xl bg-primary px-2 text-xs font-black text-primary-foreground active:opacity-90"
+                    className="h-8 rounded-lg bg-primary px-1 text-[11px] font-black text-primary-foreground active:opacity-90"
                     onPointerDown={(event) => {
                       event.preventDefault();
                       submit(event);

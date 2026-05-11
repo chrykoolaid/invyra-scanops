@@ -1,20 +1,10 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { useToast } from "@/components/ui/use-toast";
 
 export default function ActionTile({ icon: Icon, label, to, active = false }) {
   const navigate = useNavigate();
-  const { toast } = useToast();
-
   const handleTap = () => {
-    if (active && to) {
-      navigate(to);
-    } else {
-      toast({
-        description: "Coming in later stage",
-        duration: 1500,
-      });
-    }
+    if (active && to) navigate(to);
   };
 
   return (

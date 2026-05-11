@@ -66,7 +66,7 @@ export default function Transfers() {
             {step === 1 && <SectionCard className="space-y-3"><TouchSelect label="Transfer type" value={transferType} onChange={(v) => { setTransferType(v); setReason(""); }} options={TRANSFER_TYPE_OPTIONS} /><TouchSelect label="Reason" value={reason || reasonOptions[0]?.id} onChange={setReason} options={reasonOptions} /></SectionCard>}
             {step === 2 && <SectionCard><TouchSelect label="Source location" value={source} onChange={setSource} options={LOCATION_OPTIONS} /></SectionCard>}
             {step === 3 && <SectionCard><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Context</p><p className="mt-1 text-sm font-bold text-foreground">Source: {getLocationLabel(source)}</p><p className="mt-0.5 text-xs leading-snug text-muted-foreground">Type: {getTransferTypeLabel(transferType)}</p></SectionCard>}
-            {step === 4 && <>{item ? <ItemSummaryCard item={item} /> : <SectionCard><p className="text-sm font-bold text-foreground">No item selected yet.</p></SectionCard>}<SectionCard><QuantityStepper label="Quantity / weight" value={quantity} onChange={setQuantity} unit={unit} min={1} /></SectionCard></>}
+            {step === 4 && <>{item && <ItemSummaryCard item={item} />}<SectionCard><QuantityStepper label="Quantity / weight" value={quantity} onChange={setQuantity} unit={unit} min={1} /></SectionCard></>}
             {step === 5 && <SectionCard><TouchSelect label="Destination location" value={destination} onChange={setDestination} options={LOCATION_OPTIONS} /></SectionCard>}
             {step === 6 && <SectionCard className="space-y-2">
               <h2 className="text-base font-black text-foreground">Transfer Request Review</h2>

@@ -86,15 +86,10 @@ export default function StockCount() {
         {!started && <>
           <SectionCard className="space-y-3">
             <TouchSelect label="Count mode" value={mode} onChange={setMode} options={STOCK_COUNT_TYPE_OPTIONS.map((option) => ({ id: option.id, label: option.title, helper: option.caption }))} />
-            <div className="rounded-2xl bg-secondary/60 p-3">
-              <p className="text-sm font-black text-foreground">{modeMeta.title}</p>
-              <p className="mt-1 text-xs leading-snug text-muted-foreground">{modeMeta.helper}</p>
-              {!modeMeta.enabled && <p className="mt-2 text-xs font-bold text-muted-foreground">Governed placeholder. Full scheduler/assignment remains out of scope for this pass.</p>}
-            </div>
+            {!modeMeta.enabled && <p className="text-xs font-bold text-muted-foreground">Governed placeholder.</p>}
           </SectionCard>
           <StickyActions leftLabel="Back" rightLabel={modeMeta.enabled ? "Start Count" : "Governed"} onLeft={() => {}} onRight={start} rightDisabled={!modeMeta.enabled} />
         </>}
-        {started && !item && !done && <ReadyCard title="Ready to scan" helper="Use hardware trigger or tap search above." />}
         {item && <>
           <ItemSummaryCard item={item} />
           <SectionCard className="space-y-3">

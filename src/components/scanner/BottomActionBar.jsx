@@ -1,18 +1,8 @@
 import React from "react";
-import { useToast } from "@/components/ui/use-toast";
 
 export default function BottomActionBar({ actions }) {
-  const { toast } = useToast();
-
   const handleTap = (action) => {
-    if (action.onClick) {
-      action.onClick();
-    } else {
-      toast({
-        description: "Coming in later stage",
-        duration: 1500,
-      });
-    }
+    if (action.onClick) action.onClick();
   };
 
   return (

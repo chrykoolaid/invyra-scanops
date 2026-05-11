@@ -69,7 +69,6 @@ export default function Receiving() {
           </SectionCard>
           {done && <DoneCard title="Added to Receiving Batch" helper="The item is staged for receiving review. Final inventory application remains desktop/sync-side." rows={[{ label: "Supplier", value: supplier }, { label: "Quantity", value: `${quantity} ${unit}` }, { label: "Condition", value: condition }]} />}
         </>}
-        {!item && <SectionCard><p className="text-sm font-bold text-foreground">Scan the first item after supplier setup.</p><p className="mt-1 text-xs leading-snug text-muted-foreground">The receiving controls appear after item lookup so setup stays visible first.</p></SectionCard>}
         <StickyActions leftLabel="Reset" rightLabel="Add to Receiving Batch" onLeft={() => { setItem(null); setDone(false); }} onRight={add} rightDisabled={!item} />
       </WorkflowMain>
     </PageShell>

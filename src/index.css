@@ -278,16 +278,16 @@ body {
   margin-bottom: -3.5rem;
 }
 
-/* Stage M.1.2 keyboard placement polish */
+/* Stage M.1.3 keyboard containment polish */
 .scanops-keyboard-fallback {
-  max-height: 46dvh;
+  max-height: min(13.25rem, 34dvh);
   overflow: hidden;
 }
 
 .scanops-keyboard-open .scanops-root-shell main {
-  padding-bottom: max(16rem, env(safe-area-inset-bottom)) !important;
+  padding-bottom: max(13.75rem, env(safe-area-inset-bottom)) !important;
 }
 
 .scanops-keyboard-open .scanops-root-shell .scanops-sticky-actions {
-  bottom: 13.75rem;
+  bottom: 11.5rem;
 }
