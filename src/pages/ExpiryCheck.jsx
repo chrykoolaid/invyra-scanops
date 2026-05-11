@@ -4,6 +4,7 @@ import { AlertTriangle, CalendarClock, CheckCircle2, Home, RotateCw, Sparkles, T
 import PageHeader from "../components/scanner/PageHeader";
 import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
 import DecisionRecommendationCard from "../components/scanner/DecisionRecommendationCard";
+import TouchSelect from "../components/scanner/TouchSelect";
 import { useToast } from "@/components/ui/use-toast";
 import { EXPIRY_CHECK_SCAN_ITEM, EXPIRY_CHECK_SCENARIOS } from "../lib/scanOpsInventoryFixtures";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
@@ -13,7 +14,6 @@ import { FRESHNESS_CONDITIONS, getExpiryStatus, getFreshnessRecommendation } fro
 const BUTTON_PRIMARY = "w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40";
 const BUTTON_SECONDARY = "w-full py-4 rounded-2xl bg-secondary text-secondary-foreground font-bold text-sm active:scale-[0.98] active:bg-border transition-all flex items-center justify-center gap-2";
 const SOFT_BUTTON = "w-full rounded-2xl bg-secondary text-secondary-foreground px-4 py-4 text-sm font-bold active:scale-[0.98] active:bg-border transition-all text-center break-words";
-const CONDITION_BUTTON = "w-full rounded-2xl px-3 py-4 text-sm font-bold active:scale-[0.98] transition-all text-center leading-snug min-h-[64px]";
 const STEPS = { SCAN: "scan", RESULT: "result", DONE: "done" };
 const TODAY = "2026-05-05";
 
@@ -243,13 +243,14 @@ function ExpiryDatePanel({ expiryDate, onChange, expiryStatus, recommendation })
 
 function FreshnessButtons({ selected, onSelect }) {
   return (
-    <section className="bg-card rounded-2xl border border-border p-4 space-y-3 min-w-0">
-      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Freshness condition</p>
-      <div className="grid grid-cols-2 gap-2">
-        {FRESHNESS_CONDITIONS.map((condition) => (
-          <button key={condition.id} onClick={() => onSelect(condition.id)} className={`${CONDITION_BUTTON} ${selected === condition.id ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground active:bg-border"}`}>{condition.label}</button>
-        ))}
-      </div>
+    <section className="scanops-compact-card">
+      <TouchSelect
+        label="Freshness condition"
+        value={selected}
+        onChange={onSelect}
+        options={FRESHNESS_CONDITIONS}
+        placeholder="Select freshness condition"
+      />
     </section>
   );
 }

@@ -4,6 +4,7 @@ import { CheckCircle2, Home, Printer, RotateCw, Tags } from "lucide-react";
 import PageHeader from "../components/scanner/PageHeader";
 import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
 import DecisionRecommendationCard from "../components/scanner/DecisionRecommendationCard";
+import TouchSelect from "../components/scanner/TouchSelect";
 import { useToast } from "@/components/ui/use-toast";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
@@ -12,7 +13,6 @@ import { getMarkdownRecommendation, MARKDOWN_REASONS } from "../lib/scanOpsRules
 
 const BUTTON_PRIMARY = "w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40";
 const BUTTON_SECONDARY = "w-full py-4 rounded-2xl bg-secondary text-secondary-foreground font-bold text-sm active:scale-[0.98] active:bg-border transition-all flex items-center justify-center gap-2";
-const REASON_BUTTON = "w-full rounded-2xl px-3 py-4 text-sm font-bold active:scale-[0.98] transition-all text-center leading-snug min-h-[64px]";
 const STEPS = { SCAN: "scan", RESULT: "result", DONE: "done" };
 
 export default function Markdowns() {
@@ -119,7 +119,7 @@ export default function Markdowns() {
                 <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0"><Tags className="w-5 h-5" /></div>
                 <div className="min-w-0">
                   <h2 className="font-bold text-foreground">Scan item to apply markdown</h2>
-                  <p className="text-sm text-muted-foreground mt-1 break-words">Use large reason buttons, confirm suggested discount, then request a markdown shelf ticket.</p>
+                  <p className="text-sm text-muted-foreground mt-1 break-words">Choose a reason from the dropdown, confirm suggested discount, then request a markdown shelf ticket.</p>
                 </div>
               </div>
             </section>
@@ -168,11 +168,14 @@ function ItemSummary({ item, recommendation }) {
 
 function ReasonButtons({ selected, onSelect }) {
   return (
-    <section className="bg-card rounded-2xl border border-border p-4 space-y-3 min-w-0">
-      <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Markdown reason</p>
-      <div className="grid grid-cols-2 gap-2">
-        {MARKDOWN_REASONS.map((reason) => <button key={reason.id} onClick={() => onSelect(reason.id)} className={`${REASON_BUTTON} ${selected === reason.id ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground active:bg-border"}`}>{reason.label}</button>)}
-      </div>
+    <section className="scanops-compact-card">
+      <TouchSelect
+        label="Markdown reason"
+        value={selected}
+        onChange={onSelect}
+        options={MARKDOWN_REASONS}
+        placeholder="Select markdown reason"
+      />
     </section>
   );
 }

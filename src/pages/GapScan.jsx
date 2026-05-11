@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import PageHeader from "../components/scanner/PageHeader";
 import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
 import DecisionRecommendationCard from "../components/scanner/DecisionRecommendationCard";
+import TouchSelect from "../components/scanner/TouchSelect";
 import { useToast } from "@/components/ui/use-toast";
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Home, PackageCheck, PackageSearch, Printer, RotateCw, Truck } from "lucide-react";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
@@ -22,6 +23,8 @@ const GAP_TYPE_LABELS = {
   [GAP_TYPES.SHELF_LABEL_PLANOGRAM_ISSUE]: "Shelf label / planogram issue",
   [GAP_TYPES.SUPPLIER_PENDING]: "Supplier pending",
 };
+
+const GAP_OUTCOME_OPTIONS = Object.entries(GAP_TYPE_LABELS).map(([id, label]) => ({ id, label }));
 
 function scenarioFromIdentity(input, buttonLabel, overrides = {}) {
   const item = resolveInventoryIdentity(input);
@@ -60,19 +63,23 @@ export default function GapScan() {
   const [item, setItem] = useState(null);
   const [doneState, setDoneState] = useState(null);
   const [showTests, setShowTests] = useState(false);
+  const [outcomeId, setOutcomeId] = useState("");
   const classification = useMemo(() => classifyGap(item), [item]);
+  const selectedGapType = outcomeId || classification.gap_type;
   const decision = useMemo(() => createDecisionRecommendation({ workflow: "gap_scan", item }), [item]);
 
   const handleScan = (scenario = GAP_SCAN_SCENARIOS[0]) => {
     const scanDecision = createDecisionRecommendation({ workflow: "gap_scan", item: scenario });
     recordDecisionEvent(scanDecision, "generated", { source_module: "Gap Scan", status: "generated" });
     setItem(scenario);
+    setOutcomeId("");
     setDoneState(null);
     setStep(STEPS.RESULT);
   };
 
   const resetScan = () => {
     setItem(null);
+    setOutcomeId("");
     setDoneState(null);
     setStep(STEPS.SCAN);
   };
@@ -97,7 +104,7 @@ export default function GapScan() {
       pending_delivery_qty: item.pending_delivery_qty,
       pending_delivery_eta: item.pending_delivery_eta,
       planogram_status: item.planogram_status,
-      gap_type: classification.gap_type,
+      gap_type: selectedGapType,
       recommended_action: classification.recommended_action,
       status,
       ...extra,
@@ -145,7 +152,7 @@ export default function GapScan() {
   };
 
   const renderActions = () => {
-    if (classification.gap_type === GAP_TYPES.BACKROOM_AVAILABLE) {
+    if (selectedGapType === GAP_TYPES.BACKROOM_AVAILABLE) {
       return (
         <>
           <button onClick={createReplenishment} className={BUTTON_PRIMARY}>Create Replenishment</button>
@@ -153,7 +160,7 @@ export default function GapScan() {
         </>
       );
     }
-    if (classification.gap_type === GAP_TYPES.TRUE_OUT_OF_STOCK) {
+    if (selectedGapType === GAP_TYPES.TRUE_OUT_OF_STOCK) {
       return (
         <>
           <button onClick={() => finish({ eventType: SCANOPS_EVENT_TYPES.GAP_CONFIRMED, title: "Out of Stock Confirmed", helper: "True out-of-stock was recorded for review and reporting.", status: "confirmed" })} className={BUTTON_PRIMARY}>Confirm Out of Stock</button>
@@ -161,7 +168,7 @@ export default function GapScan() {
         </>
       );
     }
-    if (classification.gap_type === GAP_TYPES.SUPPLIER_PENDING) {
+    if (selectedGapType === GAP_TYPES.SUPPLIER_PENDING) {
       return (
         <>
           <button onClick={() => finish({ eventType: SCANOPS_EVENT_TYPES.SUPPLIER_PENDING_CONFIRMED, title: "Supplier Pending Confirmed", helper: "Incoming stock exists, so duplicate reorder was avoided.", status: "supplier_pending" })} className={BUTTON_PRIMARY}>Confirm Supplier Pending</button>
@@ -169,7 +176,7 @@ export default function GapScan() {
         </>
       );
     }
-    if (classification.gap_type === GAP_TYPES.SHELF_LABEL_PLANOGRAM_ISSUE) {
+    if (selectedGapType === GAP_TYPES.SHELF_LABEL_PLANOGRAM_ISSUE) {
       return (
         <>
           <button onClick={() => finish({ eventType: SCANOPS_EVENT_TYPES.SHELF_LABEL_ISSUE_FLAGGED, title: "Label Issue Flagged", helper: "Gap was classified as a shelf label or planogram issue, not a stock shortage.", status: "flagged" })} className={BUTTON_PRIMARY}>Flag Label Issue</button>
@@ -217,6 +224,17 @@ export default function GapScan() {
           <div className="space-y-4">
             <ProductCard item={item} />
             <StatusGrid item={item} />
+            <section className="scanops-compact-card">
+              <TouchSelect
+                label="Gap outcome"
+                helper="Confirm or correct the shelf outcome before creating the next action."
+                value={selectedGapType || ""}
+                onChange={setOutcomeId}
+                options={GAP_OUTCOME_OPTIONS}
+                placeholder="Select gap outcome"
+              />
+            </section>
+            <GapCard classification={classification} gapType={selectedGapType} />
             <DecisionRecommendationCard decision={decision} onReject={rejectRecommendation} onMoreInfo={viewReason} />
             <div className="space-y-3">
               {renderActions()}
@@ -225,7 +243,7 @@ export default function GapScan() {
           </div>
         )}
 
-        {step === STEPS.DONE && item && doneState && <DonePanel state={doneState} item={item} classification={classification} onNext={resetScan} onHome={() => navigate("/")} />}
+        {step === STEPS.DONE && item && doneState && <DonePanel state={doneState} item={item} classification={classification} gapType={selectedGapType} onNext={resetScan} onHome={() => navigate("/")} />}
       </main>
     </div>
   );
@@ -268,21 +286,21 @@ function Metric({ label, value, helper }) {
   );
 }
 
-function GapCard({ classification }) {
+function GapCard({ classification, gapType }) {
   const iconByType = {
     [GAP_TYPES.BACKROOM_AVAILABLE]: PackageCheck,
     [GAP_TYPES.TRUE_OUT_OF_STOCK]: AlertTriangle,
     [GAP_TYPES.SUPPLIER_PENDING]: Truck,
     [GAP_TYPES.SHELF_LABEL_PLANOGRAM_ISSUE]: Printer,
   };
-  const Icon = iconByType[classification.gap_type] || PackageSearch;
+  const Icon = iconByType[gapType] || PackageSearch;
   return (
     <section className="bg-primary/5 rounded-2xl border border-primary/20 p-5 min-w-0">
       <div className="flex items-start gap-3">
         <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0"><Icon className="w-5 h-5" /></div>
         <div className="min-w-0">
           <p className="text-xs font-bold text-primary uppercase tracking-wider">Gap type</p>
-          <h3 className="text-base font-bold text-foreground mt-1 break-words">{GAP_TYPE_LABELS[classification.gap_type] || classification.title}</h3>
+          <h3 className="text-base font-bold text-foreground mt-1 break-words">{GAP_TYPE_LABELS[gapType] || classification.title}</h3>
           <p className="text-sm text-muted-foreground mt-1 break-words">{classification.helper}</p>
           <p className="text-xs font-mono text-primary mt-3 break-all">{formatActionLabel(classification.recommended_action)}</p>
         </div>
@@ -291,8 +309,8 @@ function GapCard({ classification }) {
   );
 }
 
-function DonePanel({ state, item, classification, onNext, onHome }) {
-  const rows = [["Item", item.name], ["Gap type", GAP_TYPE_LABELS[classification.gap_type] || "—"], ["Status", state.event?.status || "recorded"], ["Event", state.event?.event_type || "—"]];
+function DonePanel({ state, item, classification, gapType, onNext, onHome }) {
+  const rows = [["Item", item.name], ["Gap type", GAP_TYPE_LABELS[gapType || classification.gap_type] || "—"], ["Status", state.event?.status || "recorded"], ["Event", state.event?.event_type || "—"]];
   return (
     <div className="space-y-5">
       <section className="bg-card rounded-2xl border border-border p-6 text-center">

@@ -12,7 +12,12 @@ const SUPPLIERS = [
   { id: "Green Harvest", label: "Green Harvest", ref: "PO-2849" },
 ];
 
-const CONDITIONS = ["Good", "Damaged", "Short", "Over"];
+const CONDITIONS = [
+  { id: "Good", label: "Good" },
+  { id: "Damaged", label: "Damaged" },
+  { id: "Short", label: "Short" },
+  { id: "Over", label: "Over" },
+];
 const RECEIVING_ITEM = resolveInventoryIdentity("930000000004");
 const MOCK_PRODUCT = {
   name: RECEIVING_ITEM?.name || "Greek Yoghurt 1kg",
@@ -119,21 +124,13 @@ export default function Receiving() {
               </div>
             </div>
 
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Condition</p>
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {CONDITIONS.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    onClick={() => { setCondition(option); setDoneState(null); }}
-                    className={`rounded-xl px-3 py-3 text-sm font-bold active:scale-[0.98] ${condition === option ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
-                  >
-                    {option}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <TouchSelect
+              label="Condition"
+              value={condition}
+              onChange={(next) => { setCondition(next); setDoneState(null); }}
+              options={CONDITIONS}
+              placeholder="Select condition"
+            />
           </section>
         )}
 

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import PageHeader from "../components/scanner/PageHeader";
 import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
 import DecisionRecommendationCard from "../components/scanner/DecisionRecommendationCard";
+import TouchSelect from "../components/scanner/TouchSelect";
 import NumericKeypad from "../components/scanner/NumericKeypad";
 import { useToast } from "@/components/ui/use-toast";
 import { AlertTriangle, CheckCircle2, Home, Minus, PackageCheck, Plus, RotateCcw } from "lucide-react";
@@ -16,7 +17,12 @@ const BUTTON_SECONDARY = "w-full py-4 rounded-2xl bg-secondary text-secondary-fo
 const SOFT_BUTTON = "w-full rounded-2xl bg-secondary text-secondary-foreground px-4 py-4 text-sm font-bold active:scale-[0.98] active:bg-border transition-all text-center break-words";
 
 const STEPS = { SCAN: "scan", RESULT: "result", ISSUE: "issue", CREATED: "created", COMPLETED: "completed" };
-const ISSUE_REASONS = ["No stock found", "Wrong location", "Damaged stock", "Label issue"];
+const ISSUE_REASONS = [
+  { id: "No stock found", label: "No stock found" },
+  { id: "Wrong location", label: "Wrong location" },
+  { id: "Damaged stock", label: "Damaged stock" },
+  { id: "Label issue", label: "Label issue" },
+];
 
 export default function Replenish() {
   const navigate = useNavigate();
@@ -204,11 +210,15 @@ export default function Replenish() {
                 </div>
               </div>
             </section>
-            <div className="space-y-2">
-              {ISSUE_REASONS.map((reason) => (
-                <button key={reason} onClick={() => setSelectedIssue(reason)} className={`w-full py-4 px-5 rounded-2xl border text-sm font-semibold text-left transition-all active:scale-[0.99] ${selectedIssue === reason ? "bg-primary border-primary text-primary-foreground" : "bg-card border-border text-foreground"}`}>{reason}</button>
-              ))}
-            </div>
+            <section className="scanops-compact-card">
+              <TouchSelect
+                label="Issue reason"
+                value={selectedIssue || ""}
+                onChange={setSelectedIssue}
+                options={ISSUE_REASONS}
+                placeholder="Select issue reason"
+              />
+            </section>
             <button onClick={recordIssue} disabled={!selectedIssue} className={BUTTON_PRIMARY}>Record Issue</button>
           </div>
         )}

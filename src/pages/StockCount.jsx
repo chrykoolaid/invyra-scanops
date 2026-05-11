@@ -14,6 +14,7 @@ import {
 import PageHeader from "../components/scanner/PageHeader";
 import ScanPlaceholder from "../components/scanner/ScanPlaceholder";
 import NumericKeypad from "../components/scanner/NumericKeypad";
+import TouchSelect from "../components/scanner/TouchSelect";
 import { useToast } from "@/components/ui/use-toast";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { getLocalInventorySnapshot, resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
@@ -40,12 +41,12 @@ const SCREENS = {
 const DEFAULT_SCAN_VALUE = "930000000010";
 
 const VARIANCE_REASONS = [
-  "Shelf count mismatch",
-  "Backroom stock found",
-  "Damaged / unsaleable",
-  "Theft / shrink",
-  "Previous movement not updated",
-  "Other",
+  { id: "Shelf count mismatch", label: "Shelf count mismatch" },
+  { id: "Backroom stock found", label: "Backroom stock found" },
+  { id: "Damaged / unsaleable", label: "Damaged / unsaleable" },
+  { id: "Theft / shrink", label: "Theft / shrink" },
+  { id: "Previous movement not updated", label: "Previous movement not updated" },
+  { id: "Other", label: "Other" },
 ];
 
 const MODE_ICONS = {
@@ -503,21 +504,15 @@ function CountStep({
       <NumericKeypad value={counted} onChange={setCounted} allowDecimal={allowDecimal} />
 
       {hasVariance && (
-        <div className="rounded-2xl border border-border bg-card p-4">
-          <p className="text-sm font-bold text-foreground">Variance reason</p>
-          <p className="mt-1 text-xs text-muted-foreground">Reason is recorded for review. It does not approve a stock adjustment.</p>
-          <div className="mt-3 space-y-2">
-            {VARIANCE_REASONS.map((item) => (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setReason(item)}
-                className={`w-full rounded-xl border px-3 py-3 text-left text-xs font-bold active:scale-[0.99] ${reason === item ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-foreground"}`}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
+        <div className="scanops-compact-card space-y-2">
+          <TouchSelect
+            label="Variance reason"
+            helper="Reason is recorded for review. It does not approve a stock adjustment."
+            value={reason}
+            onChange={setReason}
+            options={VARIANCE_REASONS}
+            placeholder="Select variance reason"
+          />
         </div>
       )}
 
