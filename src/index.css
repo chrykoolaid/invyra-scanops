@@ -278,15 +278,14 @@ body {
   margin-bottom: -3.5rem;
 }
 
-/* Stage M.1.6 keyboard lift fix
- * The Base44/desktop phone preview crops panels that sit near the preview's lower
- * browser edge. Keep the fallback keyboard fixed, but float it well above the
- * lower boundary so the full key grid remains visible.
+/* Stage M.1.7 keyboard key sizing polish
+ * Keep the accepted lifted keyboard position, but give each key more touch
+ * height and breathing room so the manual keyboard does not feel cramped.
  */
 .scanops-keyboard-fallback {
   box-sizing: border-box;
   bottom: max(6.75rem, env(safe-area-inset-bottom)) !important;
-  max-height: min(8.1rem, 24dvh);
+  max-height: min(10.5rem, 31dvh);
   overflow: visible;
   border-radius: 1rem;
 }
@@ -297,19 +296,23 @@ body {
 }
 
 .scanops-kbd-key {
-  height: 1.22rem;
+  height: 1.56rem;
+  min-height: 1.56rem;
   line-height: 1;
+  border-radius: 0.75rem;
 }
 
 .scanops-kbd-action {
-  height: 1.34rem;
+  height: 1.7rem;
+  min-height: 1.7rem;
   line-height: 1;
+  border-radius: 0.75rem;
 }
 
 .scanops-keyboard-open .scanops-root-shell main {
-  padding-bottom: max(18rem, env(safe-area-inset-bottom)) !important;
+  padding-bottom: max(20rem, env(safe-area-inset-bottom)) !important;
 }
 
 .scanops-keyboard-open .scanops-root-shell .scanops-sticky-actions {
-  bottom: 15.75rem;
+  bottom: 17.5rem;
 }

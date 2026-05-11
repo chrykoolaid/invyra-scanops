@@ -357,7 +357,7 @@ export default function WorkflowHeader({
                       ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
                       ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
                     ].map((row, rowIndex) => (
-                      <div key={rowIndex} className="mb-0.5 flex justify-center gap-0.5">
+                      <div key={rowIndex} className="mb-1 flex justify-center gap-1">
                         {row.map((key) => {
                           const visibleKey = keyboardCaps ? key.toUpperCase() : key;
                           return (
@@ -376,7 +376,7 @@ export default function WorkflowHeader({
                         })}
                       </div>
                     ))}
-                    <div className="mb-0.5 grid grid-cols-[1.1fr_repeat(7,1fr)_1.35fr] gap-0.5">
+                    <div className="mb-1 grid grid-cols-[1.1fr_repeat(7,1fr)_1.35fr] gap-1">
                       <button
                         type="button"
                         aria-pressed={keyboardCaps}
@@ -415,7 +415,7 @@ export default function WorkflowHeader({
                         Del
                       </button>
                     </div>
-                    <div className="grid grid-cols-[0.9fr_0.7fr_2.2fr_1.15fr] gap-0.5">
+                    <div className="grid grid-cols-[0.9fr_0.7fr_2.2fr_1.15fr] gap-1">
                       <button
                         type="button"
                         className="scanops-kbd-action rounded-md bg-secondary px-1 text-[10px] font-black text-foreground active:bg-border"
@@ -465,7 +465,7 @@ export default function WorkflowHeader({
                       ["-", "/", ".", "#", "A", "B", "C", "D", "E", "F"],
                       ["G", "H", "I", "J", "K", "L", "M", "N", "O", "P"],
                     ].map((row, rowIndex) => (
-                      <div key={rowIndex} className="mb-0.5 flex justify-center gap-0.5">
+                      <div key={rowIndex} className="mb-1 flex justify-center gap-1">
                         {row.map((key) => (
                           <button
                             key={key}
@@ -481,7 +481,7 @@ export default function WorkflowHeader({
                         ))}
                       </div>
                     ))}
-                    <div className="grid grid-cols-[0.9fr_2.3fr_1fr_1.15fr] gap-0.5">
+                    <div className="grid grid-cols-[0.9fr_2.3fr_1fr_1.15fr] gap-1">
                       <button
                         type="button"
                         className="scanops-kbd-action rounded-md bg-secondary px-1 text-[10px] font-black text-foreground active:bg-border"
