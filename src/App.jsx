@@ -1,7 +1,8 @@
+import React from "react";
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
@@ -19,6 +20,28 @@ import Tasks from './pages/Tasks';
 import InventorySync from './pages/InventorySync';
 import ShelfTickets from './pages/ShelfTickets';
 import Transfers from './pages/Transfers';
+
+
+const ScrollToTopOnRouteChange = () => {
+  const { pathname } = useLocation();
+
+  React.useEffect(() => {
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+
+    const root = document.getElementById('root');
+    if (root) root.scrollTop = 0;
+
+    requestAnimationFrame(() => {
+      document.querySelectorAll('main, [data-scanops-scroll]').forEach((node) => {
+        node.scrollTop = 0;
+      });
+    });
+  }, [pathname]);
+
+  return null;
+};
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -45,23 +68,26 @@ const AuthenticatedApp = () => {
 
   // Render the main app
   return (
-    <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="/scan" element={<Scan />} />
-      <Route path="/product/:id" element={<ProductLookup />} />
-      <Route path="/stock-count" element={<StockCount />} />
-      <Route path="/receiving" element={<Receiving />} />
-      <Route path="/replenish" element={<Replenish />} />
-      <Route path="/gap-scan" element={<GapScan />} />
-      <Route path="/markdowns" element={<Markdowns />} />
-      <Route path="/waste" element={<Waste />} />
-      <Route path="/expiry-check" element={<ExpiryCheck />} />
-      <Route path="/tasks" element={<Tasks />} />
-      <Route path="/inventory-sync" element={<InventorySync />} />
-      <Route path="/shelf-tickets" element={<ShelfTickets />} />
-      <Route path="/transfers" element={<Transfers />} />
-      <Route path="*" element={<PageNotFound />} />
-    </Routes>
+    <div className="scanops-root-shell">
+      <ScrollToTopOnRouteChange />
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/scan" element={<Scan />} />
+        <Route path="/product/:id" element={<ProductLookup />} />
+        <Route path="/stock-count" element={<StockCount />} />
+        <Route path="/receiving" element={<Receiving />} />
+        <Route path="/replenish" element={<Replenish />} />
+        <Route path="/gap-scan" element={<GapScan />} />
+        <Route path="/markdowns" element={<Markdowns />} />
+        <Route path="/waste" element={<Waste />} />
+        <Route path="/expiry-check" element={<ExpiryCheck />} />
+        <Route path="/tasks" element={<Tasks />} />
+        <Route path="/inventory-sync" element={<InventorySync />} />
+        <Route path="/shelf-tickets" element={<ShelfTickets />} />
+        <Route path="/transfers" element={<Transfers />} />
+        <Route path="*" element={<PageNotFound />} />
+      </Routes>
+    </div>
   );
 };
 
