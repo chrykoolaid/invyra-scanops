@@ -2,6 +2,7 @@ import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "./scanOpsEvents";
 import { getAllPricePromoVerificationEvents, PRICE_PROMO_RESULTS } from "./scanOpsPricePromoVerification";
 import { buildEventIdentity, getScanOpsSession } from "./scanOpsSession";
 import { buildGovernanceSnapshot } from "./scanOpsGovernance";
+import { COLLABORATION_STATES, COLLABORATION_VERSION, TASK_TYPES, registerCollaborationTaskForRecord } from "./scanOpsCollaboration";
 
 const REQUESTS_KEY = "invyra_scanops_shelf_ticket_queue_requests_v2";
 const CONTRACTS_KEY = "invyra_scanops_shelf_ticket_print_contracts_v1";
@@ -127,10 +128,11 @@ function itemNameFromSnapshot(snapshot = {}) {
 function normalizeRequest(input = {}) {
   const createdAt = input.createdAt || nowIso();
   const sourceType = input.sourceType || SHELF_TICKET_SOURCE_TYPES.MANUAL_SHELF_TICKET;
+  const requestId = input.requestId || makeId("shelf_ticket_req");
   const actor = getActorSnapshot();
   const actorInput = input.actorSnapshot || {};
   return {
-    requestId: input.requestId || makeId("shelf_ticket_req"),
+    requestId,
     sourceEventId: input.sourceEventId || null,
     sourceWorkflow: input.sourceWorkflow || "shelf_tickets",
     sourceType,
@@ -159,6 +161,11 @@ function normalizeRequest(input = {}) {
     quantity: Math.max(1, Number(input.quantity || 1)),
     copies: Math.max(1, Number(input.copies || 1)),
     itemSnapshot: input.itemSnapshot || null,
+
+    collaborationVersion: input.collaborationVersion || COLLABORATION_VERSION,
+    collaborationTaskId: input.collaborationTaskId || `task_${requestId}`,
+    collaborationOwnershipStatus: input.collaborationOwnershipStatus || COLLABORATION_STATES.TASK_CLAIMED,
+    collaborationSyncStatus: input.collaborationSyncStatus || "SYNC_DEFERRED",
 
     requestedBy: input.requestedBy || actorInput.requestedBy || actor.requestedBy,
     requestedByRole: input.requestedByRole || actorInput.requestedByRole || actor.requestedByRole,
@@ -215,6 +222,16 @@ export function saveShelfTicketQueueRequest(request) {
   const current = getShelfTicketQueueRequests();
   const next = [normalized, ...current.filter((entry) => entry.requestId !== normalized.requestId)].slice(0, MAX_RECORDS);
   safeWrite(REQUESTS_KEY, next);
+  registerCollaborationTaskForRecord({
+    taskId: normalized.collaborationTaskId || `task_${normalized.requestId}`,
+    taskType: TASK_TYPES.SHELF_TICKET,
+    taskLabel: `Shelf Ticket · ${normalized.itemName}`,
+    taskSummary: `${normalized.sourceLabel} · ${normalized.quantity} ticket${normalized.quantity === 1 ? "" : "s"}`,
+    sourceWorkflow: "Shelf Tickets",
+    sourceRecordId: normalized.requestId,
+    ownerMode: "current",
+    conflictRisk: normalized.status === SHELF_TICKET_STATUSES.NEEDS_REVIEW ? "HIGH" : "LOW",
+  });
   return normalized;
 }
 

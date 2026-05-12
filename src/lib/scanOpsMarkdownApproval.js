@@ -10,6 +10,7 @@ import {
 import { getCurrentPriceSnapshot, getCurrencySymbol, getOptionLabel, MARKDOWN_REASON_OPTIONS } from "./scanOpsRequestLifecycle";
 import { normalizeSelectedScanItem } from "./scanOpsWorkflowBatch";
 import { buildGovernanceSnapshot } from "./scanOpsGovernance";
+import { COLLABORATION_STATES, COLLABORATION_VERSION, TASK_TYPES, registerCollaborationTaskForRecord } from "./scanOpsCollaboration";
 
 const REQUESTS_KEY = "invyra_scanops_markdown_approval_requests_v1";
 const EVENTS_KEY = "invyra_scanops_markdown_approval_events_v1";
@@ -259,12 +260,13 @@ function normalizeRequest(input = {}) {
     quantity: input.quantity,
   });
   const actor = actorSnapshot();
+  const requestId = input.requestId || makeId("md_req");
   const actorInput = input.actorSnapshot || {};
   const status = input.status || rule.status || MARKDOWN_STATUSES.DRAFT;
   const selectedMarkdownPrice = numberOrNull(input.selectedMarkdownPrice ?? rule.selectedMarkdownPrice);
 
   return {
-    requestId: input.requestId || makeId("md_req"),
+    requestId,
     requestVersion: MARKDOWN_REQUEST_VERSION,
     status,
 
@@ -331,6 +333,10 @@ function normalizeRequest(input = {}) {
     locationName: input.locationName || actorInput.locationName || actor.locationName,
     attributeSnapshot: input.attributeSnapshot || null,
     rawItem: input.rawItem || null,
+    collaborationVersion: input.collaborationVersion || COLLABORATION_VERSION,
+    collaborationTaskId: input.collaborationTaskId || `task_${requestId}`,
+    collaborationOwnershipStatus: input.collaborationOwnershipStatus || COLLABORATION_STATES.TASK_CLAIMED,
+    collaborationSyncStatus: input.collaborationSyncStatus || "SYNC_DEFERRED",
     createdAt,
     submittedAt: input.submittedAt || (status === MARKDOWN_STATUSES.DRAFT ? null : createdAt),
     updatedAt: input.updatedAt || createdAt,
@@ -395,6 +401,17 @@ export function createMarkdownApprovalRequest({ item, reasonCode, selectedMarkdo
     applies_price_directly: false,
     printer_connection_deferred: true,
   });
+  registerCollaborationTaskForRecord({
+    taskId: request.collaborationTaskId || `task_${request.requestId}`,
+    taskType: TASK_TYPES.MARKDOWN_APPROVAL,
+    taskLabel: `Markdown Approval · ${request.itemName}`,
+    taskSummary: `${request.selectedMarkdownPercent}% off · ${request.reasonLabel}`,
+    sourceWorkflow: "Markdown Approval",
+    sourceRecordId: request.requestId,
+    ownerMode: "current",
+    conflictRisk: request.approvalRoleRequired === "Manager" ? "HIGH" : "LOW",
+  });
+
   createScanOpsEvent(SCANOPS_EVENT_TYPES.MARKDOWN_REQUEST_CREATED, {
     source_module: "Markdowns",
     markdown_request_id: request.requestId,

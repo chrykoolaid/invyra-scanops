@@ -24,6 +24,7 @@ import Transfers from './pages/Transfers';
 import ProductIdentityReview from './pages/ProductIdentityReview';
 import ScanOpsReporting from './pages/ScanOpsReporting';
 import DeviceGovernance from './pages/DeviceGovernance';
+import SessionCollaboration from './pages/SessionCollaboration';
 
 
 const ScrollToTopOnRouteChange = () => {
@@ -94,6 +95,7 @@ const AuthenticatedApp = () => {
         <Route path="/product-identity-review" element={<ProductIdentityReview />} />
         <Route path="/scanops-reporting" element={<ScanOpsReporting />} />
         <Route path="/device-governance" element={<DeviceGovernance />} />
+        <Route path="/session-collaboration" element={<SessionCollaboration />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>
     </div>

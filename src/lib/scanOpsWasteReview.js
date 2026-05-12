@@ -9,6 +9,7 @@ import {
   canPerformScanOpsAction,
   recordGovernedAction,
 } from "./scanOpsGovernance";
+import { COLLABORATION_STATES, COLLABORATION_VERSION, TASK_TYPES, registerCollaborationTaskForRecord } from "./scanOpsCollaboration";
 
 const REVIEWS_KEY = "invyra_scanops_waste_reviews_v1";
 const EVENTS_KEY = "invyra_scanops_waste_review_events_v1";
@@ -247,10 +248,11 @@ function normalizeReview(input = {}) {
     reviewType: input.reviewType || reason.reviewType,
   });
   const identity = identitySnapshot();
+  const reviewId = input.reviewId || makeId("waste_review");
   const status = input.status || WASTE_REVIEW_STATUSES.DRAFT;
 
   return {
-    reviewId: input.reviewId || makeId("waste_review"),
+    reviewId,
     reviewVersion: WASTE_REVIEW_VERSION,
 
     status,
@@ -314,6 +316,10 @@ function normalizeReview(input = {}) {
     storeId: input.storeId || identity.storeId,
 
     rawItem: input.rawItem || null,
+    collaborationVersion: input.collaborationVersion || COLLABORATION_VERSION,
+    collaborationTaskId: input.collaborationTaskId || `task_${reviewId}`,
+    collaborationOwnershipStatus: input.collaborationOwnershipStatus || COLLABORATION_STATES.TASK_CLAIMED,
+    collaborationSyncStatus: input.collaborationSyncStatus || "SYNC_DEFERRED",
     createdAt,
     submittedAt: input.submittedAt || null,
     updatedAt: input.updatedAt || createdAt,
@@ -439,6 +445,17 @@ export function createWasteReviewDraft({ item, reasonCode, quantity, expiryDate,
     evidenceStatus: evidenceNote ? "NOTE_CAPTURED_ATTACHMENT_DEFERRED" : "NOTE_REQUIRED",
   });
   appendWasteReviewEvent(SCANOPS_EVENT_TYPES.WASTE_REVIEW_DRAFT_SAVED, review, { applies_stock_directly: false });
+  registerCollaborationTaskForRecord({
+    taskId: review.collaborationTaskId || `task_${review.reviewId}`,
+    taskType: TASK_TYPES.WASTE_REVIEW,
+    taskLabel: `Waste Review · ${review.itemName}`,
+    taskSummary: `${review.reasonLabel} · ${review.quantity} ${review.unitOfMeasure}`,
+    sourceWorkflow: "Waste Review",
+    sourceRecordId: review.reviewId,
+    ownerMode: "current",
+    conflictRisk: review.managerReviewRequired ? "HIGH" : "LOW",
+  });
+
   createScanOpsEvent(SCANOPS_EVENT_TYPES.WASTE_REVIEW_DRAFT_SAVED, {
     source_module: "Waste Review",
     review_id: review.reviewId,

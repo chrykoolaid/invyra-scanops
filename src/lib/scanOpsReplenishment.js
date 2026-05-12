@@ -1,4 +1,5 @@
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "./scanOpsEvents";
+import { COLLABORATION_STATES, COLLABORATION_VERSION, TASK_TYPES, registerCollaborationTaskForRecord } from "./scanOpsCollaboration";
 import { buildEventIdentity, getScanOpsSession } from "./scanOpsSession";
 
 const STORAGE_KEY = "invyra_scanops_replenishment_tasks_v1";
@@ -218,6 +219,10 @@ export function saveReplenishmentAction({ item, actionId, quantity, issueReason,
     shelf_need_snapshot: need,
     applies_stock_directly: false,
     requiresManagerReview: action.status === REPLENISHMENT_STATUS.REVIEW_REQUIRED,
+    collaborationVersion: COLLABORATION_VERSION,
+    collaborationTaskId: `task_${makeId("repl_collab")}`,
+    collaborationOwnershipStatus: COLLABORATION_STATES.TASK_CLAIMED,
+    collaborationSyncStatus: "SYNC_DEFERRED",
     createdAt: identity.created_at,
     created_at: identity.created_at,
     updatedAt: identity.created_at,
@@ -231,8 +236,20 @@ export function saveReplenishmentAction({ item, actionId, quantity, issueReason,
     traceId: makeId("trace_repl"),
   };
 
+  task.collaborationTaskId = `task_${task.replenishmentTaskId}`;
   const next = [task, ...readTasks()].slice(0, MAX_RECORDS);
   writeTasks(next);
+
+  registerCollaborationTaskForRecord({
+    taskId: task.collaborationTaskId,
+    taskType: TASK_TYPES.REPLENISHMENT,
+    taskLabel: task.outcome === REPLENISHMENT_OUTCOMES.TASK_CREATED ? `Replenish ${snapshot.name}` : `${action.label} · ${snapshot.name}`,
+    taskSummary: `${need.backroomLocation} to ${need.shelfLocation} · ${qty} ${need.unit}`,
+    sourceWorkflow: "Replenishment",
+    sourceRecordId: task.replenishmentTaskId,
+    ownerMode: "current",
+    conflictRisk: task.requiresManagerReview ? "HIGH" : "LOW",
+  });
 
   const event = createScanOpsEvent(action.eventType, {
     traceId: task.traceId,

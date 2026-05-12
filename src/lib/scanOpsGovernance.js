@@ -43,6 +43,16 @@ export const GOVERNED_ACTIONS = {
   SHIFT_END: "SHIFT_END",
   DEVICE_CONTEXT_VIEW: "DEVICE_CONTEXT_VIEW",
   DEMO_ROLE_SWITCH: "DEMO_ROLE_SWITCH",
+  COLLAB_TASK_CLAIM: "COLLAB_TASK_CLAIM",
+  COLLAB_TASK_RELEASE_OWN: "COLLAB_TASK_RELEASE_OWN",
+  COLLAB_TASK_RELEASE_OTHER: "COLLAB_TASK_RELEASE_OTHER",
+  COLLAB_TASK_TAKEOVER_REQUEST: "COLLAB_TASK_TAKEOVER_REQUEST",
+  COLLAB_TASK_TAKEOVER_APPROVE: "COLLAB_TASK_TAKEOVER_APPROVE",
+  COLLAB_TASK_FORCE_RELEASE: "COLLAB_TASK_FORCE_RELEASE",
+  COLLAB_CONFLICT_VIEW: "COLLAB_CONFLICT_VIEW",
+  COLLAB_CONFLICT_RESOLVE: "COLLAB_CONFLICT_RESOLVE",
+  COLLAB_CONFLICT_RESOLVE_HIGH: "COLLAB_CONFLICT_RESOLVE_HIGH",
+  COLLAB_REMOTE_TASK_VIEW: "COLLAB_REMOTE_TASK_VIEW",
 };
 
 const ROLE_LEVELS = { Staff: 1, Supervisor: 2, Manager: 3, Admin: 4 };
@@ -61,6 +71,16 @@ const ACTION_POLICIES = {
   [GOVERNED_ACTIONS.SHIFT_END]: { requiredRole: "Staff", shiftRequired: false, label: "End shift" },
   [GOVERNED_ACTIONS.DEVICE_CONTEXT_VIEW]: { requiredRole: "Staff", shiftRequired: false, label: "View device context" },
   [GOVERNED_ACTIONS.DEMO_ROLE_SWITCH]: { requiredRole: "Admin", shiftRequired: false, label: "Switch local/demo preview role" },
+  [GOVERNED_ACTIONS.COLLAB_TASK_CLAIM]: { requiredRole: "Staff", shiftRequired: true, label: "Claim shared task" },
+  [GOVERNED_ACTIONS.COLLAB_TASK_RELEASE_OWN]: { requiredRole: "Staff", shiftRequired: true, label: "Release own shared task" },
+  [GOVERNED_ACTIONS.COLLAB_TASK_RELEASE_OTHER]: { requiredRole: "Manager", shiftRequired: true, label: "Release another device task" },
+  [GOVERNED_ACTIONS.COLLAB_TASK_TAKEOVER_REQUEST]: { requiredRole: "Staff", shiftRequired: true, label: "Request shared task takeover" },
+  [GOVERNED_ACTIONS.COLLAB_TASK_TAKEOVER_APPROVE]: { requiredRole: "Supervisor", shiftRequired: true, label: "Approve shared task takeover" },
+  [GOVERNED_ACTIONS.COLLAB_TASK_FORCE_RELEASE]: { requiredRole: "Manager", shiftRequired: true, label: "Force-release abandoned task" },
+  [GOVERNED_ACTIONS.COLLAB_CONFLICT_VIEW]: { requiredRole: "Staff", shiftRequired: true, label: "View collaboration conflict" },
+  [GOVERNED_ACTIONS.COLLAB_CONFLICT_RESOLVE]: { requiredRole: "Supervisor", shiftRequired: true, label: "Resolve low-risk collaboration conflict" },
+  [GOVERNED_ACTIONS.COLLAB_CONFLICT_RESOLVE_HIGH]: { requiredRole: "Manager", shiftRequired: true, label: "Resolve high-risk collaboration conflict" },
+  [GOVERNED_ACTIONS.COLLAB_REMOTE_TASK_VIEW]: { requiredRole: "Staff", shiftRequired: true, label: "View remote-owned shared task" },
 };
 
 function nowIso() {
