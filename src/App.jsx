@@ -27,6 +27,7 @@ import DeviceGovernance from './pages/DeviceGovernance';
 import SessionCollaboration from './pages/SessionCollaboration';
 import DesktopSyncContract from './pages/DesktopSyncContract';
 import StoreOpsDashboard from './pages/StoreOpsDashboard';
+import PilotReadiness from './pages/PilotReadiness';
 
 
 const ScrollToTopOnRouteChange = () => {
@@ -100,6 +101,7 @@ const AuthenticatedApp = () => {
         <Route path="/session-collaboration" element={<SessionCollaboration />} />
         <Route path="/desktop-sync-contract" element={<DesktopSyncContract />} />
         <Route path="/store-ops-dashboard" element={<StoreOpsDashboard />} />
+        <Route path="/pilot-readiness" element={<PilotReadiness />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>
     </div>
