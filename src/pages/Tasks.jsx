@@ -1,123 +1,241 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import PageHeader from "../components/scanner/PageHeader";
 import {
+  AlertTriangle,
   ArrowRight,
   CheckCircle2,
   ClipboardCheck,
   Clock3,
   Flag,
+  Link2,
   ListChecks,
+  Lock,
   Play,
   RotateCcw,
   ShieldAlert,
+  UserPlus,
 } from "lucide-react";
-import { SCANOPS_USER_CONTEXT } from "../lib/scanOpsInventoryFixtures";
+import PageHeader from "../components/scanner/PageHeader";
+import TouchSelect from "../components/scanner/TouchSelect";
+import { SectionCard, TextInputField } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
+import { useScanOpsSession } from "../lib/scanOpsSession";
 import {
   buildTaskEventPayload,
+  canCancelTask,
   canCompleteTask,
+  canEscalateTask,
+  canReassignTask,
   canStartTask,
   filterTasks,
   getInitialTaskQueue,
+  getTaskDueStateLabel,
   getTaskLinkedWorkflow,
   getTaskPriority,
+  getTaskSourceOptions,
+  getTaskStats,
   getTaskStatusLabel,
-  getTaskTypeLabel,
+  normalizeTask,
+  reassignTask,
   resetTaskQueue,
-  TASK_FILTERS,
+  sortTasksByOperationalPriority,
+  TASK_DEPARTMENTS,
+  TASK_DUE_STATES,
   TASK_PRIORITIES,
   TASK_STATUSES,
+  TASK_TABS,
   updateTaskStatus,
 } from "../lib/scanOpsTasks";
 
-const BUTTON_PRIMARY = "w-full py-4 rounded-2xl bg-primary text-primary-foreground font-bold text-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:active:scale-100";
-const BUTTON_SECONDARY = "w-full py-4 rounded-2xl bg-secondary text-secondary-foreground font-bold text-sm active:scale-[0.98] active:bg-border transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:active:scale-100";
-const BUTTON_MUTED = "w-full py-4 rounded-2xl bg-background border border-border text-foreground font-bold text-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:active:scale-100";
-const CHIP_BUTTON = "rounded-2xl px-3 py-3 text-xs font-black border transition-all active:scale-[0.98] whitespace-nowrap";
+const BUTTON_PRIMARY = "w-full min-h-12 rounded-2xl bg-primary px-3 text-sm font-black text-primary-foreground active:scale-[0.98] disabled:opacity-40 disabled:active:scale-100 flex items-center justify-center gap-2";
+const BUTTON_SECONDARY = "w-full min-h-12 rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border disabled:opacity-40 flex items-center justify-center gap-2";
+const BUTTON_MUTED = "w-full min-h-12 rounded-2xl border border-border bg-card px-3 text-sm font-black text-foreground active:bg-secondary disabled:opacity-40 flex items-center justify-center gap-2";
+const CHIP_BUTTON = "min-h-11 rounded-2xl px-3 text-xs font-black border transition-all active:scale-[0.98] whitespace-nowrap";
+
+const PRIORITY_OPTIONS = [
+  { id: "all", label: "All" },
+  { id: TASK_PRIORITIES.CRITICAL, label: "Critical" },
+  { id: TASK_PRIORITIES.HIGH, label: "High" },
+  { id: TASK_PRIORITIES.MEDIUM, label: "Medium" },
+  { id: TASK_PRIORITIES.LOW, label: "Low" },
+];
+
+const DUE_OPTIONS = [
+  { id: "all", label: "All" },
+  { id: TASK_DUE_STATES.OVERDUE, label: "Overdue" },
+  { id: TASK_DUE_STATES.NOW, label: "Due now" },
+  { id: TASK_DUE_STATES.TODAY, label: "Due today" },
+  { id: TASK_DUE_STATES.LATER, label: "Due later" },
+  { id: TASK_DUE_STATES.NONE, label: "No due date" },
+];
+
+const STATUS_OPTIONS = [
+  { id: "all", label: "All" },
+  { id: TASK_STATUSES.OPEN, label: "Open" },
+  { id: TASK_STATUSES.IN_PROGRESS, label: "In Progress" },
+  { id: TASK_STATUSES.BLOCKED, label: "Blocked" },
+  { id: TASK_STATUSES.ESCALATED, label: "Escalated" },
+  { id: TASK_STATUSES.DONE, label: "Done" },
+];
+
+const ASSIGNED_OPTIONS = [
+  { id: "all", label: "All" },
+  { id: "mine", label: "My scope" },
+  { id: "department", label: "My department" },
+  { id: "unassigned", label: "Unassigned" },
+  ...TASK_DEPARTMENTS.map((department) => ({ id: department, label: department })),
+];
 
 function priorityClass(priority) {
   switch (priority) {
-    case TASK_PRIORITIES.URGENT:
-      return "bg-destructive/10 text-destructive border-destructive/20";
+    case TASK_PRIORITIES.CRITICAL:
+      return "border-destructive/25 bg-destructive/10 text-destructive";
     case TASK_PRIORITIES.HIGH:
-      return "bg-amber-500/10 text-amber-700 border-amber-500/20";
+      return "border-amber-500/25 bg-amber-500/10 text-amber-700";
     case TASK_PRIORITIES.LOW:
-      return "bg-muted text-muted-foreground border-border";
+      return "border-border bg-muted text-muted-foreground";
     default:
-      return "bg-primary/10 text-primary border-primary/20";
+      return "border-primary/20 bg-primary/10 text-primary";
+  }
+}
+
+function dueClass(dueState) {
+  switch (dueState) {
+    case TASK_DUE_STATES.OVERDUE:
+      return "border-destructive/25 bg-destructive/10 text-destructive";
+    case TASK_DUE_STATES.NOW:
+      return "border-amber-500/25 bg-amber-500/10 text-amber-700";
+    case TASK_DUE_STATES.TODAY:
+      return "border-primary/20 bg-primary/10 text-primary";
+    default:
+      return "border-border bg-secondary text-secondary-foreground";
   }
 }
 
 function statusClass(status) {
   switch (status) {
-    case TASK_STATUSES.COMPLETED:
-      return "bg-emerald-500/10 text-emerald-700 border-emerald-500/20";
+    case TASK_STATUSES.DONE:
+      return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700";
     case TASK_STATUSES.IN_PROGRESS:
-      return "bg-primary/10 text-primary border-primary/20";
+      return "border-primary/20 bg-primary/10 text-primary";
     case TASK_STATUSES.BLOCKED:
-      return "bg-destructive/10 text-destructive border-destructive/20";
-    case TASK_STATUSES.SYNC_PENDING:
-      return "bg-amber-500/10 text-amber-700 border-amber-500/20";
-    case TASK_STATUSES.SYNC_FAILED:
-      return "bg-destructive/10 text-destructive border-destructive/20";
+      return "border-amber-500/25 bg-amber-500/10 text-amber-700";
+    case TASK_STATUSES.ESCALATED:
+      return "border-destructive/25 bg-destructive/10 text-destructive";
     default:
-      return "bg-secondary text-secondary-foreground border-border";
+      return "border-border bg-secondary text-secondary-foreground";
   }
 }
 
-function dueLabel(value) {
-  if (!value) return "No due time";
-  try {
-    const date = new Date(value);
-    return date.toLocaleDateString([], { month: "short", day: "numeric" }) + " · " + date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  } catch {
-    return value;
-  }
+function dueDateLabel(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} · ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
-function sortTasks(a, b) {
-  const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
-  const statusOrder = { in_progress: 0, not_started: 1, blocked: 2, sync_failed: 3, sync_pending: 4, completed: 5, cancelled: 6 };
-  return (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9)
-    || (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9)
-    || String(a.dueAt || "").localeCompare(String(b.dueAt || ""));
+function sourceSnapshotText(task) {
+  const snap = task.source_item_snapshot || {};
+  return [
+    snap.item_name || snap.itemName || snap.name,
+    snap.sku && `SKU ${snap.sku}`,
+    snap.unknown_barcode && `Barcode ${snap.unknown_barcode}`,
+    snap.expected_quantity != null && `Expected ${snap.expected_quantity}`,
+    snap.received_quantity != null && `Received ${snap.received_quantity}`,
+    snap.counted_quantity != null && `Counted ${snap.counted_quantity}`,
+    snap.difference_quantity != null && `Diff ${snap.difference_quantity > 0 ? "+" : ""}${snap.difference_quantity}`,
+    snap.variance_quantity != null && `Variance ${snap.variance_quantity > 0 ? "+" : ""}${snap.variance_quantity}`,
+    snap.item_count != null && `${snap.item_count} items`,
+  ].filter(Boolean).join(" · ");
 }
 
 export default function Tasks() {
   const navigate = useNavigate();
+  const session = useScanOpsSession();
   const [tasks, setTasks] = useState(() => getInitialTaskQueue());
-  const [activeFilter, setActiveFilter] = useState("mine");
-  const [scope, setScope] = useState("mine");
+  const [activeTab, setActiveTab] = useState(() => session.actorRole === "Staff" ? "mine" : "team");
+  const [filters, setFilters] = useState({ assigned: "all", priority: "all", due: "all", source: "all", status: "all" });
   const [selectedTaskId, setSelectedTaskId] = useState(null);
+  const [completionNote, setCompletionNote] = useState("");
+  const [blockReason, setBlockReason] = useState("");
+  const [escalationReason, setEscalationReason] = useState("");
+  const [assignmentDepartment, setAssignmentDepartment] = useState("Grocery");
   const [lastEvent, setLastEvent] = useState(null);
 
-  const selectedTask = useMemo(() => tasks.find((task) => task.taskId === selectedTaskId || task.id === selectedTaskId) || null, [selectedTaskId, tasks]);
-  const filteredTasks = useMemo(() => filterTasks(tasks, activeFilter, SCANOPS_USER_CONTEXT, scope).sort(sortTasks), [tasks, activeFilter, scope]);
-  const stats = useMemo(() => ({
-    active: tasks.filter((task) => ![TASK_STATUSES.COMPLETED, TASK_STATUSES.CANCELLED].includes(task.status)).length,
-    today: filterTasks(tasks, "due_today", SCANOPS_USER_CONTEXT, "team").length,
-    inProgress: tasks.filter((task) => task.status === TASK_STATUSES.IN_PROGRESS).length,
-    issues: tasks.filter((task) => [TASK_STATUSES.BLOCKED, TASK_STATUSES.SYNC_FAILED].includes(task.status)).length,
-  }), [tasks]);
+  const selectedTask = useMemo(() => tasks.map(normalizeTask).find((task) => task.taskId === selectedTaskId || task.id === selectedTaskId) || null, [selectedTaskId, tasks]);
+  const sourceOptions = useMemo(() => getTaskSourceOptions(tasks), [tasks]);
+  const taskFilters = { ...filters, tab: activeTab };
+  const visibleTasks = useMemo(() => sortTasksByOperationalPriority(filterTasks(tasks, taskFilters, session)), [tasks, taskFilters, session]);
+  const stats = useMemo(() => getTaskStats(tasks, session), [tasks, session]);
 
-  const changeFilter = (filterId) => {
-    setActiveFilter(filterId);
-    createScanOpsEvent(SCANOPS_EVENT_TYPES.TASK_FILTER_CHANGED, buildTaskEventPayload({ taskId: "task_filter", title: "Task filter", taskType: "general_check" }, "viewed", { filter_id: filterId, sync_exempt: true }));
+  const updateFilter = (key, value) => {
+    setFilters((current) => ({ ...current, [key]: value }));
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.TASK_FILTER_CHANGED, {
+      source_module: "Tasks",
+      filter_key: key,
+      filter_value: value,
+      sync_exempt: true,
+      status: "viewed",
+    });
   };
 
   const recordAndSet = (task, nextStatus, eventType, extra = {}) => {
-    const updated = updateTaskStatus(tasks, task.taskId, nextStatus, extra);
+    const updated = updateTaskStatus(tasks, task.taskId, nextStatus, extra, session);
     setTasks(updated);
     const nextTask = updated.find((row) => row.taskId === task.taskId) || task;
     setSelectedTaskId(nextTask.taskId);
-    const event = createScanOpsEvent(eventType, buildTaskEventPayload(nextTask, nextStatus, extra));
+    const event = createScanOpsEvent(eventType, buildTaskEventPayload(nextTask, nextStatus, { ...extra, status: nextStatus }));
     setLastEvent(event);
   };
 
   const startTask = (task) => recordAndSet(task, TASK_STATUSES.IN_PROGRESS, SCANOPS_EVENT_TYPES.TASK_STARTED, { status: "in_progress" });
-  const blockTask = (task) => recordAndSet(task, TASK_STATUSES.BLOCKED, SCANOPS_EVENT_TYPES.TASK_BLOCKED, { status: "blocked", blocked_reason: "Operator marked blocked" });
-  const completeTask = (task) => recordAndSet(task, TASK_STATUSES.COMPLETED, SCANOPS_EVENT_TYPES.TASK_COMPLETED, { status: "completed", creates_sync_queue_item: true });
+
+  const markBlocked = (task) => {
+    const reason = blockReason.trim();
+    if (!reason) return;
+    recordAndSet(task, TASK_STATUSES.BLOCKED, SCANOPS_EVENT_TYPES.TASK_BLOCKED, { blocked_reason: reason, status: "blocked" });
+  };
+
+  const escalateTask = (task) => {
+    const reason = escalationReason.trim();
+    if (!reason) return;
+    recordAndSet(task, TASK_STATUSES.ESCALATED, SCANOPS_EVENT_TYPES.TASK_ESCALATED, { escalation_reason: reason, status: "escalated" });
+  };
+
+  const completeTask = (task) => {
+    const note = completionNote.trim();
+    if (!note) return;
+    recordAndSet(task, TASK_STATUSES.DONE, SCANOPS_EVENT_TYPES.TASK_COMPLETED, {
+      completion_note: note,
+      status: "done",
+      creates_sync_queue_item: true,
+      applies_stock_directly: false,
+      closes_source_exception: false,
+      creates_product_directly: false,
+      prints_directly: false,
+    });
+  };
+
+  const cancelTask = (task) => {
+    const reason = blockReason.trim() || "Cancelled from manager/admin task review";
+    recordAndSet(task, TASK_STATUSES.CANCELLED, SCANOPS_EVENT_TYPES.TASK_CANCELLED, { cancelled_reason: reason, status: "cancelled" });
+    setSelectedTaskId(null);
+  };
+
+  const reassignSelectedTask = (task) => {
+    if (!assignmentDepartment) return;
+    const nextTasks = reassignTask(tasks, task.taskId, {
+      assigned_user_id: "team",
+      assigned_user_name: `${assignmentDepartment} Team`,
+      assigned_department: assignmentDepartment,
+      assigned_role: assignmentDepartment === "Manager Review" ? "Manager" : "Staff",
+    }, `Reassigned to ${assignmentDepartment}`, session);
+    setTasks(nextTasks);
+    setSelectedTaskId(task.taskId);
+    const nextTask = nextTasks.find((row) => row.taskId === task.taskId) || task;
+    const event = createScanOpsEvent(SCANOPS_EVENT_TYPES.TASK_REASSIGNED, buildTaskEventPayload(nextTask, nextTask.status, { status: "reassigned" }));
+    setLastEvent(event);
+  };
 
   const openLinkedWorkflow = (task) => {
     const workflow = getTaskLinkedWorkflow(task);
@@ -135,75 +253,123 @@ export default function Tasks() {
     const reset = resetTaskQueue();
     setTasks(reset);
     setSelectedTaskId(null);
-    setActiveFilter("mine");
-    setScope("mine");
+    setFilters({ assigned: "all", priority: "all", due: "all", source: "all", status: "all" });
+    setActiveTab(session.actorRole === "Staff" ? "mine" : "team");
     setLastEvent(null);
   };
 
   if (selectedTask) {
     const workflow = getTaskLinkedWorkflow(selectedTask);
+    const canReassign = canReassignTask(selectedTask, session);
+    const canCancel = canCancelTask(selectedTask, session);
+    const canStart = canStartTask(selectedTask, session);
+    const canComplete = canCompleteTask(selectedTask, session);
+    const canEscalate = canEscalateTask(selectedTask, session);
     return (
       <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
-        <PageHeader title="Task Detail" subtitle="Open linked workflow without auto-submitting" />
-        <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 pb-8 space-y-4">
-          <section className="bg-card rounded-2xl border border-border p-5 space-y-4 min-w-0">
+        <PageHeader title="Task" subtitle="Source-linked work evidence" />
+        <main data-scanops-scroll className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 pb-8 space-y-3">
+          <SectionCard className="space-y-3">
             <div className="flex items-start gap-3 min-w-0">
-              <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                <ClipboardCheck className="w-5 h-5" />
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <ClipboardCheck className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{getTaskTypeLabel(selectedTask.taskType)}</p>
-                <h2 className="text-lg font-black text-foreground mt-1 break-words">{selectedTask.title}</h2>
-                <p className="text-sm text-muted-foreground mt-1 break-words">{selectedTask.description}</p>
+                <p className="text-xs font-black uppercase tracking-wider text-primary">{selectedTask.task_ref}</p>
+                <h2 className="mt-1 break-words text-lg font-black leading-tight text-foreground">{selectedTask.title}</h2>
+                <p className="mt-1 break-words text-sm font-semibold text-muted-foreground">{selectedTask.description}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <InfoPill label="Priority" value={getTaskPriority(selectedTask)} className={priorityClass(selectedTask.priority)} />
-              <InfoPill label="Status" value={getTaskStatusLabel(selectedTask.status)} className={statusClass(selectedTask.status)} />
+            <div className="grid grid-cols-3 gap-2">
+              <Badge label={getTaskPriority(selectedTask)} className={priorityClass(selectedTask.priority)} />
+              <Badge label={getTaskDueStateLabel(selectedTask.due_state)} className={dueClass(selectedTask.due_state)} />
+              <Badge label={getTaskStatusLabel(selectedTask.status)} className={statusClass(selectedTask.status)} />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <InfoBlock label="Area" value={selectedTask.areaName} />
-              <InfoBlock label="Due" value={dueLabel(selectedTask.dueAt)} />
+              <InfoBlock label="Assigned" value={selectedTask.assigned_user_name || selectedTask.assigned_department || "Unassigned"} />
+              <InfoBlock label="Due" value={dueDateLabel(selectedTask.dueAt)} />
+              <InfoBlock label="Department" value={selectedTask.assigned_department} />
+              <InfoBlock label="Role" value={selectedTask.assigned_role} />
             </div>
-            <InfoBlock label="Assigned to" value={selectedTask.assignedToName || "—"} />
-            <InfoBlock label="Instruction" value={selectedTask.description} />
-          </section>
+          </SectionCard>
 
-          <section className="bg-card rounded-2xl border border-border p-5 space-y-3 min-w-0">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Linked workflow</p>
-            <h3 className="text-base font-black text-foreground break-words">{workflow.label}</h3>
-            <p className="text-sm text-muted-foreground break-words">Context can prefill setup. It will not auto-add items, submit evidence, mutate stock, change price, or print tickets.</p>
-            <button onClick={() => openLinkedWorkflow(selectedTask)} className={BUTTON_PRIMARY}>
-              Open {getTaskTypeLabel(selectedTask.taskType)} <ArrowRight className="w-4 h-4" />
+          <SectionCard className="space-y-3">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-secondary text-secondary-foreground">
+                <Link2 className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Source</p>
+                <h3 className="mt-1 break-words text-base font-black text-foreground">{selectedTask.source_module} · {selectedTask.source_ref}</h3>
+                <p className="mt-1 break-words text-xs font-bold text-muted-foreground">{sourceSnapshotText(selectedTask) || selectedTask.source_status_snapshot || "Source evidence linked."}</p>
+              </div>
+            </div>
+            <InfoBlock label="Action needed" value={selectedTask.action_needed} />
+            <InfoBlock label="Evidence required" value={selectedTask.evidence_required} />
+            <p className="rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-bold text-muted-foreground">
+              Completion records task evidence only. It does not post stock, close receiving/transfer exceptions, create products, print tickets, or calculate prices.
+            </p>
+            <button type="button" onClick={() => openLinkedWorkflow(selectedTask)} className={BUTTON_PRIMARY}>
+              Open Source <ArrowRight className="h-4 w-4" />
             </button>
-          </section>
+            <p className="break-words text-xs font-semibold text-muted-foreground">Target: {workflow.label}</p>
+          </SectionCard>
 
           {selectedTask.status === TASK_STATUSES.BLOCKED && (
-            <section className="bg-amber-500/10 rounded-2xl border border-amber-500/20 p-4 min-w-0">
-              <div className="flex items-start gap-3">
-                <ShieldAlert className="w-5 h-5 text-amber-700 shrink-0 mt-0.5" />
-                <div className="min-w-0">
-                  <p className="font-bold text-amber-800">Task is blocked</p>
-                  <p className="text-sm text-amber-800/80 mt-1 break-words">{selectedTask.blockedReason || "Operator marked this task blocked."}</p>
-                </div>
-              </div>
-            </section>
+            <Notice icon={ShieldAlert} title="Blocked" helper={selectedTask.blocked_reason || "Reason required before this task can continue."} />
           )}
+          {selectedTask.status === TASK_STATUSES.ESCALATED && (
+            <Notice icon={AlertTriangle} title="Escalated" helper={selectedTask.escalation_reason || "Supervisor, Manager, or Admin review required."} danger />
+          )}
+          {selectedTask.started_at && <InfoBlock label="Started" value={`${selectedTask.started_by || "Operator"} · ${dueDateLabel(selectedTask.started_at)}`} />}
+          {selectedTask.completed_at && <InfoBlock label="Completed" value={`${selectedTask.completed_by || "Operator"} · ${dueDateLabel(selectedTask.completed_at)}`} />}
 
           {lastEvent && <EventProof event={lastEvent} />}
 
-          <div className="space-y-3">
-            <button onClick={() => startTask(selectedTask)} disabled={!canStartTask(selectedTask, SCANOPS_USER_CONTEXT)} className={BUTTON_PRIMARY}>
-              <Play className="w-4 h-4" />Start Task
-            </button>
-            <button onClick={() => blockTask(selectedTask)} disabled={selectedTask.status === TASK_STATUSES.COMPLETED} className={BUTTON_SECONDARY}>
-              <Flag className="w-4 h-4" />Mark Blocked
-            </button>
-            <button onClick={() => completeTask(selectedTask)} disabled={!canCompleteTask(selectedTask, SCANOPS_USER_CONTEXT)} className={BUTTON_SECONDARY}>
-              <CheckCircle2 className="w-4 h-4" />Complete Task
-            </button>
-            <button onClick={() => setSelectedTaskId(null)} className={BUTTON_MUTED}>Back to Tasks</button>
-          </div>
+          {selectedTask.status !== TASK_STATUSES.DONE && selectedTask.status !== TASK_STATUSES.CANCELLED && (
+            <SectionCard className="space-y-3">
+              <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Task actions</p>
+              <button type="button" onClick={() => startTask(selectedTask)} disabled={!canStart} className={BUTTON_PRIMARY}>
+                <Play className="h-4 w-4" />Start Task
+              </button>
+
+              <TextInputField label="Blocked / cancel reason" value={blockReason} onChange={setBlockReason} placeholder="Required for Blocked. Used as cancel reason for Manager/Admin." />
+              <button type="button" onClick={() => markBlocked(selectedTask)} disabled={!blockReason.trim() || selectedTask.status === TASK_STATUSES.ESCALATED} className={BUTTON_SECONDARY}>
+                <Flag className="h-4 w-4" />Mark Blocked
+              </button>
+
+              <TextInputField label="Escalation reason" value={escalationReason} onChange={setEscalationReason} placeholder="Required to escalate" />
+              <button type="button" onClick={() => escalateTask(selectedTask)} disabled={!canEscalate || !escalationReason.trim()} className={BUTTON_SECONDARY}>
+                <ShieldAlert className="h-4 w-4" />Escalate
+              </button>
+
+              <TextInputField label="Completion note" value={completionNote} onChange={setCompletionNote} placeholder="Required completion evidence" />
+              <button type="button" onClick={() => completeTask(selectedTask)} disabled={!canComplete || !completionNote.trim()} className={BUTTON_SECONDARY}>
+                <CheckCircle2 className="h-4 w-4" />Complete Task
+              </button>
+
+              {canReassign && (
+                <div className="space-y-3 rounded-2xl border border-border bg-card p-3">
+                  <TouchSelect label="Reassign to" value={assignmentDepartment} onChange={setAssignmentDepartment} options={TASK_DEPARTMENTS} />
+                  <button type="button" onClick={() => reassignSelectedTask(selectedTask)} className={BUTTON_MUTED}>
+                    <UserPlus className="h-4 w-4" />Reassign Task
+                  </button>
+                </div>
+              )}
+
+              {canCancel ? (
+                <button type="button" onClick={() => cancelTask(selectedTask)} className={BUTTON_MUTED}>
+                  Cancel Task
+                </button>
+              ) : (
+                <div className="flex items-start gap-2 rounded-2xl bg-secondary/50 px-3 py-2 text-xs font-bold text-muted-foreground">
+                  <Lock className="mt-0.5 h-4 w-4 shrink-0" /> Staff cannot reassign, cancel, or close escalated manager-review tasks.
+                </div>
+              )}
+            </SectionCard>
+          )}
+
+          <button type="button" onClick={() => setSelectedTaskId(null)} className={BUTTON_MUTED}>Back to Tasks</button>
         </main>
       </div>
     );
@@ -211,133 +377,156 @@ export default function Tasks() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
-      <PageHeader title="Tasks" subtitle="Assigned handheld work" />
-      <main className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 pb-8 space-y-4">
-        <section className="bg-card rounded-2xl border border-border p-5 min-w-0">
+      <PageHeader title="Tasks" subtitle="Priority work queue" />
+      <main data-scanops-scroll className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 pb-8 space-y-3">
+        <SectionCard className="space-y-3">
           <div className="flex items-start gap-3">
-            <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
-              <ListChecks className="w-5 h-5" />
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <ListChecks className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-primary uppercase tracking-wider">Stage R Tasks</p>
-              <h2 className="text-lg font-black text-foreground mt-1">Operator task list</h2>
-              <p className="text-sm text-muted-foreground mt-1 break-words">Start work, open the linked workflow, then complete the task. Workflow opening never auto-submits anything.</p>
+              <p className="text-xs font-black uppercase tracking-wider text-primary">Stage X</p>
+              <h2 className="mt-1 text-lg font-black text-foreground">Task Intelligence</h2>
+              <p className="mt-1 break-words text-sm font-semibold text-muted-foreground">Assigned, prioritised, source-linked frontline work.</p>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 mt-4">
-            <button onClick={() => setScope("mine")} className={`${CHIP_BUTTON} ${scope === "mine" ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-secondary-foreground border-border"}`}>My Tasks</button>
-            <button onClick={() => setScope("team")} className={`${CHIP_BUTTON} ${scope === "team" ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-secondary-foreground border-border"}`}>All Team Tasks</button>
+          <div className="grid grid-cols-4 gap-2">
+            <StatCard label="Mine" value={stats.mine} />
+            <StatCard label="Due" value={stats.dueNow} />
+            <StatCard label="Esc." value={stats.escalated} />
+            <StatCard label="Active" value={stats.active} />
           </div>
+        </SectionCard>
+
+        <section className="grid grid-cols-4 gap-2 min-w-0">
+          {TASK_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`${CHIP_BUTTON} ${activeTab === tab.id ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-foreground"}`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </section>
 
-        <section className="grid grid-cols-2 gap-3">
-          <StatCard label="Active" value={stats.active} />
-          <StatCard label="Due Today" value={stats.today} />
-          <StatCard label="In Progress" value={stats.inProgress} />
-          <StatCard label="Issues" value={stats.issues} />
-        </section>
-
-        <section className="bg-card rounded-2xl border border-border p-3 min-w-0">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider px-1 mb-3">Filters</p>
-          <div className="grid grid-cols-2 gap-2">
-            {TASK_FILTERS.map((filter) => (
-              <button key={filter.id} onClick={() => changeFilter(filter.id)} className={`${CHIP_BUTTON} ${activeFilter === filter.id ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-secondary-foreground border-border"}`}>
-                {filter.label}
-              </button>
-            ))}
+        <SectionCard className="space-y-3">
+          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Filters</p>
+          <div className="grid grid-cols-2 gap-3">
+            <TouchSelect label="Assigned to" value={filters.assigned} onChange={(value) => updateFilter("assigned", value)} options={ASSIGNED_OPTIONS} />
+            <TouchSelect label="Priority" value={filters.priority} onChange={(value) => updateFilter("priority", value)} options={PRIORITY_OPTIONS} />
+            <TouchSelect label="Due" value={filters.due} onChange={(value) => updateFilter("due", value)} options={DUE_OPTIONS} />
+            <TouchSelect label="Source" value={filters.source} onChange={(value) => updateFilter("source", value)} options={sourceOptions} />
+            <TouchSelect label="Status" value={filters.status} onChange={(value) => updateFilter("status", value)} options={STATUS_OPTIONS} />
           </div>
-        </section>
+        </SectionCard>
 
         <section className="space-y-3 min-w-0">
-          {filteredTasks.length === 0 ? (
-            <div className="bg-card rounded-2xl border border-border p-5 min-w-0 text-center">
-              <Clock3 className="w-9 h-9 mx-auto text-muted-foreground" />
-              <p className="font-bold text-foreground mt-3">No tasks in this filter</p>
-              <p className="text-sm text-muted-foreground mt-1">Change filter or scope to see other assigned work.</p>
+          {visibleTasks.length === 0 ? (
+            <div className="rounded-2xl border border-border bg-card p-5 text-center">
+              <Clock3 className="mx-auto h-8 w-8 text-muted-foreground" />
+              <p className="mt-3 font-black text-foreground">No tasks here</p>
+              <p className="mt-1 text-sm font-semibold text-muted-foreground">Try another tab or filter.</p>
             </div>
           ) : (
-            filteredTasks.map((task) => <TaskCard key={task.taskId} task={task} onOpen={() => setSelectedTaskId(task.taskId)} />)
+            visibleTasks.map((task) => <TaskCard key={task.taskId} task={task} onOpen={() => setSelectedTaskId(task.taskId)} />)
           )}
         </section>
 
-        <section className="bg-card rounded-2xl border border-border p-4 min-w-0">
+        <SectionCard className="space-y-3">
           <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-secondary text-secondary-foreground flex items-center justify-center shrink-0">
-              <RotateCcw className="w-5 h-5" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-secondary text-secondary-foreground">
+              <RotateCcw className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-bold text-foreground">Testing helper</p>
-              <p className="text-sm text-muted-foreground mt-1 break-words">Reset restores only local task fixtures. It does not create completed workflow history.</p>
+              <p className="font-black text-foreground">Testing helper</p>
+              <p className="mt-1 break-words text-sm font-semibold text-muted-foreground">Resets only local task fixtures. Existing workflow evidence remains untouched.</p>
             </div>
           </div>
-          <button onClick={resetForTesting} className={`${BUTTON_SECONDARY} mt-4`}>
-            <RotateCcw className="w-4 h-4" />Reset Tasks
+          <button type="button" onClick={resetForTesting} className={BUTTON_SECONDARY}>
+            <RotateCcw className="h-4 w-4" />Reset Tasks
           </button>
-        </section>
+        </SectionCard>
       </main>
     </div>
   );
 }
 
-function StatCard({ label, value }) {
-  return (
-    <div className="rounded-2xl bg-card border border-border px-3 py-4 text-center min-w-0">
-      <p className="text-2xl font-black text-foreground leading-none">{value}</p>
-      <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide mt-1 truncate">{label}</p>
-    </div>
-  );
-}
-
 function TaskCard({ task, onOpen }) {
+  const normalized = normalizeTask(task);
+  const sourceText = `${normalized.source_module} · ${normalized.source_ref}`;
   return (
-    <article className="bg-card rounded-2xl border border-border p-4 space-y-3 min-w-0">
+    <article className="rounded-2xl border border-border bg-card p-4 space-y-3 min-w-0">
       <div className="flex items-start justify-between gap-3 min-w-0">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap gap-2 mb-2">
-            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${priorityClass(task.priority)}`}>{getTaskPriority(task)}</span>
-            <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-black ${statusClass(task.status)}`}>{getTaskStatusLabel(task.status)}</span>
+          <div className="mb-2 flex flex-wrap gap-2">
+            <Badge label={getTaskPriority(normalized)} className={priorityClass(normalized.priority)} />
+            <Badge label={getTaskDueStateLabel(normalized.due_state)} className={dueClass(normalized.due_state)} />
+            <Badge label={getTaskStatusLabel(normalized.status)} className={statusClass(normalized.status)} />
           </div>
-          <h3 className="text-base font-black text-foreground break-words">{task.title}</h3>
-          <p className="text-sm text-muted-foreground mt-1 break-words">{getTaskTypeLabel(task.taskType)} · {task.areaName} · Due {dueLabel(task.dueAt)}</p>
+          <h3 className="break-words text-base font-black leading-tight text-foreground">{normalized.title}</h3>
+          <p className="mt-1 break-words text-xs font-bold text-muted-foreground">Source: {sourceText}</p>
+          <p className="mt-1 break-words text-xs font-bold text-muted-foreground">Assigned: {normalized.assigned_user_name || normalized.assigned_department || "Unassigned"}</p>
         </div>
-        <ClipboardCheck className="w-5 h-5 text-primary shrink-0" />
+        <ClipboardCheck className="h-5 w-5 shrink-0 text-primary" />
       </div>
-      <div className="rounded-2xl bg-secondary px-4 py-3 min-w-0">
-        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Instruction</p>
-        <p className="text-sm font-bold text-foreground mt-1 break-words">{task.description}</p>
+      <div className="rounded-2xl bg-secondary/60 px-3 py-2">
+        <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Next action</p>
+        <p className="mt-1 break-words text-sm font-bold text-foreground">{normalized.action_needed}</p>
       </div>
-      <button onClick={onOpen} className={BUTTON_PRIMARY}>{task.status === TASK_STATUSES.IN_PROGRESS ? "Continue" : "Open Task"} <ArrowRight className="w-4 h-4" /></button>
+      <button type="button" onClick={onOpen} className={BUTTON_PRIMARY}>
+        Open Task <ArrowRight className="h-4 w-4" />
+      </button>
     </article>
   );
 }
 
-function InfoPill({ label, value, className }) {
+function Badge({ label, className }) {
+  return <span className={`inline-flex min-h-7 items-center rounded-full border px-2.5 text-[10px] font-black uppercase tracking-wide ${className}`}>{label}</span>;
+}
+
+function StatCard({ label, value }) {
   return (
-    <div className={`rounded-2xl border px-3 py-3 min-w-0 ${className}`}>
-      <p className="text-[11px] font-black uppercase tracking-wide opacity-80 truncate">{label}</p>
-      <p className="text-sm font-black mt-1 break-words">{value}</p>
+    <div className="min-w-0 rounded-2xl border border-border bg-secondary/50 px-2 py-3 text-center">
+      <p className="text-xl font-black leading-none text-foreground">{value}</p>
+      <p className="mt-1 truncate text-[10px] font-black uppercase tracking-wide text-muted-foreground">{label}</p>
     </div>
   );
 }
 
 function InfoBlock({ label, value }) {
   return (
-    <div className="rounded-2xl bg-secondary px-4 py-3 min-w-0">
-      <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider truncate">{label}</p>
-      <p className="text-sm font-bold text-foreground mt-1 break-words">{value || "—"}</p>
+    <div className="min-w-0 rounded-2xl bg-secondary/60 px-3 py-2">
+      <p className="truncate text-[10px] font-black uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className="mt-1 break-words text-sm font-black text-foreground">{value || "—"}</p>
     </div>
+  );
+}
+
+function Notice({ icon: Icon, title, helper, danger = false }) {
+  return (
+    <section className={`rounded-2xl border p-4 ${danger ? "border-destructive/20 bg-destructive/10" : "border-amber-500/20 bg-amber-500/10"}`}>
+      <div className="flex items-start gap-3">
+        <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${danger ? "text-destructive" : "text-amber-700"}`} />
+        <div className="min-w-0">
+          <p className={`font-black ${danger ? "text-destructive" : "text-amber-800"}`}>{title}</p>
+          <p className={`mt-1 break-words text-sm font-semibold ${danger ? "text-destructive/80" : "text-amber-800/80"}`}>{helper}</p>
+        </div>
+      </div>
+    </section>
   );
 }
 
 function EventProof({ event }) {
   return (
-    <section className="bg-primary/5 rounded-2xl border border-primary/20 p-4 min-w-0">
+    <section className="rounded-2xl border border-primary/20 bg-primary/5 p-4 min-w-0">
       <div className="flex items-start gap-3">
-        <Clock3 className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+        <Clock3 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
         <div className="min-w-0">
-          <p className="font-bold text-foreground">Last task event</p>
-          <p className="text-sm text-muted-foreground mt-1 break-words">{String(event.event_type || "event").replaceAll("_", " ")}</p>
-          <p className="text-xs text-muted-foreground mt-2 break-all">Trace: {event.trace_id}</p>
+          <p className="font-black text-foreground">Last task event</p>
+          <p className="mt-1 break-words text-sm font-semibold text-muted-foreground">{String(event.event_type || "event").replaceAll("_", " ")}</p>
+          <p className="mt-2 break-all text-xs font-semibold text-muted-foreground">Trace: {event.trace_id}</p>
         </div>
       </div>
     </section>

@@ -46,6 +46,7 @@ import {
   upsertCountSessionItem,
 } from "../lib/scanOpsStockCount";
 import { useScanOpsSession } from "../lib/scanOpsSession";
+import { TASK_DUE_STATES, TASK_PRIORITIES, TASK_TYPES, upsertDerivedTaskFromSource } from "../lib/scanOpsTasks";
 
 function findProduct(input) {
   if (!input) return null;
@@ -524,6 +525,38 @@ export default function StockCount() {
       reason: request.reason,
       applies_stock_directly: false,
       status: "recount_requested",
+    });
+    upsertDerivedTaskFromSource({
+      taskType: TASK_TYPES.STOCK_COUNT,
+      task_kind: "stock_count_recount",
+      title: "Recount stock variance",
+      description: `${lineName(line)} requires a recount before desktop stock review.`,
+      action_needed: "Open the Stock Count source and record recount evidence. Task completion does not approve or post stock.",
+      evidence_required: "Recount quantity and note",
+      priority: TASK_PRIORITIES.HIGH,
+      due_state: TASK_DUE_STATES.TODAY,
+      source_type: "stock_count_recount",
+      source_id: request.id,
+      source_ref: activeSession.session_ref || activeSession.count_session_ref || activeSession.id || activeSession.count_session_id,
+      source_module: "Stock Count",
+      source_status_snapshot: "Recount Required",
+      source_item_snapshot: {
+        item_name: lineName(line),
+        sku: line.sku,
+        barcode: line.barcode,
+        plu: line.plu,
+        expected_quantity: line.expected_quantity,
+        counted_quantity: line.counted_quantity,
+        variance_quantity: line.variance_quantity,
+        variance_reason: line.variance_reason_label || line.variance_reason,
+      },
+      assigned_department: line.item_snapshot?.department || activeSession.area_label || "Grocery",
+      assigned_role: "Staff",
+      assigned_user_id: "team",
+      assigned_user_name: `${line.item_snapshot?.department || activeSession.area_label || "Stock Count"} Team`,
+      linkedWorkflow: "/stock-count",
+      linkedWorkflowLabel: "Stock Count · Recount source",
+      linkedContext: { sessionId: activeSession.id || activeSession.count_session_id, recountRequestId: request.id },
     });
     refreshSessions();
     refreshLines(activeSession.id || activeSession.count_session_id);

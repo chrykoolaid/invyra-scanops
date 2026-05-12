@@ -32,6 +32,7 @@ import {
   SHELF_TICKET_REQUEST_TYPE_OPTIONS,
   upsertShelfTicketRequestLine,
 } from "../lib/scanOpsRequestLifecycle";
+import { TASK_DUE_STATES, TASK_PRIORITIES, TASK_TYPES, upsertDerivedTaskFromSource } from "../lib/scanOpsTasks";
 
 function formatMoney(currency, value) {
   if (value === null || value === undefined || value === "" || Number.isNaN(Number(value))) return "—";
@@ -127,6 +128,34 @@ export default function ShelfTickets() {
       applies_stock_directly: false,
       status: request.status,
       official_inventory_prints_after_sync: true,
+    });
+    upsertDerivedTaskFromSource({
+      taskType: TASK_TYPES.SHELF_TICKET,
+      task_kind: "shelf_ticket_request",
+      title: "Complete shelf ticket request",
+      description: `${batch.length} shelf ticket item${batch.length === 1 ? "" : "s"} ready for physical follow-up.`,
+      action_needed: "Open Shelf Tickets and confirm task work only. Scanner does not print tickets directly.",
+      evidence_required: "Completion note",
+      priority: TASK_PRIORITIES.MEDIUM,
+      due_state: TASK_DUE_STATES.TODAY,
+      source_type: "shelf_ticket_request",
+      source_id: request.requestId,
+      source_ref: request.requestId,
+      source_module: "Shelf Tickets",
+      source_status_snapshot: request.status,
+      source_item_snapshot: {
+        item_count: batch.length,
+        copies: totalCopies(batch),
+        markdown_ticket_count: markdownTicketCount,
+        first_item: batch[0]?.itemName,
+      },
+      assigned_department: "Grocery",
+      assigned_role: "Staff",
+      assigned_user_id: "team",
+      assigned_user_name: "Grocery Team",
+      linkedWorkflow: "/shelf-tickets",
+      linkedWorkflowLabel: "Shelf Tickets · Request batch",
+      linkedContext: { requestId: request.requestId },
     });
     setSubmittedRequest(request);
     setView("done");

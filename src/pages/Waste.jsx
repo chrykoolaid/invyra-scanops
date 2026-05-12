@@ -38,6 +38,7 @@ import {
   WASTE_DISPOSAL_ACTION_OPTIONS,
   WASTE_REASON_OPTIONS,
 } from "../lib/scanOpsRequestLifecycle";
+import { TASK_DUE_STATES, TASK_PRIORITIES, TASK_TYPES, upsertDerivedTaskFromSource } from "../lib/scanOpsTasks";
 
 function getUnit(item) {
   return item?.unitType || item?.unit_type || "each";
@@ -179,6 +180,29 @@ export default function Waste() {
       status: request.status,
       applies_stock_directly: false,
       official_inventory_applies_after_sync: true,
+    });
+    upsertDerivedTaskFromSource({
+      taskType: TASK_TYPES.WASTE,
+      task_kind: "waste_review",
+      title: reviewCount ? "Review waste evidence" : "Confirm waste evidence follow-up",
+      description: `${batch.length} waste item${batch.length === 1 ? "" : "s"} submitted for evidence follow-up.`,
+      action_needed: "Open Waste and record task evidence only. Task completion does not post wastage.",
+      evidence_required: "Completion or review note",
+      priority: reviewCount ? TASK_PRIORITIES.HIGH : TASK_PRIORITIES.MEDIUM,
+      due_state: reviewCount ? TASK_DUE_STATES.NOW : TASK_DUE_STATES.TODAY,
+      source_type: "waste_review",
+      source_id: request.requestId,
+      source_ref: request.requestId,
+      source_module: "Waste",
+      source_status_snapshot: request.status,
+      source_item_snapshot: { item_count: batch.length, total_units: totalQuantity(batch), review_required_count: reviewCount, first_item: batch[0]?.itemName },
+      assigned_department: batch[0]?.department || "Meat",
+      assigned_role: reviewCount ? "Supervisor" : "Staff",
+      assigned_user_id: "team",
+      assigned_user_name: `${batch[0]?.department || "Waste"} Team`,
+      linkedWorkflow: "/waste",
+      linkedWorkflowLabel: "Waste · Evidence request",
+      linkedContext: { requestId: request.requestId },
     });
     setSubmittedRequest(request);
     setView("done");

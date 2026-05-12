@@ -1,5 +1,6 @@
 import { SCANOPS_USER_CONTEXT } from "./scanOpsInventoryFixtures";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "./scanOpsEvents";
+import { TASK_DUE_STATES, TASK_PRIORITIES, TASK_TYPES, upsertDerivedTaskFromSource } from "./scanOpsTasks";
 
 export const UNKNOWN_ITEM_REVIEW_STATES = {
   NEEDS_REVIEW: "needs_review",
@@ -63,6 +64,29 @@ export function createUnknownItemEvidence({ enteredCode, sourceWorkflow = "ScanO
     applies_stock_directly: false,
     applies_price_directly: false,
     supervisor_review_required: true,
+  });
+  upsertDerivedTaskFromSource({
+    taskType: TASK_TYPES.PRODUCT_IDENTITY_REVIEW,
+    task_kind: "unknown_item_review",
+    title: "Review unknown barcode",
+    description: `${evidence.enteredCode} needs product identity review.`,
+    action_needed: "Open Product Identity Review and decide whether this evidence needs linking, rejection, deferral, or escalation. Task completion does not create a product.",
+    evidence_required: "Review note or escalation reason",
+    priority: TASK_PRIORITIES.HIGH,
+    due_state: TASK_DUE_STATES.TODAY,
+    source_type: "unknown_item_evidence",
+    source_id: evidence.evidenceId,
+    source_ref: evidence.enteredCode,
+    source_module: "Product Identity Review",
+    source_status_snapshot: UNKNOWN_ITEM_REVIEW_STATES.NEEDS_REVIEW,
+    source_item_snapshot: { unknown_barcode: evidence.enteredCode, captured_from: sourceWorkflow, note },
+    assigned_department: SCANOPS_USER_CONTEXT.department || "Grocery",
+    assigned_role: "Staff",
+    assigned_user_id: "team",
+    assigned_user_name: `${SCANOPS_USER_CONTEXT.department || "Grocery"} Team`,
+    linkedWorkflow: "/product-identity-review",
+    linkedWorkflowLabel: "Product Identity Review · Unknown evidence",
+    linkedContext: { evidenceId: evidence.evidenceId },
   });
   return evidence;
 }

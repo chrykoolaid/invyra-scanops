@@ -43,6 +43,7 @@ import {
   submitReceivingBatch,
   unitForItem,
 } from "../lib/scanOpsReceivingTransfers";
+import { TASK_DUE_STATES, TASK_PRIORITIES, TASK_TYPES, upsertDerivedTaskFromSource } from "../lib/scanOpsTasks";
 
 const SUPPLIERS = [
   { id: "fresh_fields", label: "Fresh Fields Co.", helper: "Fresh produce and dairy" },
@@ -223,16 +224,49 @@ export default function Receiving() {
       applies_price_directly: false,
     });
     if (line.line_status === "Review Required") {
+      const createdException = (nextBatch.exceptions || []).find((exception) => exception.batch_line_id === line.id);
       createScanOpsEvent(SCANOPS_EVENT_TYPES.RECEIVING_EXCEPTION_RECORDED, {
         source_module: "Receiving",
         batch_id: activeBatch.id,
         batch_ref: activeBatch.batch_ref,
+        exception_id: createdException?.id || null,
         item_name: line.item_snapshot?.itemName,
         exception_type: line.exception_type,
         expected_quantity: line.expected_quantity,
         received_quantity: line.received_quantity,
         difference_quantity: line.difference_quantity,
         applies_stock_directly: false,
+      });
+      upsertDerivedTaskFromSource({
+        taskType: TASK_TYPES.RECEIVING,
+        task_kind: "receiving_exception_review",
+        title: "Review receiving exception",
+        description: `${line.item_snapshot?.itemName || "Receiving item"} needs receiving exception review.`,
+        action_needed: "Open the Receiving source and record investigation evidence only. Task completion does not accept supplier issue or post stock.",
+        evidence_required: "Investigation note",
+        priority: createdException?.severity === "High" ? TASK_PRIORITIES.HIGH : TASK_PRIORITIES.MEDIUM,
+        due_state: TASK_DUE_STATES.TODAY,
+        source_type: "receiving_exception",
+        source_id: createdException?.id || line.id,
+        source_ref: activeBatch.batch_ref,
+        source_module: "Receiving",
+        source_status_snapshot: createdException?.status || "Review Required",
+        source_item_snapshot: {
+          item_name: line.item_snapshot?.itemName,
+          sku: line.sku,
+          barcode: line.barcode,
+          expected_quantity: line.expected_quantity,
+          received_quantity: line.received_quantity,
+          difference_quantity: line.difference_quantity,
+          exception_type: line.exception_type,
+        },
+        assigned_department: line.item_snapshot?.department || "Dairy",
+        assigned_role: "Staff",
+        assigned_user_id: "team",
+        assigned_user_name: `${line.item_snapshot?.department || "Receiving"} Team`,
+        linkedWorkflow: "/receiving",
+        linkedWorkflowLabel: `Receiving · ${activeBatch.batch_ref}`,
+        linkedContext: { batchId: activeBatch.id, exceptionId: createdException?.id || line.id },
       });
     }
     createScanOpsEvent(attributeSnapshot.weighted_snapshot ? SCANOPS_EVENT_TYPES.WEIGHTED_ITEM_EVIDENCE_CAPTURED : SCANOPS_EVENT_TYPES.ATTRIBUTE_EVIDENCE_CAPTURED, {

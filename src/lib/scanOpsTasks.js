@@ -1,7 +1,13 @@
 import { SCANOPS_USER_CONTEXT } from "./scanOpsInventoryFixtures";
+import { getScanOpsSession } from "./scanOpsSession";
 
-const STORAGE_KEY = "invyra_scanops_tasks_v2";
-const LEGACY_STORAGE_KEY = "invyra_scanops_tasks_v1";
+const STORAGE_KEY = "invyra_scanops_tasks_v3_stagex";
+const LEGACY_STORAGE_KEYS = ["invyra_scanops_tasks_v2", "invyra_scanops_tasks_v1"];
+const STATUS_EVENT_STORAGE_KEY = "invyra_scanops_task_status_events_v1";
+const ASSIGNMENT_STORAGE_KEY = "invyra_scanops_task_assignments_v1";
+const SOURCE_LINK_STORAGE_KEY = "invyra_scanops_task_source_links_v1";
+const ESCALATION_STORAGE_KEY = "invyra_scanops_task_escalations_v1";
+const COMPLETION_STORAGE_KEY = "invyra_scanops_task_completion_evidence_v1";
 
 export const TASK_TYPES = {
   STOCK_COUNT: "stock_count",
@@ -11,8 +17,12 @@ export const TASK_TYPES = {
   MARKDOWN: "markdown",
   SHELF_TICKET: "shelf_ticket",
   PRODUCT_LOOKUP: "product_lookup",
+  PRODUCT_IDENTITY_REVIEW: "product_identity_review",
+  UNKNOWN_ITEM: "unknown_item",
+  SYNC_QUEUE: "sync_queue",
+  MANUAL: "manual",
   GENERAL_CHECK: "general_check",
-  // Legacy Stage F task values kept for decision-engine compatibility.
+  // Legacy Stage F/R task values kept for decision-engine compatibility.
   REPLENISHMENT_TASK: "REPLENISHMENT_TASK",
   GAP_SCAN_TASK: "GAP_SCAN_TASK",
   MARKDOWN_TASK: "MARKDOWN_TASK",
@@ -24,31 +34,102 @@ export const TASK_TYPES = {
 };
 
 export const TASK_STATUSES = {
-  NOT_STARTED: "not_started",
+  OPEN: "open",
+  NOT_STARTED: "open",
   IN_PROGRESS: "in_progress",
   BLOCKED: "blocked",
-  COMPLETED: "completed",
+  DONE: "done",
+  COMPLETED: "done",
+  ESCALATED: "escalated",
   CANCELLED: "cancelled",
   SYNC_PENDING: "sync_pending",
   SYNC_FAILED: "sync_failed",
-  // Legacy aliases.
-  OPEN: "Open",
-  NEEDS_SUPERVISOR: "Needs Supervisor",
+  NEEDS_SUPERVISOR: "escalated",
 };
 
 export const TASK_PRIORITIES = {
   LOW: "low",
-  NORMAL: "normal",
+  MEDIUM: "medium",
+  NORMAL: "medium",
   HIGH: "high",
-  URGENT: "urgent",
+  CRITICAL: "critical",
+  URGENT: "critical",
 };
 
-export const TASK_FILTERS = [
+export const TASK_DUE_STATES = {
+  NONE: "none",
+  LATER: "later",
+  TODAY: "today",
+  NOW: "now",
+  OVERDUE: "overdue",
+};
+
+export const TASK_TABS = [
   { id: "mine", label: "My Tasks" },
-  { id: "due_today", label: "Due Today" },
-  { id: "in_progress", label: "In Progress" },
-  { id: "completed", label: "Completed" },
+  { id: "team", label: "Team Tasks" },
+  { id: "escalated", label: "Escalated" },
+  { id: "done", label: "Done" },
 ];
+
+export const TASK_FILTERS = [
+  { id: "all", label: "All" },
+  { id: "open", label: "Open" },
+  { id: "in_progress", label: "In Progress" },
+  { id: "blocked", label: "Blocked" },
+  { id: "done", label: "Done" },
+];
+
+export const TASK_DEPARTMENTS = [
+  "Grocery",
+  "Dairy",
+  "Produce",
+  "Meat",
+  "Bakery",
+  "Front End",
+  "Stockroom",
+  "Manager Review",
+];
+
+const PRIORITY_LABELS = {
+  [TASK_PRIORITIES.LOW]: "Low",
+  [TASK_PRIORITIES.MEDIUM]: "Medium",
+  [TASK_PRIORITIES.HIGH]: "High",
+  [TASK_PRIORITIES.CRITICAL]: "Critical",
+};
+
+const STATUS_LABELS = {
+  [TASK_STATUSES.OPEN]: "Open",
+  [TASK_STATUSES.IN_PROGRESS]: "In Progress",
+  [TASK_STATUSES.BLOCKED]: "Blocked",
+  [TASK_STATUSES.DONE]: "Done",
+  [TASK_STATUSES.ESCALATED]: "Escalated",
+  [TASK_STATUSES.CANCELLED]: "Cancelled",
+  [TASK_STATUSES.SYNC_PENDING]: "Sync Pending",
+  [TASK_STATUSES.SYNC_FAILED]: "Sync Failed",
+};
+
+const TYPE_LABELS = {
+  [TASK_TYPES.STOCK_COUNT]: "Stock Count",
+  [TASK_TYPES.RECEIVING]: "Receiving",
+  [TASK_TYPES.TRANSFER]: "Transfer",
+  [TASK_TYPES.WASTE]: "Waste",
+  [TASK_TYPES.MARKDOWN]: "Markdown",
+  [TASK_TYPES.SHELF_TICKET]: "Shelf Tickets",
+  [TASK_TYPES.PRODUCT_LOOKUP]: "Product Lookup",
+  [TASK_TYPES.PRODUCT_IDENTITY_REVIEW]: "Product Identity Review",
+  [TASK_TYPES.UNKNOWN_ITEM]: "Unknown Item Evidence",
+  [TASK_TYPES.SYNC_QUEUE]: "Sync Queue",
+  [TASK_TYPES.MANUAL]: "Manual Task",
+  [TASK_TYPES.GENERAL_CHECK]: "General Check",
+  [TASK_TYPES.REPLENISHMENT_TASK]: "Replenishment Task",
+  [TASK_TYPES.GAP_SCAN_TASK]: "Gap Scan Task",
+  [TASK_TYPES.MARKDOWN_TASK]: "Markdown Task",
+  [TASK_TYPES.WASTE_REVIEW_TASK]: "Waste Review Task",
+  [TASK_TYPES.EXPIRY_CHECK_TASK]: "Expiry Check Task",
+  [TASK_TYPES.FRESHNESS_REVIEW_TASK]: "Freshness Review Task",
+  [TASK_TYPES.STOCK_COUNT_RECHECK_TASK]: "Stock Count Recount",
+  [TASK_TYPES.RECEIVING_FOLLOWUP_TASK]: "Receiving Follow-up",
+};
 
 const LEGACY_TYPE_MAP = {
   [TASK_TYPES.REPLENISHMENT_TASK]: TASK_TYPES.GENERAL_CHECK,
@@ -61,116 +142,215 @@ const LEGACY_TYPE_MAP = {
   [TASK_TYPES.RECEIVING_FOLLOWUP_TASK]: TASK_TYPES.RECEIVING,
 };
 
-const LEGACY_STATUS_MAP = {
-  Open: TASK_STATUSES.NOT_STARTED,
+const STATUS_MAP = {
+  open: TASK_STATUSES.OPEN,
+  not_started: TASK_STATUSES.OPEN,
+  "not started": TASK_STATUSES.OPEN,
+  Open: TASK_STATUSES.OPEN,
   "In Progress": TASK_STATUSES.IN_PROGRESS,
+  in_progress: TASK_STATUSES.IN_PROGRESS,
+  blocked: TASK_STATUSES.BLOCKED,
   Blocked: TASK_STATUSES.BLOCKED,
-  "Needs Supervisor": TASK_STATUSES.BLOCKED,
-  Completed: TASK_STATUSES.COMPLETED,
+  completed: TASK_STATUSES.DONE,
+  Completed: TASK_STATUSES.DONE,
+  done: TASK_STATUSES.DONE,
+  Done: TASK_STATUSES.DONE,
+  escalated: TASK_STATUSES.ESCALATED,
+  Escalated: TASK_STATUSES.ESCALATED,
+  "Needs Supervisor": TASK_STATUSES.ESCALATED,
+  cancelled: TASK_STATUSES.CANCELLED,
   Cancelled: TASK_STATUSES.CANCELLED,
+  sync_pending: TASK_STATUSES.SYNC_PENDING,
+  sync_failed: TASK_STATUSES.SYNC_FAILED,
 };
 
-const LEGACY_PRIORITY_MAP = {
+const PRIORITY_MAP = {
+  low: TASK_PRIORITIES.LOW,
   Low: TASK_PRIORITIES.LOW,
-  Normal: TASK_PRIORITIES.NORMAL,
+  normal: TASK_PRIORITIES.MEDIUM,
+  Normal: TASK_PRIORITIES.MEDIUM,
+  medium: TASK_PRIORITIES.MEDIUM,
+  Medium: TASK_PRIORITIES.MEDIUM,
+  high: TASK_PRIORITIES.HIGH,
   High: TASK_PRIORITIES.HIGH,
-  Urgent: TASK_PRIORITIES.URGENT,
+  urgent: TASK_PRIORITIES.CRITICAL,
+  Urgent: TASK_PRIORITIES.CRITICAL,
+  critical: TASK_PRIORITIES.CRITICAL,
+  Critical: TASK_PRIORITIES.CRITICAL,
 };
 
 export const INITIAL_SCANOPS_TASKS = [
   {
-    taskId: "task-stock-count-dairy-a4",
-    title: "Count Dairy Aisle",
-    description: "Count shelf A4-B2 and submit count evidence.",
-    taskType: TASK_TYPES.STOCK_COUNT,
-    status: TASK_STATUSES.NOT_STARTED,
-    priority: TASK_PRIORITIES.NORMAL,
-    assignedToUserId: "staff_001",
-    assignedToName: "Sarah M.",
-    assignedRole: "Staff",
-    areaId: "dairy_chilled",
-    areaName: "Dairy",
-    locationId: "bay_a4_b2",
-    locationName: "Aisle A4-B2",
-    linkedWorkflow: "/stock-count",
-    linkedWorkflowLabel: "Stock Count · Dairy · Unguided scan count",
-    linkedContext: { countType: "QUICK_COUNT", area: "dairy_chilled", countMode: "unguided_scan_count" },
-    dueAt: "2026-05-11T14:00:00+08:00",
-    createdBy: "Manager Preview",
-    createdRole: "Manager",
-    createdAt: "2026-05-11T08:30:00+08:00",
-    source: "inventory_desktop",
-  },
-  {
-    taskId: "task-markdown-yoghurt-short-date",
-    title: "Check short-dated yoghurt",
-    description: "Review chilled yoghurt and request markdown evidence only if needed.",
-    taskType: TASK_TYPES.MARKDOWN,
-    status: TASK_STATUSES.IN_PROGRESS,
-    priority: TASK_PRIORITIES.HIGH,
-    assignedToUserId: "staff_001",
-    assignedToName: "Sarah M.",
-    assignedRole: "Staff",
-    areaId: "dairy_chilled",
-    areaName: "Chilled",
-    locationId: "dairy_bay_2",
-    locationName: "Dairy Bay 2",
-    linkedWorkflow: "/markdowns",
-    linkedWorkflowLabel: "Markdown · Chilled · Short-dated review",
-    linkedContext: { reason: "short_dated" },
-    dueAt: "2026-05-11T17:00:00+08:00",
-    startedAt: "2026-05-11T09:45:00+08:00",
-    createdBy: "Manager Preview",
-    createdRole: "Manager",
-    createdAt: "2026-05-11T08:45:00+08:00",
-    source: "inventory_desktop",
-  },
-  {
-    taskId: "task-shelf-ticket-promo-end",
-    title: "Request missing promo shelf tickets",
-    description: "Scan items on promo end cap and submit ticket requests. Do not print directly from scanner.",
-    taskType: TASK_TYPES.SHELF_TICKET,
-    status: TASK_STATUSES.NOT_STARTED,
-    priority: TASK_PRIORITIES.NORMAL,
-    assignedToUserId: "team",
-    assignedToName: "Grocery Team",
-    assignedRole: "Staff",
-    areaId: "promo_ends",
-    areaName: "Promo Ends",
-    locationId: "promo_end_03",
-    locationName: "Promo End 03",
-    linkedWorkflow: "/shelf-tickets",
-    linkedWorkflowLabel: "Shelf Tickets · Medium shelf edge",
-    linkedContext: { ticketType: "price_check_ticket", paperSize: "medium_shelf_edge" },
-    dueAt: "2026-05-11T16:00:00+08:00",
-    createdBy: "Supervisor Preview",
-    createdRole: "Supervisor",
-    createdAt: "2026-05-11T09:10:00+08:00",
-    source: "manual",
-  },
-  {
-    taskId: "task-receiving-dairy-followup",
-    title: "Receive supplier delivery",
-    description: "Check dairy delivery paperwork and submit receiving evidence only.",
+    task_ref: "TSK-X-1001",
+    title: "Review receiving exception",
+    description: "Check dairy delivery short-received evidence and decide the next review action in Receiving.",
+    action_needed: "Open the receiving exception context and add investigation notes. Task completion does not accept supplier issue or post stock.",
     taskType: TASK_TYPES.RECEIVING,
-    status: TASK_STATUSES.BLOCKED,
-    priority: TASK_PRIORITIES.LOW,
-    assignedToUserId: "staff_001",
-    assignedToName: "Sarah M.",
-    assignedRole: "Staff",
-    areaId: "receiving_bay",
-    areaName: "Receiving",
-    locationId: "receiving_bay",
-    locationName: "Receiving Bay",
+    task_kind: "receiving_exception_review",
+    priority: TASK_PRIORITIES.HIGH,
+    status: TASK_STATUSES.OPEN,
+    due_state: TASK_DUE_STATES.NOW,
+    dueAt: "2026-05-12T20:30:00+08:00",
+    source_type: "receiving_exception",
+    source_module: "Receiving",
+    source_id: "recv_ex_demo_1042",
+    source_ref: "PO-1042",
+    source_status_snapshot: "Review Required",
+    source_item_snapshot: { item_name: "Greek Yoghurt 1kg", sku: "930000000004", expected_quantity: 24, received_quantity: 18, difference_quantity: -6 },
+    assigned_department: "Dairy",
+    assigned_role: "Staff",
+    assigned_user_id: "staff_001",
+    assigned_user_name: "Sarah M.",
+    created_by: "ScanOps",
+    created_by_role: "System",
+    created_at: "2026-05-12T19:20:00+08:00",
     linkedWorkflow: "/receiving",
-    linkedWorkflowLabel: "Receiving · Supplier evidence",
-    linkedContext: { receivingMode: "against_po" },
-    dueAt: "2026-05-11T15:30:00+08:00",
-    createdBy: "Manager Preview",
-    createdRole: "Manager",
-    createdAt: "2026-05-11T09:00:00+08:00",
-    blockedReason: "Awaiting paperwork",
-    source: "inventory_desktop",
+    linkedWorkflowLabel: "Receiving · PO-1042 exception",
+    evidence_required: "Investigation note",
+  },
+  {
+    task_ref: "TSK-X-1002",
+    title: "Investigate transfer wrong destination",
+    description: "Transfer exception is severe and needs supervisor or manager review before reconciliation continues.",
+    action_needed: "Open the transfer context and record investigation evidence only. Task completion must not close transfer reconciliation.",
+    taskType: TASK_TYPES.TRANSFER,
+    task_kind: "transfer_exception_review",
+    priority: TASK_PRIORITIES.CRITICAL,
+    status: TASK_STATUSES.ESCALATED,
+    due_state: TASK_DUE_STATES.OVERDUE,
+    dueAt: "2026-05-12T18:30:00+08:00",
+    source_type: "transfer_exception",
+    source_module: "Transfers",
+    source_id: "trf_ex_demo_2218",
+    source_ref: "TR-2218",
+    source_status_snapshot: "Review Required",
+    source_item_snapshot: { item_name: "Chicken Breast 1kg", dispatched_quantity: 12, received_quantity: 0, difference_quantity: -12 },
+    assigned_department: "Manager Review",
+    assigned_role: "Manager",
+    assigned_user_id: "manager_001",
+    assigned_user_name: "Daniel K.",
+    created_by: "ScanOps",
+    created_by_role: "System",
+    created_at: "2026-05-12T18:35:00+08:00",
+    escalation_reason: "Wrong destination requires manager review",
+    linkedWorkflow: "/transfers",
+    linkedWorkflowLabel: "Transfers · TR-2218 exception",
+    evidence_required: "Investigation note",
+  },
+  {
+    task_ref: "TSK-X-1003",
+    title: "Recount stock variance",
+    description: "Dairy count variance requires a second count before desktop review.",
+    action_needed: "Open the stock count source and record recount evidence. This task does not approve stock movement.",
+    taskType: TASK_TYPES.STOCK_COUNT,
+    task_kind: "stock_count_recount",
+    priority: TASK_PRIORITIES.HIGH,
+    status: TASK_STATUSES.OPEN,
+    due_state: TASK_DUE_STATES.TODAY,
+    dueAt: "2026-05-12T21:00:00+08:00",
+    source_type: "stock_count_recount",
+    source_module: "Stock Count",
+    source_id: "count_line_demo_778",
+    source_ref: "COUNT-DAIRY-A2",
+    source_status_snapshot: "Recount Required",
+    source_item_snapshot: { item_name: "Milk 2L", expected_quantity: 14, counted_quantity: 9, variance_quantity: -5 },
+    assigned_department: "Dairy",
+    assigned_role: "Staff",
+    assigned_user_id: "staff_001",
+    assigned_user_name: "Sarah M.",
+    created_by: "Supervisor Preview",
+    created_by_role: "Supervisor",
+    created_at: "2026-05-12T17:45:00+08:00",
+    linkedWorkflow: "/stock-count",
+    linkedWorkflowLabel: "Stock Count · Recount source",
+    evidence_required: "Recount quantity and note",
+  },
+  {
+    task_ref: "TSK-X-1004",
+    title: "Review unknown barcode",
+    description: "Unknown barcode evidence was captured during stock count and needs product identity review.",
+    action_needed: "Review whether this barcode should be linked to an existing product. Completion does not create a product or alias.",
+    taskType: TASK_TYPES.PRODUCT_IDENTITY_REVIEW,
+    task_kind: "unknown_item_review",
+    priority: TASK_PRIORITIES.HIGH,
+    status: TASK_STATUSES.OPEN,
+    due_state: TASK_DUE_STATES.TODAY,
+    dueAt: "2026-05-12T22:00:00+08:00",
+    source_type: "unknown_item_evidence",
+    source_module: "Product Identity Review",
+    source_id: "unknown_demo_930000000777",
+    source_ref: "930000000777",
+    source_status_snapshot: "Needs Review",
+    source_item_snapshot: { unknown_barcode: "930000000777", captured_from: "Stock Count", area: "Dairy · Aisle A2" },
+    assigned_department: "Grocery",
+    assigned_role: "Staff",
+    assigned_user_id: "staff_001",
+    assigned_user_name: "Sarah M.",
+    created_by: "Sarah M.",
+    created_by_role: "Staff",
+    created_at: "2026-05-12T16:55:00+08:00",
+    linkedWorkflow: "/product-identity-review",
+    linkedWorkflowLabel: "Product Identity Review · Unknown barcode",
+    evidence_required: "Review note or escalation reason",
+  },
+  {
+    task_ref: "TSK-X-1005",
+    title: "Complete shelf ticket request",
+    description: "Print-request evidence is ready for desktop follow-up. Confirm the physical shelf request was handled.",
+    action_needed: "Open the shelf ticket source and complete work evidence only. Scanner still does not integrate with printers.",
+    taskType: TASK_TYPES.SHELF_TICKET,
+    task_kind: "shelf_ticket_request",
+    priority: TASK_PRIORITIES.MEDIUM,
+    status: TASK_STATUSES.IN_PROGRESS,
+    due_state: TASK_DUE_STATES.TODAY,
+    dueAt: "2026-05-12T21:30:00+08:00",
+    source_type: "shelf_ticket_request",
+    source_module: "Shelf Tickets",
+    source_id: "shelf_ticket_demo_33",
+    source_ref: "ST-REQ-33",
+    source_status_snapshot: "Submitted",
+    source_item_snapshot: { item_name: "Promo End Cap Batch", item_count: 4, copies: 8 },
+    assigned_department: "Grocery",
+    assigned_role: "Staff",
+    assigned_user_id: "team",
+    assigned_user_name: "Grocery Team",
+    created_by: "Supervisor Preview",
+    created_by_role: "Supervisor",
+    created_at: "2026-05-12T16:05:00+08:00",
+    started_by: "Sarah M.",
+    started_at: "2026-05-12T17:00:00+08:00",
+    linkedWorkflow: "/shelf-tickets",
+    linkedWorkflowLabel: "Shelf Tickets · Request batch",
+    evidence_required: "Completion note",
+  },
+  {
+    task_ref: "TSK-X-1006",
+    title: "Review waste evidence",
+    description: "Fresh meat waste evidence needs review before desktop waste governance continues.",
+    action_needed: "Open Waste and record follow-up evidence only. Task completion does not post wastage.",
+    taskType: TASK_TYPES.WASTE,
+    task_kind: "waste_review",
+    priority: TASK_PRIORITIES.MEDIUM,
+    status: TASK_STATUSES.BLOCKED,
+    due_state: TASK_DUE_STATES.TODAY,
+    dueAt: "2026-05-12T23:00:00+08:00",
+    source_type: "waste_review",
+    source_module: "Waste",
+    source_id: "waste_demo_12",
+    source_ref: "WASTE-12",
+    source_status_snapshot: "Review Required",
+    source_item_snapshot: { item_name: "Chicken Breast 1kg", reason: "Expiry / quality concern", quantity: 2 },
+    assigned_department: "Meat",
+    assigned_role: "Supervisor",
+    assigned_user_id: "team",
+    assigned_user_name: "Meat Team",
+    blocked_reason: "Awaiting cold-chain note",
+    created_by: "ScanOps",
+    created_by_role: "System",
+    created_at: "2026-05-12T15:40:00+08:00",
+    linkedWorkflow: "/waste",
+    linkedWorkflowLabel: "Waste · Evidence review",
+    evidence_required: "Blocked reason or completion note",
   },
 ];
 
@@ -178,8 +358,14 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function makeTaskId(prefix = "task") {
+function makeId(prefix = "task") {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function makeTaskRef() {
+  const date = new Date();
+  const ymd = date.toISOString().slice(2, 10).replaceAll("-", "");
+  return `TSK-X-${ymd}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 }
 
 function safeReadRaw(key) {
@@ -188,106 +374,127 @@ function safeReadRaw(key) {
     const raw = window.localStorage.getItem(key);
     return raw ? JSON.parse(raw) : [];
   } catch (error) {
-    console.warn("Unable to read ScanOps tasks", error);
+    console.warn(`Unable to read ${key}`, error);
     return [];
   }
 }
 
-function safeWriteTasks(tasks) {
-  if (typeof window === "undefined") return;
+function safeWriteRaw(key, rows) {
+  if (typeof window === "undefined") return rows || [];
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    window.localStorage.setItem(key, JSON.stringify(rows || []));
   } catch (error) {
-    console.warn("Unable to persist ScanOps tasks", error);
+    console.warn(`Unable to persist ${key}`, error);
   }
+  return rows || [];
 }
 
 function safeReadTasks() {
   const current = safeReadRaw(STORAGE_KEY);
   if (current.length) return current.map(normalizeTask);
-  const legacy = safeReadRaw(LEGACY_STORAGE_KEY);
-  if (legacy.length) {
-    const migrated = legacy.map(normalizeTask);
-    safeWriteTasks(migrated);
-    return migrated;
+  for (const key of LEGACY_STORAGE_KEYS) {
+    const legacy = safeReadRaw(key);
+    if (legacy.length) {
+      const migrated = legacy.map(normalizeTask);
+      safeWriteTasks(migrated);
+      return migrated;
+    }
   }
   return INITIAL_SCANOPS_TASKS.map(normalizeTask);
 }
 
-function normalizeStatus(status) {
-  if (Object.values(TASK_STATUSES).includes(status) && ![TASK_STATUSES.OPEN, TASK_STATUSES.NEEDS_SUPERVISOR].includes(status)) return status;
-  return LEGACY_STATUS_MAP[status] || TASK_STATUSES.NOT_STARTED;
-}
-
-function normalizePriority(priority) {
-  const value = String(priority || "").toLowerCase();
-  if (Object.values(TASK_PRIORITIES).includes(value)) return value;
-  return LEGACY_PRIORITY_MAP[priority] || TASK_PRIORITIES.NORMAL;
-}
-
-function normalizeType(type) {
-  return LEGACY_TYPE_MAP[type] || type || TASK_TYPES.GENERAL_CHECK;
-}
-
-export function normalizeTask(task = {}) {
-  const taskType = normalizeType(task.taskType || task.type);
-  const status = normalizeStatus(task.status);
-  const taskId = task.taskId || task.id || makeTaskId();
-  const title = task.title || task.itemName || "Scanner task";
-  return {
-    ...task,
-    id: taskId,
-    taskId,
-    title,
-    itemName: title,
-    description: task.description || task.recommendation || task.reason || "Complete the assigned scanner work.",
-    taskType,
-    type: taskType,
-    status,
-    priority: normalizePriority(task.priority),
-    assignedToUserId: task.assignedToUserId || task.assignedTo || SCANOPS_USER_CONTEXT.user_id,
-    assignedToName: task.assignedToName || (task.assignedTo === "team" ? "Team" : SCANOPS_USER_CONTEXT.user_name),
-    assignedRole: task.assignedRole || SCANOPS_USER_CONTEXT.role,
-    areaName: task.areaName || task.department || "Store Operations",
-    locationName: task.locationName || task.location || "Store floor",
-    linkedWorkflow: task.linkedWorkflow || workflowPathForTaskType(taskType),
-    linkedWorkflowLabel: task.linkedWorkflowLabel || getTaskTypeLabel(taskType),
-    linkedContext: task.linkedContext || {},
-    source: task.source || task.sourceModule || "scanops_local",
-    createdBy: task.createdBy || "ScanOps",
-    createdRole: task.createdRole || "Staff",
-    createdAt: task.createdAt || nowIso(),
-  };
-}
-
-export function getInitialTaskQueue() {
-  return safeReadTasks();
-}
-
-export function saveTaskQueue(tasks) {
-  const normalized = (tasks || []).map(normalizeTask);
-  safeWriteTasks(normalized);
+function safeWriteTasks(tasks) {
+  const normalized = (tasks || []).map(normalizeTask).slice(0, 160);
+  safeWriteRaw(STORAGE_KEY, normalized);
   return normalized;
 }
 
-export function resetTaskQueue() {
-  const initial = INITIAL_SCANOPS_TASKS.map(normalizeTask);
-  safeWriteTasks(initial);
-  return initial;
+function normalizeType(type) {
+  const value = LEGACY_TYPE_MAP[type] || type || TASK_TYPES.MANUAL;
+  return Object.values(TASK_TYPES).includes(value) ? value : TASK_TYPES.MANUAL;
 }
 
-export function updateTaskStatus(tasks, taskId, status, extra = {}) {
-  const normalizedStatus = normalizeStatus(status);
-  const updated = (tasks || []).map((task) => {
-    const current = normalizeTask(task);
-    if (current.taskId !== taskId && current.id !== taskId) return current;
-    const patch = { updatedAt: nowIso() };
-    if (normalizedStatus === TASK_STATUSES.IN_PROGRESS && !current.startedAt) patch.startedAt = nowIso();
-    if (normalizedStatus === TASK_STATUSES.COMPLETED) patch.completedAt = nowIso();
-    return normalizeTask({ ...current, status: normalizedStatus, ...patch, ...extra });
-  });
-  saveTaskQueue(updated);
-  return updated;
+function normalizeStatus(status) {
+  if (status && STATUS_MAP[status]) return STATUS_MAP[status];
+  const value = String(status || "").toLowerCase();
+  return STATUS_MAP[value] || TASK_STATUSES.OPEN;
+}
+
+function normalizePriority(priority) {
+  if (priority && PRIORITY_MAP[priority]) return PRIORITY_MAP[priority];
+  const value = String(priority || "").toLowerCase();
+  return PRIORITY_MAP[value] || TASK_PRIORITIES.MEDIUM;
+}
+
+export function getTaskActorContext(userContext = null) {
+  const session = userContext || getScanOpsSession?.() || {};
+  return {
+    actor_id: session.actorUserId || session.user_id || SCANOPS_USER_CONTEXT.user_id,
+    actor_name: session.actorName || session.user_name || SCANOPS_USER_CONTEXT.user_name,
+    actor_role: session.actorRole || session.role || SCANOPS_USER_CONTEXT.role,
+    department: session.departmentName || session.department || SCANOPS_USER_CONTEXT.department,
+    store_id: session.storeId || session.location_id || SCANOPS_USER_CONTEXT.location_id,
+  };
+}
+
+export function deriveDueState(dueAt, explicitState = null, status = TASK_STATUSES.OPEN) {
+  if ([TASK_STATUSES.DONE, TASK_STATUSES.CANCELLED].includes(normalizeStatus(status))) return explicitState || TASK_DUE_STATES.NONE;
+  if (explicitState && Object.values(TASK_DUE_STATES).includes(explicitState)) {
+    if ([TASK_DUE_STATES.OVERDUE, TASK_DUE_STATES.NOW, TASK_DUE_STATES.TODAY, TASK_DUE_STATES.LATER, TASK_DUE_STATES.NONE].includes(explicitState)) return explicitState;
+  }
+  if (!dueAt) return TASK_DUE_STATES.NONE;
+  const due = new Date(dueAt);
+  if (Number.isNaN(due.getTime())) return TASK_DUE_STATES.NONE;
+  const now = new Date();
+  const diff = due.getTime() - now.getTime();
+  if (diff < 0) return TASK_DUE_STATES.OVERDUE;
+  if (diff <= 60 * 60 * 1000) return TASK_DUE_STATES.NOW;
+  if (due.toDateString() === now.toDateString()) return TASK_DUE_STATES.TODAY;
+  return TASK_DUE_STATES.LATER;
+}
+
+export function getTaskDueStateLabel(state) {
+  const labels = {
+    [TASK_DUE_STATES.NONE]: "No due date",
+    [TASK_DUE_STATES.LATER]: "Due later",
+    [TASK_DUE_STATES.TODAY]: "Due today",
+    [TASK_DUE_STATES.NOW]: "Due now",
+    [TASK_DUE_STATES.OVERDUE]: "Overdue",
+  };
+  return labels[state] || "No due date";
+}
+
+function sourceTypeForTaskType(taskType) {
+  const type = normalizeType(taskType);
+  const map = {
+    [TASK_TYPES.STOCK_COUNT]: "stock_count_recount",
+    [TASK_TYPES.RECEIVING]: "receiving_exception",
+    [TASK_TYPES.TRANSFER]: "transfer_exception",
+    [TASK_TYPES.WASTE]: "waste_review",
+    [TASK_TYPES.MARKDOWN]: "markdown_review",
+    [TASK_TYPES.SHELF_TICKET]: "shelf_ticket_request",
+    [TASK_TYPES.PRODUCT_IDENTITY_REVIEW]: "product_identity_review",
+    [TASK_TYPES.UNKNOWN_ITEM]: "unknown_item_evidence",
+    [TASK_TYPES.SYNC_QUEUE]: "sync_queue_issue",
+  };
+  return map[type] || "manual_task";
+}
+
+function moduleForTaskType(taskType) {
+  const type = normalizeType(taskType);
+  const map = {
+    [TASK_TYPES.STOCK_COUNT]: "Stock Count",
+    [TASK_TYPES.RECEIVING]: "Receiving",
+    [TASK_TYPES.TRANSFER]: "Transfers",
+    [TASK_TYPES.WASTE]: "Waste",
+    [TASK_TYPES.MARKDOWN]: "Markdowns",
+    [TASK_TYPES.SHELF_TICKET]: "Shelf Tickets",
+    [TASK_TYPES.PRODUCT_IDENTITY_REVIEW]: "Product Identity Review",
+    [TASK_TYPES.UNKNOWN_ITEM]: "Product Identity Review",
+    [TASK_TYPES.SYNC_QUEUE]: "Sync Queue",
+    [TASK_TYPES.MANUAL]: "Manual",
+  };
+  return map[type] || "Tasks";
 }
 
 export function workflowPathForTaskType(taskType) {
@@ -300,54 +507,366 @@ export function workflowPathForTaskType(taskType) {
     [TASK_TYPES.MARKDOWN]: "/markdowns",
     [TASK_TYPES.SHELF_TICKET]: "/shelf-tickets",
     [TASK_TYPES.PRODUCT_LOOKUP]: "/scan",
+    [TASK_TYPES.PRODUCT_IDENTITY_REVIEW]: "/product-identity-review",
+    [TASK_TYPES.UNKNOWN_ITEM]: "/product-identity-review",
+    [TASK_TYPES.SYNC_QUEUE]: "/sync-queue",
+    [TASK_TYPES.MANUAL]: "/tasks",
     [TASK_TYPES.GENERAL_CHECK]: "/scan",
   };
   return paths[type] || "/scan";
 }
 
-export function getTaskTypeLabel(type) {
-  const labels = {
-    [TASK_TYPES.STOCK_COUNT]: "Stock Count",
-    [TASK_TYPES.RECEIVING]: "Receiving",
-    [TASK_TYPES.TRANSFER]: "Transfer",
-    [TASK_TYPES.WASTE]: "Waste",
-    [TASK_TYPES.MARKDOWN]: "Markdown",
-    [TASK_TYPES.SHELF_TICKET]: "Shelf Ticket",
-    [TASK_TYPES.PRODUCT_LOOKUP]: "Product Lookup",
-    [TASK_TYPES.GENERAL_CHECK]: "General Check",
-    [TASK_TYPES.REPLENISHMENT_TASK]: "Replenishment Task",
-    [TASK_TYPES.GAP_SCAN_TASK]: "Gap Scan Task",
-    [TASK_TYPES.MARKDOWN_TASK]: "Markdown Task",
-    [TASK_TYPES.WASTE_REVIEW_TASK]: "Waste Review Task",
-    [TASK_TYPES.EXPIRY_CHECK_TASK]: "Expiry Check Task",
-    [TASK_TYPES.FRESHNESS_REVIEW_TASK]: "Freshness Review Task",
-    [TASK_TYPES.STOCK_COUNT_RECHECK_TASK]: "Stock Count Recheck",
-    [TASK_TYPES.RECEIVING_FOLLOWUP_TASK]: "Receiving Follow-up",
+export function normalizeTask(task = {}) {
+  const taskType = normalizeType(task.taskType || task.type || task.source_module);
+  const status = normalizeStatus(task.status);
+  const priority = normalizePriority(task.priority);
+  const taskId = task.taskId || task.id || makeId("task");
+  const actor = getTaskActorContext();
+  const sourceModule = task.source_module || task.sourceModule || task.source || moduleForTaskType(taskType);
+  const sourceType = task.source_type || task.sourceType || sourceTypeForTaskType(taskType);
+  const dueAt = task.due_at || task.dueAt || null;
+  const assignedDepartment = task.assigned_department || task.assignedDepartment || task.areaName || task.department || actor.department || "Grocery";
+  const assignedRole = task.assigned_role || task.assignedRole || (assignedDepartment === "Manager Review" ? "Manager" : "Staff");
+  const sourceItemSnapshot = task.source_item_snapshot || task.sourceItemSnapshot || task.item_snapshot || task.itemSnapshot || null;
+  const title = task.title || task.itemName || "Scanner task";
+  return {
+    ...task,
+    id: taskId,
+    taskId,
+    task_ref: task.task_ref || task.taskRef || taskId,
+    taskRef: task.task_ref || task.taskRef || taskId,
+    title,
+    itemName: title,
+    description: task.description || task.recommendation || task.reason || "Complete assigned scanner work.",
+    action_needed: task.action_needed || task.actionNeeded || task.description || "Complete the task and record evidence.",
+    evidence_required: task.evidence_required || task.evidenceRequired || "Completion note",
+    taskType,
+    type: taskType,
+    task_kind: task.task_kind || task.taskKind || sourceType,
+    status,
+    priority,
+    due_at: dueAt,
+    dueAt,
+    due_state: deriveDueState(dueAt, task.due_state || task.dueState, status),
+    dueState: deriveDueState(dueAt, task.due_state || task.dueState, status),
+    source_type: sourceType,
+    sourceType,
+    source_id: task.source_id || task.sourceId || task.linkedDecisionId || taskId,
+    sourceId: task.source_id || task.sourceId || task.linkedDecisionId || taskId,
+    source_ref: task.source_ref || task.sourceRef || task.po_ref || task.transfer_ref || task.requestId || taskId,
+    sourceRef: task.source_ref || task.sourceRef || task.po_ref || task.transfer_ref || task.requestId || taskId,
+    source_module: sourceModule,
+    sourceModule,
+    source_status_snapshot: task.source_status_snapshot || task.sourceStatusSnapshot || task.status_snapshot || null,
+    source_item_snapshot: sourceItemSnapshot,
+    sourceItemSnapshot,
+    assigned_user_id: task.assigned_user_id || task.assignedToUserId || task.assignedTo || null,
+    assignedToUserId: task.assigned_user_id || task.assignedToUserId || task.assignedTo || null,
+    assigned_user_name: task.assigned_user_name || task.assignedToName || (task.assignedTo === "team" ? "Team" : null),
+    assignedToName: task.assigned_user_name || task.assignedToName || (task.assignedTo === "team" ? "Team" : null),
+    assigned_department: assignedDepartment,
+    assignedDepartment,
+    assigned_role: assignedRole,
+    assignedRole,
+    areaName: task.areaName || assignedDepartment,
+    locationName: task.locationName || task.location || "Store floor",
+    linkedWorkflow: task.linkedWorkflow || task.linked_workflow || workflowPathForTaskType(taskType),
+    linkedWorkflowLabel: task.linkedWorkflowLabel || task.linked_workflow_label || getTaskTypeLabel(taskType),
+    linkedContext: task.linkedContext || task.linked_context || {},
+    created_by: task.created_by || task.createdBy || actor.actor_name,
+    createdBy: task.created_by || task.createdBy || actor.actor_name,
+    created_by_role: task.created_by_role || task.createdRole || actor.actor_role,
+    createdRole: task.created_by_role || task.createdRole || actor.actor_role,
+    created_at: task.created_at || task.createdAt || nowIso(),
+    createdAt: task.created_at || task.createdAt || nowIso(),
+    started_by: task.started_by || task.startedBy || null,
+    startedAt: task.started_at || task.startedAt || null,
+    started_at: task.started_at || task.startedAt || null,
+    completed_by: task.completed_by || task.completedBy || null,
+    completedAt: task.completed_at || task.completedAt || null,
+    completed_at: task.completed_at || task.completedAt || null,
+    blocked_reason: task.blocked_reason || task.blockedReason || null,
+    blockedReason: task.blocked_reason || task.blockedReason || null,
+    cancelled_reason: task.cancelled_reason || task.cancelledReason || null,
+    escalation_reason: task.escalation_reason || task.escalationReason || null,
+    completion_note: task.completion_note || task.completionNote || null,
+    last_updated_at: task.last_updated_at || task.updatedAt || task.updated_at || nowIso(),
+    updatedAt: task.last_updated_at || task.updatedAt || task.updated_at || nowIso(),
+    applies_stock_directly: false,
+    applies_price_directly: false,
+    prints_directly: false,
+    creates_product_directly: false,
   };
-  return labels[type] || labels[normalizeType(type)] || "Task";
+}
+
+export function getInitialTaskQueue() {
+  return safeReadTasks();
+}
+
+export function saveTaskQueue(tasks) {
+  return safeWriteTasks(tasks);
+}
+
+export function resetTaskQueue() {
+  return safeWriteTasks(INITIAL_SCANOPS_TASKS.map(normalizeTask));
+}
+
+function appendStored(key, row, limit = 220) {
+  const rows = safeReadRaw(key);
+  safeWriteRaw(key, [row, ...rows].slice(0, limit));
+  return row;
+}
+
+function recordStatusEvent(task, fromStatus, toStatus, actor, { reason = null, note = null } = {}) {
+  return appendStored(STATUS_EVENT_STORAGE_KEY, {
+    id: makeId("task_status_event"),
+    task_id: task.taskId,
+    task_ref: task.task_ref,
+    from_status: fromStatus || null,
+    to_status: toStatus,
+    actor_id: actor.actor_id,
+    actor_name: actor.actor_name,
+    actor_role: actor.actor_role,
+    reason,
+    note,
+    created_at: nowIso(),
+  });
+}
+
+function recordAssignment(task, actor, reason = "Assignment updated") {
+  return appendStored(ASSIGNMENT_STORAGE_KEY, {
+    id: makeId("task_assignment"),
+    task_id: task.taskId,
+    assigned_user_id: task.assigned_user_id || null,
+    assigned_user_name: task.assigned_user_name || null,
+    assigned_department: task.assigned_department || null,
+    assigned_role: task.assigned_role || null,
+    assigned_by: actor.actor_name,
+    assigned_by_role: actor.actor_role,
+    assigned_at: nowIso(),
+    assignment_reason: reason,
+  });
+}
+
+function recordSourceLink(task) {
+  return appendStored(SOURCE_LINK_STORAGE_KEY, {
+    id: makeId("task_source_link"),
+    task_id: task.taskId,
+    source_type: task.source_type,
+    source_id: task.source_id,
+    source_ref: task.source_ref,
+    source_module: task.source_module,
+    source_status_snapshot: task.source_status_snapshot || null,
+    source_item_snapshot: task.source_item_snapshot || null,
+    created_at: nowIso(),
+  });
+}
+
+function recordEscalation(task, actor, reason) {
+  return appendStored(ESCALATION_STORAGE_KEY, {
+    id: makeId("task_escalation"),
+    task_id: task.taskId,
+    escalation_level: task.assigned_role === "Admin" ? "Admin" : "Manager/Supervisor",
+    escalation_reason: reason || task.escalation_reason || "Escalated from handheld",
+    escalated_by: actor.actor_name,
+    escalated_by_role: actor.actor_role,
+    escalated_at: nowIso(),
+    reviewed_by: null,
+    reviewed_at: null,
+    review_decision: null,
+    review_note: null,
+  });
+}
+
+function recordCompletion(task, actor, note) {
+  return appendStored(COMPLETION_STORAGE_KEY, {
+    id: makeId("task_completion"),
+    task_id: task.taskId,
+    completion_note: note || task.completion_note || "Task completed from handheld.",
+    evidence_snapshot: {
+      source_type: task.source_type,
+      source_id: task.source_id,
+      source_ref: task.source_ref,
+      source_module: task.source_module,
+      source_item_snapshot: task.source_item_snapshot,
+      applies_stock_directly: false,
+      applies_price_directly: false,
+      prints_directly: false,
+      creates_product_directly: false,
+    },
+    completed_by: actor.actor_name,
+    completed_by_role: actor.actor_role,
+    completed_at: nowIso(),
+  });
+}
+
+export function updateTaskStatus(tasks, taskId, status, extra = {}, userContext = null) {
+  const actor = getTaskActorContext(userContext);
+  const normalizedStatus = normalizeStatus(status);
+  let changedTask = null;
+  const updated = (tasks || []).map((task) => {
+    const current = normalizeTask(task);
+    if (current.taskId !== taskId && current.id !== taskId) return current;
+    const timestamp = nowIso();
+    const patch = { last_updated_at: timestamp, updatedAt: timestamp, ...extra };
+    if (normalizedStatus === TASK_STATUSES.IN_PROGRESS && !current.started_at) {
+      patch.started_by = actor.actor_name;
+      patch.started_at = timestamp;
+    }
+    if (normalizedStatus === TASK_STATUSES.BLOCKED) {
+      patch.blocked_reason = extra.blocked_reason || extra.blockedReason || "Blocked from handheld";
+    }
+    if (normalizedStatus === TASK_STATUSES.ESCALATED) {
+      patch.escalation_reason = extra.escalation_reason || extra.escalationReason || "Escalated from handheld";
+    }
+    if (normalizedStatus === TASK_STATUSES.DONE) {
+      patch.completed_by = actor.actor_name;
+      patch.completed_at = timestamp;
+      patch.completion_note = extra.completion_note || extra.completionNote || "Task completed from handheld.";
+    }
+    if (normalizedStatus === TASK_STATUSES.CANCELLED) {
+      patch.cancelled_reason = extra.cancelled_reason || extra.cancelledReason || "Cancelled by manager/admin";
+    }
+    changedTask = normalizeTask({ ...current, ...patch, status: normalizedStatus });
+    recordStatusEvent(changedTask, current.status, normalizedStatus, actor, {
+      reason: patch.blocked_reason || patch.escalation_reason || patch.cancelled_reason || null,
+      note: patch.completion_note || extra.note || null,
+    });
+    if (normalizedStatus === TASK_STATUSES.ESCALATED) recordEscalation(changedTask, actor, patch.escalation_reason);
+    if (normalizedStatus === TASK_STATUSES.DONE) recordCompletion(changedTask, actor, patch.completion_note);
+    return changedTask;
+  });
+  safeWriteTasks(updated);
+  return updated;
+}
+
+export function reassignTask(tasks, taskId, assignment = {}, reason = "Manual reassignment", userContext = null) {
+  const actor = getTaskActorContext(userContext);
+  let changed = null;
+  const updated = (tasks || []).map((task) => {
+    const current = normalizeTask(task);
+    if (current.taskId !== taskId && current.id !== taskId) return current;
+    changed = normalizeTask({
+      ...current,
+      assigned_user_id: assignment.assigned_user_id ?? current.assigned_user_id,
+      assigned_user_name: assignment.assigned_user_name ?? current.assigned_user_name,
+      assigned_department: assignment.assigned_department ?? current.assigned_department,
+      assigned_role: assignment.assigned_role ?? current.assigned_role,
+      last_updated_at: nowIso(),
+    });
+    return changed;
+  });
+  if (changed) recordAssignment(changed, actor, reason);
+  return safeWriteTasks(updated);
+}
+
+export function upsertDerivedTaskFromSource(source = {}) {
+  const actor = getTaskActorContext();
+  const taskType = normalizeType(source.taskType || source.type || TASK_TYPES.MANUAL);
+  const sourceType = source.source_type || source.sourceType || sourceTypeForTaskType(taskType);
+  const sourceId = source.source_id || source.sourceId || source.id || makeId("source");
+  const taskKind = source.task_kind || source.taskKind || sourceType;
+  const currentTasks = safeReadTasks();
+  const activeMatch = currentTasks.find((task) => {
+    const row = normalizeTask(task);
+    return row.source_type === sourceType
+      && row.source_id === sourceId
+      && row.task_kind === taskKind
+      && ![TASK_STATUSES.DONE, TASK_STATUSES.CANCELLED].includes(row.status);
+  });
+  const patch = {
+    title: source.title,
+    description: source.description,
+    action_needed: source.action_needed,
+    evidence_required: source.evidence_required,
+    taskType,
+    task_kind: taskKind,
+    priority: source.priority || TASK_PRIORITIES.MEDIUM,
+    dueAt: source.due_at || source.dueAt || null,
+    due_state: source.due_state || source.dueState || null,
+    source_type: sourceType,
+    source_id: sourceId,
+    source_ref: source.source_ref || source.sourceRef || source.sourceRefLabel || sourceId,
+    source_module: source.source_module || source.sourceModule || moduleForTaskType(taskType),
+    source_status_snapshot: source.source_status_snapshot || source.sourceStatusSnapshot || null,
+    source_item_snapshot: source.source_item_snapshot || source.sourceItemSnapshot || null,
+    assigned_department: source.assigned_department || source.assignedDepartment || actor.department || "Grocery",
+    assigned_role: source.assigned_role || source.assignedRole || "Staff",
+    assigned_user_id: source.assigned_user_id || source.assignedToUserId || "team",
+    assigned_user_name: source.assigned_user_name || source.assignedToName || `${source.assigned_department || actor.department || "Store"} Team`,
+    linkedWorkflow: source.linkedWorkflow || workflowPathForTaskType(taskType),
+    linkedWorkflowLabel: source.linkedWorkflowLabel || getTaskTypeLabel(taskType),
+    linkedContext: source.linkedContext || {},
+    created_by: source.created_by || actor.actor_name,
+    created_by_role: source.created_by_role || actor.actor_role,
+    last_updated_at: nowIso(),
+  };
+  if (activeMatch) {
+    const tasks = currentTasks.map((task) => {
+      const row = normalizeTask(task);
+      if (row.taskId !== activeMatch.taskId) return row;
+      return normalizeTask({ ...row, ...patch, status: row.status || TASK_STATUSES.OPEN });
+    });
+    const saved = safeWriteTasks(tasks);
+    const task = saved.find((row) => row.taskId === activeMatch.taskId);
+    if (task) recordSourceLink(task);
+    return { task, created: false, tasks: saved };
+  }
+  const task = normalizeTask({
+    ...patch,
+    taskId: source.taskId || makeId("task_source"),
+    task_ref: source.task_ref || makeTaskRef(),
+    status: source.status || TASK_STATUSES.OPEN,
+    created_at: source.created_at || nowIso(),
+  });
+  recordSourceLink(task);
+  recordStatusEvent(task, null, task.status, actor, { reason: "Derived from source evidence" });
+  const saved = safeWriteTasks([task, ...currentTasks]);
+  return { task, created: true, tasks: saved };
+}
+
+export function createTaskFromDecision(decision, item, extra = {}) {
+  if (!decision?.taskToCreate) return null;
+  const sourceType = normalizeType(decision.taskToCreate);
+  const result = upsertDerivedTaskFromSource({
+    taskType: sourceType,
+    task_kind: extra.task_kind || "decision_task",
+    priority: decision.taskPriority || TASK_PRIORITIES.MEDIUM,
+    status: decision.supervisorReviewRequired ? TASK_STATUSES.BLOCKED : TASK_STATUSES.OPEN,
+    title: item?.name || item?.itemName || decision.itemIdentity?.item_name || "Scanner item",
+    description: decision.reasonText || decision.recommendedAction,
+    source_type: extra.source_type || "decision_engine",
+    source_id: extra.linkedDecisionEventId || decision.decisionId || makeId("decision"),
+    source_ref: decision.decisionId || "Decision",
+    source_module: extra.sourceModule || "Decision Engine",
+    source_item_snapshot: item || decision.itemIdentity || null,
+    assigned_user_id: decision.supervisorReviewRequired ? "team" : getTaskActorContext().actor_id,
+    assigned_user_name: decision.supervisorReviewRequired ? "Team" : getTaskActorContext().actor_name,
+    assigned_department: item?.department || decision.itemIdentity?.department || "Grocery",
+    linkedWorkflow: decision.linkedWorkflow || workflowPathForTaskType(sourceType),
+    linkedWorkflowLabel: extra.linkedWorkflowLabel || getTaskTypeLabel(sourceType),
+    linkedContext: extra.linkedContext || {},
+    ...extra,
+  });
+  return result.task;
+}
+
+export function getTaskTypeLabel(type) {
+  return TYPE_LABELS[type] || TYPE_LABELS[normalizeType(type)] || "Task";
 }
 
 export function getTaskStatusLabel(status) {
-  const labels = {
-    [TASK_STATUSES.NOT_STARTED]: "Not started",
-    [TASK_STATUSES.IN_PROGRESS]: "In progress",
-    [TASK_STATUSES.BLOCKED]: "Blocked",
-    [TASK_STATUSES.COMPLETED]: "Completed",
-    [TASK_STATUSES.CANCELLED]: "Cancelled",
-    [TASK_STATUSES.SYNC_PENDING]: "Sync pending",
-    [TASK_STATUSES.SYNC_FAILED]: "Sync failed",
-  };
-  return labels[normalizeStatus(status)] || "Not started";
+  return STATUS_LABELS[normalizeStatus(status)] || "Open";
 }
 
-export function getTaskPriority(task) {
-  const labels = { low: "Low", normal: "Normal", high: "High", urgent: "Urgent" };
-  return labels[normalizePriority(task?.priority)] || "Normal";
+export function getTaskPriority(taskOrPriority) {
+  const priority = typeof taskOrPriority === "string" ? taskOrPriority : taskOrPriority?.priority;
+  return PRIORITY_LABELS[normalizePriority(priority)] || "Medium";
 }
 
 export function getTaskLinkedWorkflow(task) {
   const normalized = normalizeTask(task);
-  const params = new URLSearchParams({ taskId: normalized.taskId });
+  const params = new URLSearchParams({ taskId: normalized.taskId, sourceId: normalized.source_id, sourceType: normalized.source_type });
   Object.entries(normalized.linkedContext || {}).forEach(([key, value]) => {
     if (value != null && value !== "") params.set(key, value);
   });
@@ -358,56 +877,135 @@ export function getTaskLinkedWorkflow(task) {
   };
 }
 
-export function isTaskAssignedToUser(task, userContext = SCANOPS_USER_CONTEXT) {
+export function isTaskAssignedToUser(task, userContext = null) {
   const normalized = normalizeTask(task);
-  return normalized.assignedToUserId === userContext.user_id || normalized.assignedToUserId === "team";
+  const actor = getTaskActorContext(userContext);
+  if (normalized.assigned_user_id && normalized.assigned_user_id === actor.actor_id) return true;
+  if (normalized.assigned_user_id === "team" || !normalized.assigned_user_id) {
+    return normalized.assigned_department === actor.department || normalized.assigned_role === actor.actor_role || normalized.assigned_role === "Staff";
+  }
+  return false;
 }
 
-export function canStartTask(task, userContext = SCANOPS_USER_CONTEXT) {
+export function canViewTeamTasks(userContext = null) {
+  const actor = getTaskActorContext(userContext);
+  return ["Supervisor", "Manager", "Admin"].includes(actor.actor_role);
+}
+
+export function canStartTask(task, userContext = null) {
   if (!task) return false;
   const normalized = normalizeTask(task);
-  return [TASK_STATUSES.NOT_STARTED, TASK_STATUSES.BLOCKED, TASK_STATUSES.SYNC_FAILED].includes(normalized.status)
-    && isTaskAssignedToUser(normalized, userContext);
+  if ([TASK_STATUSES.DONE, TASK_STATUSES.CANCELLED, TASK_STATUSES.ESCALATED].includes(normalized.status)) return false;
+  const actor = getTaskActorContext(userContext);
+  if (["Supervisor", "Manager", "Admin"].includes(actor.actor_role)) return true;
+  return isTaskAssignedToUser(normalized, userContext);
 }
 
-export function canCompleteTask(task, userContext = SCANOPS_USER_CONTEXT) {
+export function canCompleteTask(task, userContext = null) {
   if (!task) return false;
   const normalized = normalizeTask(task);
-  return [TASK_STATUSES.NOT_STARTED, TASK_STATUSES.IN_PROGRESS, TASK_STATUSES.BLOCKED].includes(normalized.status)
-    && isTaskAssignedToUser(normalized, userContext);
+  if (![TASK_STATUSES.OPEN, TASK_STATUSES.IN_PROGRESS, TASK_STATUSES.BLOCKED].includes(normalized.status)) return false;
+  const actor = getTaskActorContext(userContext);
+  if (["Manager", "Admin"].includes(actor.actor_role)) return true;
+  if (normalized.status === TASK_STATUSES.ESCALATED) return false;
+  return isTaskAssignedToUser(normalized, userContext);
 }
 
-export function canCancelTask(_task, userContext = SCANOPS_USER_CONTEXT) {
-  return ["Manager", "Admin"].includes(userContext.role || "Staff");
+export function canEscalateTask(task, userContext = null) {
+  const normalized = normalizeTask(task);
+  return ![TASK_STATUSES.DONE, TASK_STATUSES.CANCELLED, TASK_STATUSES.ESCALATED].includes(normalized.status) && Boolean(getTaskActorContext(userContext).actor_role);
 }
 
-function isDueToday(task) {
-  if (!task?.dueAt) return false;
-  try {
-    return new Date(task.dueAt).toDateString() === new Date().toDateString();
-  } catch {
-    return false;
+export function canReassignTask(_task, userContext = null) {
+  const actor = getTaskActorContext(userContext);
+  return ["Supervisor", "Manager", "Admin"].includes(actor.actor_role);
+}
+
+export function canCancelTask(_task, userContext = null) {
+  const actor = getTaskActorContext(userContext);
+  return ["Manager", "Admin"].includes(actor.actor_role);
+}
+
+function isDoneOrCancelled(task) {
+  return [TASK_STATUSES.DONE, TASK_STATUSES.CANCELLED].includes(normalizeTask(task).status);
+}
+
+function sourceMatches(task, sourceFilter) {
+  if (!sourceFilter || sourceFilter === "all") return true;
+  return normalizeTask(task).source_module === sourceFilter || normalizeTask(task).source_type === sourceFilter;
+}
+
+function assignedMatches(task, assignedFilter, userContext) {
+  const normalized = normalizeTask(task);
+  const actor = getTaskActorContext(userContext);
+  if (!assignedFilter || assignedFilter === "all") return true;
+  if (assignedFilter === "mine") return isTaskAssignedToUser(normalized, userContext) || normalized.assigned_user_id === actor.actor_id;
+  if (assignedFilter === "unassigned") return !normalized.assigned_user_id || normalized.assigned_user_id === "unassigned";
+  if (assignedFilter === "department") return normalized.assigned_department === actor.department;
+  return normalized.assigned_department === assignedFilter || normalized.assigned_role === assignedFilter;
+}
+
+export function filterTasks(tasks, filters = {}, userContext = null, legacyScope = null) {
+  // Backwards compatible support for old Stage R signature: filterTasks(tasks, filterId, userContext, scope).
+  if (typeof filters === "string") {
+    const filterId = filters;
+    const scope = legacyScope || "mine";
+    const mapped = {
+      tab: scope === "team" ? "team" : filterId === "completed" ? "done" : "mine",
+      status: filterId === "in_progress" ? TASK_STATUSES.IN_PROGRESS : filterId === "completed" ? TASK_STATUSES.DONE : "all",
+      due: filterId === "due_today" ? TASK_DUE_STATES.TODAY : "all",
+      priority: filterId === "urgent" ? TASK_PRIORITIES.CRITICAL : "all",
+      assigned: scope === "mine" ? "mine" : "all",
+      source: "all",
+    };
+    return filterTasks(tasks, mapped, userContext);
   }
+
+  const actor = getTaskActorContext(userContext);
+  const { tab = "mine", assigned = tab === "mine" ? "mine" : "all", priority = "all", due = "all", source = "all", status = "all" } = filters || {};
+  let taskList = (tasks || []).map(normalizeTask);
+
+  if (tab === "mine") taskList = taskList.filter((task) => isTaskAssignedToUser(task, userContext) && !isDoneOrCancelled(task) && task.status !== TASK_STATUSES.ESCALATED);
+  if (tab === "team") {
+    taskList = taskList.filter((task) => !isDoneOrCancelled(task) && task.status !== TASK_STATUSES.ESCALATED);
+    if (actor.actor_role === "Staff") taskList = taskList.filter((task) => isTaskAssignedToUser(task, userContext));
+  }
+  if (tab === "escalated") taskList = taskList.filter((task) => task.status === TASK_STATUSES.ESCALATED);
+  if (tab === "done") taskList = taskList.filter((task) => task.status === TASK_STATUSES.DONE);
+
+  taskList = taskList.filter((task) => assignedMatches(task, assigned, userContext));
+  if (priority !== "all") taskList = taskList.filter((task) => task.priority === priority);
+  if (due !== "all") taskList = taskList.filter((task) => task.due_state === due);
+  if (status !== "all") taskList = taskList.filter((task) => task.status === normalizeStatus(status));
+  if (source !== "all") taskList = taskList.filter((task) => sourceMatches(task, source));
+  return taskList;
 }
 
-export function filterTasks(tasks, filterId, userContext = SCANOPS_USER_CONTEXT, scope = "mine") {
-  let taskList = (tasks || []).map(normalizeTask).filter((task) => task.status !== TASK_STATUSES.CANCELLED);
-  if (scope === "mine") taskList = taskList.filter((task) => isTaskAssignedToUser(task, userContext));
-  switch (filterId) {
-    case "mine":
-      return taskList.filter((task) => isTaskAssignedToUser(task, userContext));
-    case "due_today":
-      return taskList.filter(isDueToday);
-    case "in_progress":
-      return taskList.filter((task) => task.status === TASK_STATUSES.IN_PROGRESS);
-    case "completed":
-      return taskList.filter((task) => task.status === TASK_STATUSES.COMPLETED);
-    case "urgent":
-      return taskList.filter((task) => task.priority === TASK_PRIORITIES.URGENT);
-    case "all":
-    default:
-      return taskList;
-  }
+export function sortTasksByOperationalPriority(tasks) {
+  const dueOrder = { [TASK_DUE_STATES.OVERDUE]: 0, [TASK_DUE_STATES.NOW]: 1, [TASK_DUE_STATES.TODAY]: 2, [TASK_DUE_STATES.LATER]: 3, [TASK_DUE_STATES.NONE]: 4 };
+  const priorityOrder = { [TASK_PRIORITIES.CRITICAL]: 0, [TASK_PRIORITIES.HIGH]: 1, [TASK_PRIORITIES.MEDIUM]: 2, [TASK_PRIORITIES.LOW]: 3 };
+  const statusOrder = { [TASK_STATUSES.ESCALATED]: 0, [TASK_STATUSES.BLOCKED]: 1, [TASK_STATUSES.IN_PROGRESS]: 2, [TASK_STATUSES.OPEN]: 3, [TASK_STATUSES.SYNC_FAILED]: 4, [TASK_STATUSES.SYNC_PENDING]: 5, [TASK_STATUSES.DONE]: 6, [TASK_STATUSES.CANCELLED]: 7 };
+  return [...(tasks || [])].map(normalizeTask).sort((a, b) => {
+    return (dueOrder[a.due_state] ?? 9) - (dueOrder[b.due_state] ?? 9)
+      || (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9)
+      || (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9)
+      || String(a.dueAt || "").localeCompare(String(b.dueAt || ""));
+  });
+}
+
+export function getTaskStats(tasks, userContext = null) {
+  const rows = (tasks || []).map(normalizeTask);
+  return {
+    active: rows.filter((task) => !isDoneOrCancelled(task)).length,
+    dueNow: rows.filter((task) => [TASK_DUE_STATES.OVERDUE, TASK_DUE_STATES.NOW].includes(task.due_state) && !isDoneOrCancelled(task)).length,
+    escalated: rows.filter((task) => task.status === TASK_STATUSES.ESCALATED).length,
+    mine: rows.filter((task) => isTaskAssignedToUser(task, userContext) && !isDoneOrCancelled(task)).length,
+  };
+}
+
+export function getTaskSourceOptions(tasks) {
+  const values = Array.from(new Set((tasks || []).map((task) => normalizeTask(task).source_module).filter(Boolean)));
+  return [{ id: "all", label: "All Sources" }, ...values.map((value) => ({ id: value, label: value }))];
 }
 
 export function buildTaskEventPayload(task, status, extra = {}) {
@@ -415,52 +1013,50 @@ export function buildTaskEventPayload(task, status, extra = {}) {
   return {
     source_module: "Tasks",
     task_id: normalized.taskId,
+    task_ref: normalized.task_ref,
     task_type: normalized.taskType,
+    task_kind: normalized.task_kind,
     task_type_label: getTaskTypeLabel(normalized.taskType),
     task_priority: normalized.priority,
-    task_status: status,
-    task_status_label: getTaskStatusLabel(status),
+    task_due_state: normalized.due_state,
+    task_status: normalizeStatus(status || normalized.status),
+    task_status_label: getTaskStatusLabel(status || normalized.status),
     title: normalized.title,
-    area_id: normalized.areaId,
-    area_name: normalized.areaName,
-    location_id: normalized.locationId,
-    location_name: normalized.locationName,
-    due_at: normalized.dueAt,
-    assigned_to_user_id: normalized.assignedToUserId,
-    assigned_to_name: normalized.assignedToName,
+    assigned_to_user_id: normalized.assigned_user_id,
+    assigned_to_name: normalized.assigned_user_name,
+    assigned_department: normalized.assigned_department,
+    assigned_role: normalized.assigned_role,
+    source_type: normalized.source_type,
+    source_id: normalized.source_id,
+    source_ref: normalized.source_ref,
+    source_workflow_module: normalized.source_module,
+    source_item_snapshot: normalized.source_item_snapshot,
     linked_workflow: normalized.linkedWorkflow,
     linked_context: normalized.linkedContext,
     applies_stock_directly: false,
     applies_price_directly: false,
     prints_directly: false,
+    creates_product_directly: false,
     ...extra,
   };
 }
 
-export function createTaskFromDecision(decision, item, extra = {}) {
-  if (!decision?.taskToCreate) return null;
-  const currentTasks = safeReadTasks();
-  const sourceType = normalizeType(decision.taskToCreate);
-  const task = normalizeTask({
-    taskId: extra.id || makeTaskId("task_decision"),
-    taskType: sourceType,
-    priority: decision.taskPriority || TASK_PRIORITIES.NORMAL,
-    status: decision.supervisorReviewRequired ? TASK_STATUSES.BLOCKED : TASK_STATUSES.NOT_STARTED,
-    title: item?.name || item?.itemName || decision.itemIdentity?.item_name || "Scanner item",
-    description: decision.reasonText || decision.recommendedAction,
-    areaName: item?.department || decision.itemIdentity?.department || "Store Operations",
-    locationName: item?.shelfLocation || item?.location || item?.aisle || decision.itemIdentity?.location || "Store floor",
-    linkedWorkflow: decision.linkedWorkflow || workflowPathForTaskType(sourceType),
-    linkedWorkflowLabel: extra.linkedWorkflowLabel || getTaskTypeLabel(sourceType),
-    linkedContext: extra.linkedContext || {},
-    assignedToUserId: decision.supervisorReviewRequired ? "team" : SCANOPS_USER_CONTEXT.user_id,
-    assignedToName: decision.supervisorReviewRequired ? "Team" : SCANOPS_USER_CONTEXT.user_name,
-    source: extra.sourceModule || "Decision Engine",
-    linkedDecisionId: decision.decisionId,
-    linkedDecisionEventId: extra.linkedDecisionEventId || null,
-    createdAt: nowIso(),
-    ...extra,
-  });
-  safeWriteTasks([task, ...currentTasks].slice(0, 100));
-  return task;
+export function getTaskStatusEvents() {
+  return safeReadRaw(STATUS_EVENT_STORAGE_KEY);
+}
+
+export function getTaskAssignments() {
+  return safeReadRaw(ASSIGNMENT_STORAGE_KEY);
+}
+
+export function getTaskSourceLinks() {
+  return safeReadRaw(SOURCE_LINK_STORAGE_KEY);
+}
+
+export function getTaskEscalations() {
+  return safeReadRaw(ESCALATION_STORAGE_KEY);
+}
+
+export function getTaskCompletionEvidence() {
+  return safeReadRaw(COMPLETION_STORAGE_KEY);
 }

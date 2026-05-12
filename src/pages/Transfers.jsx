@@ -42,6 +42,7 @@ import {
   TRANSFER_EXCEPTION_OPTIONS_STAGEW,
   unitForItem,
 } from "../lib/scanOpsReceivingTransfers";
+import { TASK_DUE_STATES, TASK_PRIORITIES, TASK_TYPES, upsertDerivedTaskFromSource } from "../lib/scanOpsTasks";
 
 const REVIEW_ACTIONS = [
   { id: "Accepted", label: "Accept Evidence" },
@@ -273,14 +274,45 @@ export default function Transfers() {
       applies_stock_directly: false,
     });
     if (receiveLine.line_status === "Review Required") {
+      const createdException = (nextBatch.exceptions || []).find((exception) => exception.receive_line_id === receiveLine.id);
       createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_EXCEPTION_RECORDED, {
         source_module: "Transfers",
         transfer_id: activeBatch.id,
         transfer_ref: activeBatch.transfer_ref,
+        exception_id: createdException?.id || null,
         item_name: selectedDispatch.item_snapshot?.itemName,
         exception_type: receiveLine.exception_type,
         difference_quantity: receiveLine.difference_quantity,
         applies_stock_directly: false,
+      });
+      upsertDerivedTaskFromSource({
+        taskType: TASK_TYPES.TRANSFER,
+        task_kind: "transfer_exception_review",
+        title: receiveLine.exception_type === "wrong_destination" ? "Investigate transfer wrong destination" : "Investigate transfer exception",
+        description: `${selectedDispatch.item_snapshot?.itemName || "Transfer item"} needs transfer exception review.`,
+        action_needed: "Open the Transfers source and record investigation evidence only. Task completion does not close reconciliation.",
+        evidence_required: "Investigation note",
+        priority: createdException?.severity === "High" ? TASK_PRIORITIES.CRITICAL : TASK_PRIORITIES.MEDIUM,
+        due_state: createdException?.severity === "High" ? TASK_DUE_STATES.NOW : TASK_DUE_STATES.TODAY,
+        source_type: "transfer_exception",
+        source_id: createdException?.id || receiveLine.id,
+        source_ref: activeBatch.transfer_ref,
+        source_module: "Transfers",
+        source_status_snapshot: createdException?.status || "Review Required",
+        source_item_snapshot: {
+          item_name: selectedDispatch.item_snapshot?.itemName,
+          dispatched_quantity: receiveLine.dispatched_quantity,
+          received_quantity: receiveLine.received_quantity,
+          difference_quantity: receiveLine.difference_quantity,
+          exception_type: receiveLine.exception_type,
+        },
+        assigned_department: createdException?.severity === "High" ? "Manager Review" : "Stockroom",
+        assigned_role: createdException?.severity === "High" ? "Manager" : "Staff",
+        assigned_user_id: "team",
+        assigned_user_name: createdException?.severity === "High" ? "Manager Review" : "Stockroom Team",
+        linkedWorkflow: "/transfers",
+        linkedWorkflowLabel: `Transfers · ${activeBatch.transfer_ref}`,
+        linkedContext: { transferId: activeBatch.id, exceptionId: createdException?.id || receiveLine.id },
       });
     }
     setSelectedDispatchId(null);

@@ -39,6 +39,7 @@ import {
   saveWorkflowDraft,
   upsertMarkdownRequestLine,
 } from "../lib/scanOpsRequestLifecycle";
+import { TASK_DUE_STATES, TASK_PRIORITIES, TASK_TYPES, upsertDerivedTaskFromSource } from "../lib/scanOpsTasks";
 
 function formatMoney(currency, value) {
   if (value === null || value === undefined || value === "" || Number.isNaN(Number(value))) return "—";
@@ -208,6 +209,29 @@ export default function Markdowns() {
       applies_price_directly: false,
       official_inventory_applies_after_sync: true,
       print_claimed: false,
+    });
+    upsertDerivedTaskFromSource({
+      taskType: TASK_TYPES.MARKDOWN,
+      task_kind: "markdown_review",
+      title: "Review markdown request",
+      description: `${batch.length} markdown item${batch.length === 1 ? "" : "s"} ready for manager or desktop review.`,
+      action_needed: "Open Markdowns and record review work only. Task completion does not calculate or apply prices.",
+      evidence_required: "Review or completion note",
+      priority: TASK_PRIORITIES.MEDIUM,
+      due_state: TASK_DUE_STATES.TODAY,
+      source_type: "markdown_review",
+      source_id: request.requestId,
+      source_ref: request.requestId,
+      source_module: "Markdowns",
+      source_status_snapshot: request.status,
+      source_item_snapshot: { item_count: batch.length, ticket_required_count: ticketCount, first_item: batch[0]?.itemName },
+      assigned_department: batch[0]?.department || "Grocery",
+      assigned_role: "Staff",
+      assigned_user_id: "team",
+      assigned_user_name: `${batch[0]?.department || "Grocery"} Team`,
+      linkedWorkflow: "/markdowns",
+      linkedWorkflowLabel: "Markdowns · Request batch",
+      linkedContext: { requestId: request.requestId },
     });
     setSubmittedRequest(request);
     setView("done");
