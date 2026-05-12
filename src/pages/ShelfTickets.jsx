@@ -1,300 +1,344 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useLocation } from "react-router-dom";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
-import TouchSelect from "../components/scanner/TouchSelect";
 import {
   DoneCard,
   EmptyState,
   InfoLine,
-  ItemSummaryCard,
   MetricPill,
   PageShell,
-  QuantityStepper,
   SectionCard,
   StickyActions,
-  TextInputField,
   WorkflowMain,
 } from "../components/scanner/WorkflowPrimitives";
-import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import {
-  buildShelfTicketRequest,
-  clearWorkflowDraft,
-  getCurrencySymbol,
-  getCurrentPriceSnapshot,
-  getOptionLabel,
-  loadWorkflowDraft,
-  normalizeShelfTicketRequestLine,
-  saveShelfTicketRequest,
-  saveWorkflowDraft,
-  SHELF_TICKET_PAPER_SIZE_OPTIONS,
-  SHELF_TICKET_REQUEST_REASON_OPTIONS,
-  SHELF_TICKET_REQUEST_TYPE_OPTIONS,
-  upsertShelfTicketRequestLine,
-} from "../lib/scanOpsRequestLifecycle";
-import { TASK_DUE_STATES, TASK_PRIORITIES, TASK_TYPES, upsertDerivedTaskFromSource } from "../lib/scanOpsTasks";
+  buildShelfTicketPreview,
+  createManualShelfTicketRequest,
+  formatShelfTicketMoney,
+  getShelfTicketPrintContracts,
+  getShelfTicketQueueRequests,
+  importShelfTicketRequestsFromPriceCheck,
+  recommendedTicketFormatForRequest,
+  saveShelfTicketPrintContract,
+  SHELF_TICKET_FORMATS,
+  SHELF_TICKET_STATUSES,
+  updateShelfTicketRequestStatus,
+} from "../lib/scanOpsShelfTicketContracts";
 
-function formatMoney(currency, value) {
-  if (value === null || value === undefined || value === "" || Number.isNaN(Number(value))) return "—";
-  return `${currency}${Number(value).toFixed(2)}`;
+const FILTERS = [
+  { id: "all", label: "All" },
+  { id: "needs", label: "Needs Review" },
+  { id: "ready", label: "Ready" },
+];
+
+function statusClass(status) {
+  if (status === SHELF_TICKET_STATUSES.READY_FOR_PRINT_HANDOFF) return "bg-primary/10 text-primary";
+  if (status === SHELF_TICKET_STATUSES.PRINTED_COMPLETED) return "bg-emerald-50 text-emerald-700";
+  if (status === SHELF_TICKET_STATUSES.CANCELLED) return "bg-secondary text-muted-foreground";
+  return "bg-secondary text-secondary-foreground";
 }
 
-function totalCopies(lines) {
-  return lines.reduce((sum, line) => sum + Number(line.copies || 0), 0);
+function compactDate(value) {
+  if (!value) return "—";
+  return String(value).slice(0, 10);
+}
+
+function FilterButton({ filter, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`min-h-10 rounded-xl px-2 text-xs font-black active:scale-[0.98] ${active ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground active:bg-border"}`}
+    >
+      {filter.label}
+    </button>
+  );
+}
+
+function FormatButton({ format, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`min-h-12 rounded-2xl px-3 py-2 text-left active:scale-[0.98] ${active ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground active:bg-border"}`}
+    >
+      <span className="block text-sm font-black leading-tight">{format.label}</span>
+      <span className={`mt-1 block text-[10px] font-bold uppercase tracking-wide ${active ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{format.size}</span>
+    </button>
+  );
+}
+
+function QueueItem({ request, active, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full rounded-2xl border p-3 text-left active:scale-[0.99] ${active ? "border-primary bg-primary/5" : "border-border bg-card"}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="break-words text-sm font-black leading-tight text-foreground">{request.itemName}</p>
+          <p className="mt-1 break-words text-xs font-bold text-muted-foreground">
+            {request.sourceLabel} · {request.shelfLocation || "Location pending"}
+          </p>
+        </div>
+        <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide ${statusClass(request.status)}`}>{request.status}</span>
+      </div>
+    </button>
+  );
+}
+
+function PreviewCard({ preview, request, contract }) {
+  return (
+    <SectionCard className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Print-ready preview</p>
+          <p className="mt-1 text-sm font-black text-foreground">{preview.templateKey}</p>
+        </div>
+        <span className="shrink-0 rounded-full bg-secondary px-2 py-1 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+          {contract ? "Saved" : "Draft"}
+        </span>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-card p-4">
+        <div className="flex items-start justify-between gap-3">
+          <p className="break-words text-lg font-black leading-tight text-foreground">{preview.labelTitle}</p>
+          <span className="shrink-0 rounded-xl bg-primary px-2 py-1 text-[10px] font-black text-primary-foreground">{preview.labelBadgeText}</span>
+        </div>
+        <p className="mt-3 text-3xl font-black tracking-tight text-foreground">{preview.labelPrimaryPrice}</p>
+        {preview.labelSecondaryPrice && <p className="mt-1 text-xs font-black uppercase tracking-wide text-muted-foreground">{preview.labelSecondaryPrice}</p>}
+        <p className="mt-3 border-t border-border pt-2 text-xs font-bold text-muted-foreground">{preview.labelFooterText}</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <MetricPill label="Copies" value={contract?.copies || request.copies || 1} />
+        <MetricPill label="Print status" value="No printer job" />
+      </div>
+    </SectionCard>
+  );
 }
 
 export default function ShelfTickets() {
-  const location = useLocation();
-  const taskParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
-  const taskTicketType = taskParams.get("ticketType");
-  const taskPaperSize = taskParams.get("paperSize");
-  const taskReason = taskParams.get("reason");
-  const savedDraft = useMemo(() => loadWorkflowDraft("shelf_tickets"), []);
   const [scanValue, setScanValue] = useState("");
-  const [item, setItem] = useState(null);
-  const [ticketType, setTicketType] = useState(() => SHELF_TICKET_REQUEST_TYPE_OPTIONS.some((option) => option.id === taskTicketType) ? taskTicketType : "standard_shelf_ticket");
-  const [paperSize, setPaperSize] = useState(() => SHELF_TICKET_PAPER_SIZE_OPTIONS.some((option) => option.id === taskPaperSize) ? taskPaperSize : "small_shelf_edge");
-  const [copies, setCopies] = useState(1);
-  const [reason, setReason] = useState(() => SHELF_TICKET_REQUEST_REASON_OPTIONS.some((option) => option.id === taskReason) ? taskReason : "missing_ticket");
-  const [notes, setNotes] = useState("");
-  const [batch, setBatch] = useState(savedDraft?.items || []);
-  const [view, setView] = useState("entry");
-  const [submittedRequest, setSubmittedRequest] = useState(null);
+  const [filter, setFilter] = useState("all");
+  const [requests, setRequests] = useState([]);
+  const [contracts, setContracts] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [formatId, setFormatId] = useState("STANDARD_SHELF_LABEL");
+  const [savedContract, setSavedContract] = useState(null);
+  const [importedCount, setImportedCount] = useState(0);
 
-  const currency = getCurrencySymbol(item);
-  const currentPrice = getCurrentPriceSnapshot(item);
-  const markdownTicketCount = useMemo(() => batch.filter((line) => line.ticketType === "markdown_ticket").length, [batch]);
-  const itemCountLabel = `${batch.length} item${batch.length === 1 ? "" : "s"}`;
+  const refreshQueue = (nextSelectedId = selectedId) => {
+    const imported = importShelfTicketRequestsFromPriceCheck();
+    const nextRequests = imported.requests || getShelfTicketQueueRequests();
+    const nextContracts = getShelfTicketPrintContracts();
+    setRequests(nextRequests);
+    setContracts(nextContracts);
+    setImportedCount(imported.imported?.length || 0);
+    const stillExists = nextRequests.some((request) => request.requestId === nextSelectedId);
+    const fallback = nextRequests.find((request) => request.status !== SHELF_TICKET_STATUSES.CANCELLED)?.requestId || nextRequests[0]?.requestId || null;
+    const nextId = stillExists ? nextSelectedId : fallback;
+    setSelectedId(nextId);
+    const selected = nextRequests.find((request) => request.requestId === nextId);
+    if (selected) setFormatId(recommendedTicketFormatForRequest(selected));
+  };
 
   useEffect(() => {
-    if (view === "done") return;
-    saveWorkflowDraft("shelf_tickets", { items: batch });
-  }, [batch, view]);
+    refreshQueue(null);
+    // Stage AC imports once on open and then remains local/explicit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const scan = (value) => {
+  const selectedRequest = useMemo(() => requests.find((request) => request.requestId === selectedId) || null, [requests, selectedId]);
+  const selectedContract = useMemo(() => {
+    if (!selectedRequest) return null;
+    return contracts.find((contract) => contract.requestId === selectedRequest.requestId || contract.contractId === selectedRequest.ticketContractId) || null;
+  }, [contracts, selectedRequest]);
+
+  useEffect(() => {
+    if (selectedRequest) setFormatId(selectedContract?.ticketType || recommendedTicketFormatForRequest(selectedRequest));
+  }, [selectedRequest?.requestId, selectedContract?.ticketType]);
+
+  const activeRequests = useMemo(() => {
+    return requests.filter((request) => {
+      if (filter === "needs") return request.status === SHELF_TICKET_STATUSES.NEEDS_REVIEW || request.status === SHELF_TICKET_STATUSES.DRAFT;
+      if (filter === "ready") return request.status === SHELF_TICKET_STATUSES.READY_FOR_PRINT_HANDOFF;
+      return request.status !== SHELF_TICKET_STATUSES.CANCELLED;
+    });
+  }, [requests, filter]);
+
+  const queueCounts = useMemo(() => ({
+    active: requests.filter((request) => request.status !== SHELF_TICKET_STATUSES.CANCELLED && request.status !== SHELF_TICKET_STATUSES.PRINTED_COMPLETED).length,
+    ready: requests.filter((request) => request.status === SHELF_TICKET_STATUSES.READY_FOR_PRINT_HANDOFF).length,
+    contracts: contracts.length,
+  }), [requests, contracts]);
+
+  const preview = useMemo(() => selectedRequest ? buildShelfTicketPreview(selectedRequest, formatId) : null, [selectedRequest, formatId]);
+
+  const handleScan = (value) => {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
     if (!found) return;
-    setItem(found);
-    setTicketType("standard_shelf_ticket");
-    setPaperSize("small_shelf_edge");
-    setCopies(1);
-    setReason("missing_ticket");
-    setNotes("");
-    setView("entry");
-    setSubmittedRequest(null);
-  };
-
-  const addToBatch = () => {
-    if (!item || !ticketType || !paperSize || !reason || copies <= 0) return;
-    const line = normalizeShelfTicketRequestLine({ item, ticketType, paperSize, copies, reason, notes });
-    setBatch((current) => upsertShelfTicketRequestLine(current, line));
-    createScanOpsEvent(SCANOPS_EVENT_TYPES.SHELF_TICKET_ITEM_ADDED, {
-      source_module: "Shelf Tickets",
-      item_name: line.itemName,
-      sku: line.sku,
-      barcode: line.barcode,
-      plu: item.plu || item.scaleCode,
-      match_reason: item._searchMatch?.displayReason || null,
-      ticket_type: ticketType,
-      ticket_type_label: getOptionLabel(SHELF_TICKET_REQUEST_TYPE_OPTIONS, ticketType),
-      paper_size: paperSize,
-      paper_size_label: getOptionLabel(SHELF_TICKET_PAPER_SIZE_OPTIONS, paperSize),
-      copies: line.copies,
-      reason,
-      reason_label: getOptionLabel(SHELF_TICKET_REQUEST_REASON_OPTIONS, reason),
-      print_claimed: false,
-      applies_stock_directly: false,
-      status: "draft_ticket_request_added",
-    });
-    setItem(null);
+    const request = createManualShelfTicketRequest(found);
     setScanValue("");
-    setNotes("");
+    setSavedContract(null);
+    refreshQueue(request.requestId);
   };
 
-  const removeLine = (requestItemId) => {
-    setBatch((current) => current.filter((line) => line.requestItemId !== requestItemId));
+  const chooseRequest = (request) => {
+    setSelectedId(request.requestId);
+    setFormatId(selectedContract?.ticketType || recommendedTicketFormatForRequest(request));
+    setSavedContract(null);
   };
 
-  const submitTicketRequest = () => {
-    if (!batch.length) return;
-    const request = saveShelfTicketRequest(buildShelfTicketRequest({ items: batch }));
-    createScanOpsEvent(SCANOPS_EVENT_TYPES.SHELF_TICKET_BATCH_SENT_TO_DESKTOP, {
-      source_module: "Shelf Tickets",
-      shelf_ticket_request_id: request.requestId,
-      item_count: batch.length,
-      copies: totalCopies(batch),
-      markdown_ticket_count: markdownTicketCount,
-      print_claimed: false,
-      applies_stock_directly: false,
-      status: request.status,
-      official_inventory_prints_after_sync: true,
-    });
-    upsertDerivedTaskFromSource({
-      taskType: TASK_TYPES.SHELF_TICKET,
-      task_kind: "shelf_ticket_request",
-      title: "Complete shelf ticket request",
-      description: `${batch.length} shelf ticket item${batch.length === 1 ? "" : "s"} ready for physical follow-up.`,
-      action_needed: "Open Shelf Tickets and confirm task work only. Scanner does not print tickets directly.",
-      evidence_required: "Completion note",
-      priority: TASK_PRIORITIES.MEDIUM,
-      due_state: TASK_DUE_STATES.TODAY,
-      source_type: "shelf_ticket_request",
-      source_id: request.requestId,
-      source_ref: request.requestId,
-      source_module: "Shelf Tickets",
-      source_status_snapshot: request.status,
-      source_item_snapshot: {
-        item_count: batch.length,
-        copies: totalCopies(batch),
-        markdown_ticket_count: markdownTicketCount,
-        first_item: batch[0]?.itemName,
-      },
-      assigned_department: "Grocery",
-      assigned_role: "Staff",
-      assigned_user_id: "team",
-      assigned_user_name: "Grocery Team",
-      linkedWorkflow: "/shelf-tickets",
-      linkedWorkflowLabel: "Shelf Tickets · Request batch",
-      linkedContext: { requestId: request.requestId },
-    });
-    setSubmittedRequest(request);
-    setView("done");
-    setItem(null);
-    setScanValue("");
-    setBatch([]);
-    clearWorkflowDraft("shelf_tickets");
+  const saveContract = () => {
+    if (!selectedRequest) return;
+    const result = saveShelfTicketPrintContract({ request: selectedRequest, formatId, copies: selectedRequest.copies || 1, quantity: selectedRequest.quantity || 1 });
+    if (!result) return;
+    setSavedContract(result.contract);
+    refreshQueue(result.request.requestId);
   };
 
-  const resetDraft = () => {
-    setItem(null);
-    setScanValue("");
-    setBatch([]);
-    setView("entry");
-    setSubmittedRequest(null);
-    clearWorkflowDraft("shelf_tickets");
+  const updateStatus = (status) => {
+    if (!selectedRequest) return;
+    const result = updateShelfTicketRequestStatus(selectedRequest.requestId, status);
+    if (!result) return;
+    setSavedContract(result.contract || null);
+    refreshQueue(result.request.requestId);
   };
+
+  const readyDisabled = !selectedRequest?.ticketContractId && !selectedContract && !savedContract;
+  const completedDisabled = selectedRequest?.status !== SHELF_TICKET_STATUSES.READY_FOR_PRINT_HANDOFF;
 
   return (
     <PageShell>
       <WorkflowHeader
         title="Shelf Tickets"
-        subtitle={view === "review" ? "Review ticket request" : "Request only · Inventory prints later"}
+        subtitle="Queue v2 · print-ready contracts"
         scanValue={scanValue}
         onScanValueChange={setScanValue}
-        onScan={scan}
-        showSearch={view !== "done"}
+        onScan={handleScan}
       />
       <WorkflowMain>
-        {view === "done" && submittedRequest ? (
+        {savedContract && (
           <DoneCard
-            title="Shelf ticket request submitted"
-            helper="No ticket has been printed. Inventory owns printer routing and print status."
+            title="Shelf ticket contract saved"
+            helper="Saved locally for desktop/print handoff. No real printer job was created."
             rows={[
-              { label: "Request", value: submittedRequest.requestId },
-              { label: "Status", value: submittedRequest.status === "sync_pending" ? "Sync pending" : "Submitted" },
-              { label: "Items", value: String(submittedRequest.items.length) },
-              { label: "Copies", value: String(totalCopies(submittedRequest.items)) },
-              { label: "Printer mutation", value: "No direct print from handheld" },
+              { label: "Contract", value: savedContract.contractId },
+              { label: "Template", value: savedContract.templateKey },
+              { label: "Status", value: savedContract.status },
             ]}
           />
-        ) : view === "review" ? (
+        )}
+
+        <SectionCard className="space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-black text-foreground">Shelf Ticket Queue</p>
+              <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Scan/search to add a manual ticket. AB Ticket Needed events import once.</p>
+            </div>
+            <div className="shrink-0 rounded-2xl bg-secondary px-3 py-2 text-center">
+              <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Pending</p>
+              <p className="text-lg font-black text-foreground">{queueCounts.active}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {FILTERS.map((item) => <FilterButton key={item.id} filter={item} active={filter === item.id} onClick={() => setFilter(item.id)} />)}
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <MetricPill label="Ready" value={queueCounts.ready} />
+            <MetricPill label="Contracts" value={queueCounts.contracts} />
+            <MetricPill label="Imported" value={importedCount} />
+          </div>
+        </SectionCard>
+
+        <SectionCard>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Queue</p>
+              <p className="mt-1 text-lg font-black text-foreground">{activeRequests.length} ticket{activeRequests.length === 1 ? "" : "s"}</p>
+            </div>
+          </div>
+          {activeRequests.length ? (
+            <div className="mt-3 space-y-2">
+              {activeRequests.map((request) => <QueueItem key={request.requestId} request={request} active={request.requestId === selectedId} onClick={() => chooseRequest(request)} />)}
+            </div>
+          ) : (
+            <p className="mt-3 rounded-2xl bg-secondary/50 px-3 py-2 text-sm font-bold text-muted-foreground">No ticket requests in this view.</p>
+          )}
+        </SectionCard>
+
+        {selectedRequest ? (
           <>
             <SectionCard className="space-y-3">
-              <div>
-                <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Review Shelf Ticket Request</p>
-                <h2 className="mt-1 text-lg font-black text-foreground">{itemCountLabel} ready</h2>
-              </div>
-              <div className="space-y-2 rounded-2xl bg-secondary/50 p-3">
-                <InfoLine label="Copies" value={String(totalCopies(batch))} />
-                <InfoLine label="Markdown tickets" value={String(markdownTicketCount)} />
-                <InfoLine label="Printer action" value="No handheld print" />
-              </div>
-              <div className="space-y-2">
-                {batch.map((line) => (
-                  <div key={line.requestItemId} className="rounded-2xl border border-border bg-card p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="break-words text-sm font-black text-foreground">{line.itemName}</p>
-                        <p className="mt-1 break-words text-xs font-bold text-muted-foreground">
-                          {getOptionLabel(SHELF_TICKET_REQUEST_TYPE_OPTIONS, line.ticketType)} · {getOptionLabel(SHELF_TICKET_PAPER_SIZE_OPTIONS, line.paperSize)}
-                        </p>
-                        <p className="mt-1 break-words text-xs font-bold text-muted-foreground">
-                          Copies: {line.copies} · {getOptionLabel(SHELF_TICKET_REQUEST_REASON_OPTIONS, line.reason)}
-                        </p>
-                        {line.notes && <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">Note: {line.notes}</p>}
-                      </div>
-                      <button type="button" onClick={() => removeLine(line.requestItemId)} className="shrink-0 rounded-xl bg-secondary px-3 py-2 text-xs font-black text-secondary-foreground">
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </SectionCard>
-            <StickyActions leftLabel="Back" rightLabel="Submit Ticket Request" onLeft={() => setView("entry")} onRight={submitTicketRequest} rightDisabled={!batch.length} />
-          </>
-        ) : (
-          <>
-            {item ? (
-              <>
-                <ItemSummaryCard item={item}>
-                  <div className="grid grid-cols-2 gap-2">
-                    <MetricPill label="Current price" value={formatMoney(currency, currentPrice)} />
-                    <MetricPill label="Shelf" value={item.shelfLocation || item.location || item.shelf || "—"} />
-                  </div>
-                </ItemSummaryCard>
-                <SectionCard className="space-y-3">
-                  <TouchSelect label="Ticket type" value={ticketType} onChange={setTicketType} options={SHELF_TICKET_REQUEST_TYPE_OPTIONS} />
-                  <TouchSelect label="Paper size" value={paperSize} onChange={setPaperSize} options={SHELF_TICKET_PAPER_SIZE_OPTIONS} />
-                  <QuantityStepper label="Copies" value={copies} onChange={setCopies} unit="copies" min={1} />
-                  <TouchSelect label="Reason" value={reason} onChange={setReason} options={SHELF_TICKET_REQUEST_REASON_OPTIONS} />
-                  <TextInputField label="Notes" value={notes} onChange={setNotes} placeholder="Optional note..." />
-                  <p className="rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-bold text-muted-foreground">
-                    Ticket request only. Inventory handles template selection, printer routing, and print confirmation.
-                  </p>
-                </SectionCard>
-              </>
-            ) : (
-              <EmptyState title="No item selected." />
-            )}
-
-            <SectionCard>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Current ticket batch</p>
-                  <p className="mt-1 text-2xl font-black text-foreground">{itemCountLabel}</p>
+                  <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Selected Ticket</p>
+                  <h2 className="mt-1 break-words text-lg font-black leading-tight text-foreground">{selectedRequest.itemName}</h2>
+                  <p className="mt-1 break-all font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+                    {[selectedRequest.sku && `SKU ${selectedRequest.sku}`, selectedRequest.barcode && `Barcode ${selectedRequest.barcode}`].filter(Boolean).join(" · ") || "Identity pending"}
+                  </p>
                 </div>
-                {batch.length > 0 && (
-                  <button type="button" onClick={resetDraft} className="rounded-xl bg-secondary px-3 py-2 text-xs font-black text-secondary-foreground">
-                    Clear
-                  </button>
-                )}
+                <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide ${statusClass(selectedRequest.status)}`}>{selectedRequest.status}</span>
               </div>
-              {batch.length ? (
-                <div className="mt-3 space-y-2">
-                  {batch.map((line) => (
-                    <div key={line.requestItemId} className="rounded-2xl bg-secondary/60 p-3">
-                      <p className="break-words text-sm font-black text-foreground">{line.itemName}</p>
-                      <p className="mt-1 break-words text-xs font-bold text-muted-foreground">
-                        {getOptionLabel(SHELF_TICKET_REQUEST_TYPE_OPTIONS, line.ticketType)} · {getOptionLabel(SHELF_TICKET_PAPER_SIZE_OPTIONS, line.paperSize)} · Copies: {line.copies}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-3 rounded-2xl bg-secondary/50 px-3 py-2 text-sm font-bold text-muted-foreground">Batch is empty.</p>
-              )}
+
+              <div className="grid grid-cols-2 gap-2">
+                <MetricPill label="Source" value={selectedRequest.sourceLabel} />
+                <MetricPill label="Location" value={selectedRequest.shelfLocation || "—"} />
+                <MetricPill label="Regular" value={formatShelfTicketMoney(selectedRequest.regularPrice, selectedRequest.currency)} />
+                <MetricPill label="Expected" value={formatShelfTicketMoney(selectedRequest.expectedShelfPrice ?? selectedRequest.promoPrice ?? selectedRequest.regularPrice, selectedRequest.currency)} />
+              </div>
+
+              <div className="space-y-2 rounded-2xl bg-secondary/50 p-3">
+                <InfoLine label="Requested" value={compactDate(selectedRequest.createdAt)} />
+                <InfoLine label="Requested by" value={`${selectedRequest.requestedBy || "—"} · ${selectedRequest.requestedByRole || "—"}`} />
+                <InfoLine label="Printer action" value="No real print job" />
+              </div>
             </SectionCard>
-            <StickyActions
-              leftLabel="Review"
-              rightLabel="Add Ticket"
-              onLeft={() => setView("review")}
-              onRight={addToBatch}
-              leftDisabled={!batch.length}
-              rightDisabled={!item || !ticketType || !paperSize || !reason || copies <= 0}
-            />
+
+            <SectionCard className="space-y-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Ticket Format</p>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {SHELF_TICKET_FORMATS.map((format) => <FormatButton key={format.id} format={format} active={formatId === format.id} onClick={() => setFormatId(format.id)} />)}
+                </div>
+              </div>
+            </SectionCard>
+
+            {preview && <PreviewCard preview={preview} request={selectedRequest} contract={selectedContract || savedContract} />}
+
+            <SectionCard className="space-y-3">
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={saveContract} className="min-h-12 rounded-2xl bg-primary px-3 text-sm font-black text-primary-foreground active:scale-[0.98]">
+                  Save Contract
+                </button>
+                <button type="button" disabled={readyDisabled} onClick={() => updateStatus(SHELF_TICKET_STATUSES.READY_FOR_PRINT_HANDOFF)} className="min-h-12 rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border disabled:opacity-40">
+                  Ready for Handoff
+                </button>
+                <button type="button" disabled={completedDisabled} onClick={() => updateStatus(SHELF_TICKET_STATUSES.PRINTED_COMPLETED)} className="min-h-12 rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border disabled:opacity-40">
+                  Mark Completed
+                </button>
+                <button type="button" onClick={() => updateStatus(SHELF_TICKET_STATUSES.CANCELLED)} className="min-h-12 rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border">
+                  Cancel Ticket
+                </button>
+              </div>
+              <p className="text-xs font-semibold leading-snug text-muted-foreground">Completed is manual only. It does not claim a printer integration or print job result.</p>
+            </SectionCard>
           </>
+        ) : (
+          <EmptyState title="No ticket selected." helper="Use Price Check → Ticket Needed, or scan/search here to create a manual shelf-ticket request." />
         )}
+
+        <StickyActions
+          leftLabel="Refresh Queue"
+          rightLabel="Save Contract"
+          onLeft={() => refreshQueue(selectedId)}
+          onRight={saveContract}
+          rightDisabled={!selectedRequest}
+        />
       </WorkflowMain>
     </PageShell>
   );
