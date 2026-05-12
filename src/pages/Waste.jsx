@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
+import GovernanceContextStrip from "../components/scanner/GovernanceContextStrip";
 import TouchSelect from "../components/scanner/TouchSelect";
 import {
   EmptyState,
@@ -15,6 +16,12 @@ import {
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { getDefaultExpiryDate, getDefaultLotBatch } from "../lib/scanOpsItemAttributes";
 import { useScanOpsSession } from "../lib/scanOpsSession";
+import {
+  GOVERNED_ACTIONS,
+  canPerformScanOpsAction,
+  recordGovernedAction,
+  useScanOpsGovernanceContext,
+} from "../lib/scanOpsGovernance";
 import {
   canApproveWasteReview,
   canCreateAdjustmentContract,
@@ -170,6 +177,7 @@ function ContractCard({ contract }) {
 
 export default function Waste() {
   const session = useScanOpsSession();
+  const governance = useScanOpsGovernanceContext();
   const [scanValue, setScanValue] = useState("");
   const [item, setItem] = useState(null);
   const [quantity, setQuantity] = useState(1);
@@ -225,6 +233,13 @@ export default function Waste() {
 
   const saveDraft = () => {
     if (!item || quantity <= 0 || !reasonCode) return;
+    const permission = canPerformScanOpsAction(GOVERNED_ACTIONS.WASTE_SUBMIT, governance);
+    if (!permission.allowed) {
+      recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", null, permission);
+      setInlineMessage(permission.reason);
+      return;
+    }
+    recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", null, permission, { eventLabel: "Waste review draft saved" });
     const review = createWasteReviewDraft({ item, reasonCode, quantity, expiryDate, batchLot, shelfLocation, evidenceNote });
     refreshReviews(review.reviewId);
     setItem(null);
@@ -236,6 +251,12 @@ export default function Waste() {
 
   const submitSelected = () => {
     if (!selectedReview) return;
+    const permission = canPerformScanOpsAction(GOVERNED_ACTIONS.WASTE_SUBMIT, governance);
+    if (!permission.allowed) {
+      recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", selectedReview.reviewId, permission);
+      setInlineMessage(permission.reason);
+      return;
+    }
     const updated = submitWasteReview(selectedReview.reviewId);
     refreshReviews(updated?.reviewId);
     setInlineMessage(updated ? `${updated.status}. Review is role-gated and inventory sync remains deferred.` : "Review was not submitted.");
@@ -243,6 +264,13 @@ export default function Waste() {
 
   const decideSelected = (action) => {
     if (!selectedReview) return;
+    const actionKey = selectedReview.approvalRoleRequired === "Manager" ? GOVERNED_ACTIONS.SHRINK_APPROVE_HIGH_VALUE : GOVERNED_ACTIONS.WASTE_APPROVE_NORMAL;
+    const permission = canPerformScanOpsAction(actionKey, governance);
+    if (!permission.allowed) {
+      recordGovernedAction(actionKey, "Waste Review", selectedReview.reviewId, permission);
+      setInlineMessage(permission.reason);
+      return;
+    }
     const updated = decideWasteReview(selectedReview.reviewId, action, action === "approve" ? "Approved from handheld governance review" : `${action} from handheld governance review`);
     refreshReviews(updated?.reviewId);
     setInlineMessage(updated ? `${updated.approvalDecision}. Product master stock, price, and promotion records were not changed.` : "Review decision was not saved.");
@@ -250,6 +278,12 @@ export default function Waste() {
 
   const createContract = () => {
     if (!selectedReview) return;
+    const permission = canPerformScanOpsAction(GOVERNED_ACTIONS.ADJUSTMENT_CONTRACT_CREATE, governance);
+    if (!permission.allowed) {
+      recordGovernedAction(GOVERNED_ACTIONS.ADJUSTMENT_CONTRACT_CREATE, "Waste Review", selectedReview.reviewId, permission);
+      setInlineMessage(permission.reason);
+      return;
+    }
     const result = createAdjustmentContract(selectedReview.reviewId);
     refreshReviews(result.review?.reviewId);
     setLatestContract(result.contract || null);
@@ -276,6 +310,7 @@ export default function Waste() {
         placeholder="Search / scan item, SKU, barcode..."
       />
       <WorkflowMain>
+        <GovernanceContextStrip />
         {inlineMessage && (
           <div className="rounded-2xl border border-border bg-card px-4 py-3 text-sm font-bold leading-snug text-muted-foreground">
             {inlineMessage}

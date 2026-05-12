@@ -9,6 +9,7 @@ import {
 } from "./scanOpsShelfTicketContracts";
 import { getCurrentPriceSnapshot, getCurrencySymbol, getOptionLabel, MARKDOWN_REASON_OPTIONS } from "./scanOpsRequestLifecycle";
 import { normalizeSelectedScanItem } from "./scanOpsWorkflowBatch";
+import { buildGovernanceSnapshot } from "./scanOpsGovernance";
 
 const REQUESTS_KEY = "invyra_scanops_markdown_approval_requests_v1";
 const EVENTS_KEY = "invyra_scanops_markdown_approval_events_v1";
@@ -121,6 +122,7 @@ export function calculateDaysToExpiry(expiryDate, reference = new Date()) {
 
 function actorSnapshot() {
   const identity = buildEventIdentity(getScanOpsSession());
+  const governance = buildGovernanceSnapshot();
   return {
     requestedBy: identity.actorName || identity.user_name || "ScanOps user",
     requestedByRole: identity.actorRole || identity.role || "Staff",
@@ -129,6 +131,13 @@ function actorSnapshot() {
     scannerId: identity.scannerId || identity.scanner_id || null,
     sessionId: identity.sessionId || null,
     storeId: identity.storeId || identity.location_id || null,
+    shiftId: governance.shiftId || identity.shiftId || null,
+    shiftLabel: governance.shiftLabel || identity.shiftLabel || null,
+    shiftStatus: governance.shiftStatus || identity.shiftStatus || null,
+    deviceLabel: governance.deviceLabel || identity.deviceLabel || null,
+    locationId: governance.locationId || identity.locationId || null,
+    locationName: governance.locationName || identity.locationName || null,
+    governanceContext: governance,
   };
 }
 
@@ -314,6 +323,12 @@ function normalizeRequest(input = {}) {
     scannerId: input.scannerId || actorInput.scannerId || actor.scannerId,
     sessionId: input.sessionId || actorInput.sessionId || actor.sessionId,
     storeId: input.storeId || actorInput.storeId || actor.storeId,
+    shiftId: input.shiftId || actorInput.shiftId || actor.shiftId,
+    shiftLabel: input.shiftLabel || actorInput.shiftLabel || actor.shiftLabel,
+    shiftStatus: input.shiftStatus || actorInput.shiftStatus || actor.shiftStatus,
+    deviceLabel: input.deviceLabel || actorInput.deviceLabel || actor.deviceLabel,
+    locationId: input.locationId || actorInput.locationId || actor.locationId,
+    locationName: input.locationName || actorInput.locationName || actor.locationName,
     attributeSnapshot: input.attributeSnapshot || null,
     rawItem: input.rawItem || null,
     createdAt,
@@ -537,6 +552,10 @@ export function createMarkdownLabelHandoff(requestId) {
     scannerId: request.scannerId,
     sessionId: request.sessionId,
     storeId: request.storeId,
+    shiftId: request.shiftId,
+    shiftLabel: request.shiftLabel,
+    shiftStatus: request.shiftStatus,
+    deviceLabel: request.deviceLabel,
     createdAt: nowIso(),
   });
 
@@ -569,6 +588,12 @@ export function createMarkdownLabelHandoff(requestId) {
     createdBy: actorSnapshot().requestedBy,
     createdByRole: actorSnapshot().requestedByRole,
     deviceId: request.deviceId,
+    deviceLabel: request.deviceLabel,
+    sessionId: request.sessionId,
+    shiftId: request.shiftId,
+    shiftLabel: request.shiftLabel,
+    shiftStatus: request.shiftStatus,
+    storeId: request.storeId,
   };
   safeWrite(PRINTER_HANDOFF_KEY, [printerHandoff, ...getPrinterHandoffContracts()]);
 

@@ -3,6 +3,12 @@ import { getScanOpsSession, buildEventIdentity } from "./scanOpsSession";
 import { MARKDOWN_STATUSES, getMarkdownApprovalRequests } from "./scanOpsMarkdownApproval";
 import { getCurrencySymbol } from "./scanOpsRequestLifecycle";
 import { normalizeSelectedScanItem } from "./scanOpsWorkflowBatch";
+import {
+  GOVERNED_ACTIONS,
+  buildGovernanceSnapshot,
+  canPerformScanOpsAction,
+  recordGovernedAction,
+} from "./scanOpsGovernance";
 
 const REVIEWS_KEY = "invyra_scanops_waste_reviews_v1";
 const EVENTS_KEY = "invyra_scanops_waste_review_events_v1";
@@ -124,6 +130,7 @@ function safeWrite(key, rows) {
 
 function identitySnapshot() {
   const identity = buildEventIdentity(getScanOpsSession());
+  const governance = buildGovernanceSnapshot();
   return {
     actorUserId: identity.actorUserId || identity.user_id || null,
     actorName: identity.actorName || identity.user_name || "ScanOps user",
@@ -133,7 +140,13 @@ function identitySnapshot() {
     storeId: identity.storeId || identity.location_id || null,
     departmentId: identity.departmentId || null,
     sessionId: identity.sessionId || null,
-    shiftId: getScanOpsSession()?.shiftId || "shift_demo_001",
+    shiftId: governance.shiftId || getScanOpsSession()?.shiftId || "shift_demo_001",
+    shiftLabel: governance.shiftLabel || null,
+    shiftStatus: governance.shiftStatus || null,
+    deviceLabel: governance.deviceLabel || null,
+    locationId: governance.locationId || identity.locationId || null,
+    locationName: governance.locationName || identity.locationName || null,
+    governanceContext: governance,
   };
 }
 
@@ -447,24 +460,28 @@ function roleRank(role) {
 }
 
 export function canSubmitWasteReview(review, session = getScanOpsSession()) {
+  const governanceResult = canPerformScanOpsAction(GOVERNED_ACTIONS.WASTE_SUBMIT);
   return Boolean(review) && [
     WASTE_REVIEW_STATUSES.DRAFT,
     WASTE_REVIEW_STATUSES.RETURNED,
     WASTE_REVIEW_STATUSES.PENDING_REVIEW,
-  ].includes(review.status) && roleRank(session.actorRole) >= 1;
+  ].includes(review.status) && roleRank(session.actorRole) >= 1 && governanceResult.allowed;
 }
 
 export function canApproveWasteReview(review, session = getScanOpsSession()) {
   if (!review || [WASTE_REVIEW_STATUSES.APPROVED, WASTE_REVIEW_STATUSES.REJECTED, WASTE_REVIEW_STATUSES.ADJUSTMENT_CONTRACT_CREATED].includes(review.status)) return false;
   const required = review.approvalRoleRequired === "Manager" ? 3 : 2;
-  return roleRank(session.actorRole) >= required;
+  const actionKey = required >= 3 ? GOVERNED_ACTIONS.SHRINK_APPROVE_HIGH_VALUE : GOVERNED_ACTIONS.WASTE_APPROVE_NORMAL;
+  const governanceResult = canPerformScanOpsAction(actionKey);
+  return roleRank(session.actorRole) >= required && governanceResult.allowed;
 }
 
 export function canCreateAdjustmentContract(review, session = getScanOpsSession()) {
   if (!review) return false;
   if (review.linkedAdjustmentContractId || review.adjustmentContractStatus === "Created") return false;
   if (![WASTE_REVIEW_STATUSES.APPROVED, WASTE_REVIEW_STATUSES.ADJUSTMENT_CONTRACT_READY].includes(review.status)) return false;
-  return roleRank(session.actorRole) >= 3;
+  const governanceResult = canPerformScanOpsAction(GOVERNED_ACTIONS.ADJUSTMENT_CONTRACT_CREATE);
+  return roleRank(session.actorRole) >= 3 && governanceResult.allowed;
 }
 
 export function submitWasteReview(reviewId) {
@@ -473,6 +490,7 @@ export function submitWasteReview(reviewId) {
   const nextStatus = review.managerReviewRequired || review.approvalRoleRequired === "Manager"
     ? WASTE_REVIEW_STATUSES.PENDING_MANAGER_APPROVAL
     : WASTE_REVIEW_STATUSES.PENDING_SUPERVISOR_APPROVAL;
+  recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", review.reviewId, canPerformScanOpsAction(GOVERNED_ACTIONS.WASTE_SUBMIT));
   const updated = saveWasteReview({
     ...review,
     status: review.shrinkReviewRequired ? WASTE_REVIEW_STATUSES.SHRINK_REVIEW_REQUIRED : nextStatus,
@@ -521,6 +539,8 @@ export function decideWasteReview(reviewId, action, reason = "") {
   };
   const mapped = actionMap[action];
   if (!mapped) return review;
+  const actionKey = review.approvalRoleRequired === "Manager" ? GOVERNED_ACTIONS.SHRINK_APPROVE_HIGH_VALUE : GOVERNED_ACTIONS.WASTE_APPROVE_NORMAL;
+  recordGovernedAction(actionKey, "Waste Review", review.reviewId, canPerformScanOpsAction(actionKey), { eventLabel: `Waste review ${action}` });
   const updated = saveWasteReview({
     ...review,
     status: mapped.status,
@@ -566,6 +586,8 @@ export function createAdjustmentContract(reviewId) {
     });
     return { review, contract: existing || null, duplicateBlocked: true };
   }
+  const contractPermission = canPerformScanOpsAction(GOVERNED_ACTIONS.ADJUSTMENT_CONTRACT_CREATE);
+  recordGovernedAction(GOVERNED_ACTIONS.ADJUSTMENT_CONTRACT_CREATE, "Waste Review", review.reviewId, contractPermission, { eventLabel: "Adjustment contract create" });
   const identity = identitySnapshot();
   const contract = {
     adjustmentContractVersion: ADJUSTMENT_CONTRACT_VERSION,
@@ -589,10 +611,19 @@ export function createAdjustmentContract(reviewId) {
 
     approvedBy: review.approvedBy || identity.actorName,
     approvedByRole: review.approvedByRole || identity.actorRole,
+    actorUserId: identity.actorUserId,
+    actorName: identity.actorName,
+    actorRole: identity.actorRole,
     deviceId: review.deviceId || identity.deviceId,
+    deviceLabel: review.deviceLabel || identity.deviceLabel,
     scannerId: review.scannerId || identity.scannerId,
     sessionId: review.sessionId || identity.sessionId,
     shiftId: review.shiftId || identity.shiftId,
+    shiftLabel: review.shiftLabel || identity.shiftLabel,
+    shiftStatus: review.shiftStatus || identity.shiftStatus,
+    storeId: review.storeId || identity.storeId,
+    locationId: review.locationId || identity.locationId,
+    locationName: review.locationName || identity.locationName,
     createdAt: nowIso(),
   };
   safeWrite(CONTRACTS_KEY, [contract, ...getAdjustmentContracts()]);

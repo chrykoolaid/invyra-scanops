@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
+import GovernanceContextStrip from "../components/scanner/GovernanceContextStrip";
 import TouchSelect from "../components/scanner/TouchSelect";
 import {
   DoneCard,
@@ -23,8 +24,13 @@ import {
   getDefaultQuantityType,
   saveWorkflowItemAttributeSnapshot,
 } from "../lib/scanOpsItemAttributes";
-import { hasRoleAtLeast } from "../lib/scanOpsPermissions";
 import { useScanOpsSession } from "../lib/scanOpsSession";
+import {
+  GOVERNED_ACTIONS,
+  canPerformScanOpsAction,
+  recordGovernedAction,
+  useScanOpsGovernanceContext,
+} from "../lib/scanOpsGovernance";
 import {
   getCurrencySymbol,
   getCurrentPriceSnapshot,
@@ -115,10 +121,15 @@ function MethodButton({ method, active, onClick }) {
 
 export default function Markdowns() {
   const session = useScanOpsSession();
+  const governance = useScanOpsGovernanceContext();
   const location = useLocation();
   const taskParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const taskReason = taskParams.get("reason");
-  const canApprove = hasRoleAtLeast(session.actorRole, "Supervisor");
+  const markdownSubmitPermission = canPerformScanOpsAction(GOVERNED_ACTIONS.MARKDOWN_SUBMIT, governance);
+  const markdownApprovePermission = canPerformScanOpsAction(GOVERNED_ACTIONS.MARKDOWN_APPROVE, governance);
+  const markdownRejectPermission = canPerformScanOpsAction(GOVERNED_ACTIONS.MARKDOWN_REJECT, governance);
+  const handoffPermission = canPerformScanOpsAction(GOVERNED_ACTIONS.SHELF_TICKET_PRINT_HANDOFF, governance);
+  const canApprove = markdownApprovePermission.allowed;
 
   const [scanValue, setScanValue] = useState("");
   const [item, setItem] = useState(null);
@@ -191,6 +202,11 @@ export default function Markdowns() {
 
   const createRequest = () => {
     if (!item || !reason || !Number(quantity || 0)) return;
+    if (!markdownSubmitPermission.allowed) {
+      recordGovernedAction(GOVERNED_ACTIONS.MARKDOWN_SUBMIT, "Markdowns", null, markdownSubmitPermission);
+      setDone({ title: "Shift or permission required", helper: markdownSubmitPermission.reason, request: null });
+      return;
+    }
     const attributeSnapshot = buildWorkflowItemAttributeSnapshot({
       workflowType: "markdown",
       item,
@@ -203,6 +219,7 @@ export default function Markdowns() {
       source: "markdown_approval_stage_ad",
     });
     saveWorkflowItemAttributeSnapshot(attributeSnapshot);
+    recordGovernedAction(GOVERNED_ACTIONS.MARKDOWN_SUBMIT, "Markdowns", null, markdownSubmitPermission, { eventLabel: "Markdown request created" });
     const request = createMarkdownApprovalRequest({
       item,
       reasonCode: reason,
@@ -240,6 +257,14 @@ export default function Markdowns() {
 
   const updateSelected = (action, reasonText = "") => {
     if (!selectedRequest) return;
+    const permission = action === "submit" ? markdownSubmitPermission : action === "approve" ? markdownApprovePermission : markdownRejectPermission;
+    const actionKey = action === "submit" ? GOVERNED_ACTIONS.MARKDOWN_SUBMIT : action === "approve" ? GOVERNED_ACTIONS.MARKDOWN_APPROVE : GOVERNED_ACTIONS.MARKDOWN_REJECT;
+    if (!permission.allowed) {
+      recordGovernedAction(actionKey, "Markdowns", selectedRequest.requestId, permission);
+      setDone({ title: "Approval blocked", helper: permission.reason, request: selectedRequest });
+      return;
+    }
+    recordGovernedAction(actionKey, "Markdowns", selectedRequest.requestId, permission, { eventLabel: `Markdown ${action}` });
     const updated = updateMarkdownApprovalStatus(selectedRequest.requestId, action, reasonText);
     if (!updated) return;
     setDone({ title: `Markdown ${updated.status}`, helper: "No product master price changed. Approval state only was updated.", request: updated });
@@ -248,6 +273,12 @@ export default function Markdowns() {
 
   const createHandoff = () => {
     if (!selectedRequest) return;
+    if (!handoffPermission.allowed) {
+      recordGovernedAction(GOVERNED_ACTIONS.SHELF_TICKET_PRINT_HANDOFF, "Markdowns", selectedRequest.requestId, handoffPermission);
+      setDone({ title: "Handoff blocked", helper: handoffPermission.reason, request: selectedRequest });
+      return;
+    }
+    recordGovernedAction(GOVERNED_ACTIONS.SHELF_TICKET_PRINT_HANDOFF, "Markdowns", selectedRequest.requestId, handoffPermission, { eventLabel: "Markdown label handoff" });
     const result = createMarkdownLabelHandoff(selectedRequest.requestId);
     if (!result) return;
     if (result.duplicateBlocked) {
@@ -263,10 +294,10 @@ export default function Markdowns() {
     refreshRequests(result.request.requestId);
   };
 
-  const requestReady = Boolean(item && reason && Number(quantity || 0) > 0 && selectedPercent !== "");
-  const canSubmitSelected = selectedRequest && [MARKDOWN_STATUSES.DRAFT, MARKDOWN_STATUSES.RETURNED].includes(selectedRequest.status);
+  const requestReady = Boolean(item && reason && Number(quantity || 0) > 0 && selectedPercent !== "" && markdownSubmitPermission.allowed);
+  const canSubmitSelected = selectedRequest && markdownSubmitPermission.allowed && [MARKDOWN_STATUSES.DRAFT, MARKDOWN_STATUSES.RETURNED].includes(selectedRequest.status);
   const canApproveSelected = selectedRequest && canApprove && [MARKDOWN_STATUSES.PENDING_APPROVAL, MARKDOWN_STATUSES.NEEDS_REVIEW].includes(selectedRequest.status);
-  const canHandoffSelected = selectedRequest && selectedRequest.status === MARKDOWN_STATUSES.APPROVED && selectedRequest.labelRequired;
+  const canHandoffSelected = selectedRequest && handoffPermission.allowed && selectedRequest.status === MARKDOWN_STATUSES.APPROVED && selectedRequest.labelRequired;
 
   return (
     <PageShell>
@@ -278,6 +309,13 @@ export default function Markdowns() {
         onScan={scan}
       />
       <WorkflowMain>
+        <GovernanceContextStrip />
+        {done && !done.request && (
+          <SectionCard className="border-amber-200 bg-amber-50/70">
+            <h2 className="text-base font-black text-foreground">{done.title}</h2>
+            <p className="mt-1 text-sm font-bold leading-snug text-muted-foreground">{done.helper}</p>
+          </SectionCard>
+        )}
         {done?.request && (
           <DoneCard
             title={done.title}
@@ -413,7 +451,7 @@ export default function Markdowns() {
                 <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Approval</p>
                 <p className="mt-1 text-sm font-black text-foreground">{selectedRequest.approvalRequired ? `${selectedRequest.approvalRoleRequired} approval required` : "Approval blocked"}</p>
                 <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">
-                  Current role: {session.actorRole}. {canApprove ? "This role can approve eligible markdowns." : "Staff can create and submit only."}
+                  Current role: {session.actorRole}. {canApprove ? "This context can approve eligible markdowns." : markdownApprovePermission.reason}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -431,6 +469,7 @@ export default function Markdowns() {
                 </button>
               </div>
               {selectedRequest.blockedReason && <p className="rounded-2xl bg-destructive/10 px-3 py-2 text-xs font-black text-destructive">{selectedRequest.blockedReason}</p>}
+              {!markdownSubmitPermission.allowed && <p className="rounded-2xl bg-amber-50 px-3 py-2 text-xs font-black text-amber-700">{markdownSubmitPermission.reason}</p>}
             </SectionCard>
 
             <SectionCard className="space-y-3">
