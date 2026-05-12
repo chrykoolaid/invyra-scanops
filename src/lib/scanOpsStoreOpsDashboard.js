@@ -16,12 +16,10 @@ export const STORE_OPS_DASHBOARD_EVENT = "scanops-store-ops-dashboard-updated";
 const ROLE_LEVELS = { Staff: 1, Supervisor: 2, Manager: 3, Admin: 4 };
 
 export const STORE_OPS_FILTERS = [
-  { id: "all", label: "All" },
-  { id: "high", label: "High Risk" },
+  { id: "needs_action", label: "Needs Action" },
   { id: "blocked", label: "Blocked" },
-  { id: "review", label: "Review" },
-  { id: "deferred", label: "Deferred" },
-  { id: "waste", label: "Waste" },
+  { id: "waiting_sync", label: "Waiting Sync" },
+  { id: "reviewed", label: "Reviewed" },
 ];
 
 export const STORE_OPS_WORKFLOW_ROUTES = {
@@ -260,9 +258,9 @@ export function getStoreOpsDashboardModel(session = getScanOpsSession()) {
   return {
     context: {
       ...context,
-      mode: "Local Command Center",
+      mode: "Store Exceptions",
       desktop: "Not connected",
-      sync: "Contract preview only",
+      sync: "Saved locally",
       scope: getStoreOpsDashboardScope(session),
     },
     events,
@@ -279,13 +277,11 @@ export function getStoreOpsDashboardModel(session = getScanOpsSession()) {
   };
 }
 
-export function filterStoreOpsDashboardEvents(events = [], filterId = "all") {
-  if (filterId === "high") return events.filter((event) => event.riskLevel === "High");
+export function filterStoreOpsDashboardEvents(events = [], filterId = "needs_action") {
   if (filterId === "blocked") return events.filter((event) => event.blocked);
-  if (filterId === "review") return events.filter((event) => event.reviewRequired);
-  if (filterId === "deferred") return events.filter((event) => event.deferred);
-  if (filterId === "waste") return events.filter((event) => event.sourceWorkflow === "Waste Review");
-  return events;
+  if (filterId === "waiting_sync") return events.filter((event) => event.deferred || String(event.syncStatus || "").includes("DEFERRED") || String(event.syncStatus || "").includes("LOCAL"));
+  if (filterId === "reviewed") return events.filter((event) => String(event.localTriageStatus || "").toLowerCase().includes("reviewed"));
+  return events.filter((event) => !String(event.localTriageStatus || "").toLowerCase().includes("reviewed") && (event.blocked || event.reviewRequired || event.riskLevel !== "Low"));
 }
 
 export function addStoreOpsReviewNote(dashboardEventId, noteText, session = getScanOpsSession()) {

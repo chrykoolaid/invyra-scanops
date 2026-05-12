@@ -24,7 +24,6 @@ const BUTTON_SECONDARY = "w-full py-4 rounded-2xl bg-secondary text-secondary-fo
 const BUTTON_DANGER = "w-full py-4 rounded-2xl bg-destructive text-destructive-foreground font-bold text-sm active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-40 disabled:active:scale-100";
 const MINI_BUTTON = "px-3 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-xs font-bold active:scale-[0.98] active:bg-border transition-all flex items-center justify-center gap-1.5 disabled:opacity-40";
 const TAB_BUTTON = "rounded-2xl px-3 py-3 text-xs font-black border transition-all active:scale-[0.98]";
-const FIELD_CLASS = "w-full rounded-2xl border border-border bg-card px-3 py-3 text-sm font-semibold text-foreground outline-none focus:ring-2 focus:ring-primary/30 min-w-0";
 
 const PENDING_STATUSES = new Set([SYNC_STATUSES.QUEUED, SYNC_STATUSES.SYNC_PENDING, SYNC_STATUSES.SYNCING, SYNC_STATUSES.LOCAL_SAVED]);
 const FAILED_STATUSES = new Set([SYNC_STATUSES.SYNC_FAILED, SYNC_STATUSES.FAILED]);
@@ -97,21 +96,9 @@ function scopeQueueForRole(queue, session) {
   return queue.filter((record) => record.userId === session.actorUserId || record.deviceId === session.deviceId || record.createdBy === session.actorName);
 }
 
-function ageMatches(record, age) {
-  if (age === "all") return true;
-  const created = new Date(record.createdAt || record.lastUpdatedAt || Date.now()).getTime();
-  if (Number.isNaN(created)) return true;
-  const diff = Date.now() - created;
-  if (age === "today") return new Date(created).toDateString() === new Date().toDateString();
-  if (age === "24h") return diff <= 24 * 60 * 60 * 1000;
-  if (age === "7d") return diff <= 7 * 24 * 60 * 60 * 1000;
-  return true;
-}
-
 function applyTab(record, tab) {
   if (tab === "pending") return PENDING_STATUSES.has(record.status);
-  if (tab === "failed") return FAILED_STATUSES.has(record.status);
-  if (tab === "conflicts") return CONFLICT_STATUSES.has(record.status);
+  if (tab === "review") return FAILED_STATUSES.has(record.status) || CONFLICT_STATUSES.has(record.status);
   if (tab === "synced") return record.status === SYNC_STATUSES.SYNCED;
   if (tab === "discarded") return record.status === SYNC_STATUSES.DISCARDED;
   return true;
@@ -132,7 +119,6 @@ export default function SyncQueue() {
   const [selected, setSelected] = useState(null);
   const [activeTab, setActiveTab] = useState("pending");
   const [connection, setConnection] = useState(() => getInventoryConnection());
-  const [filters, setFilters] = useState({ workflow: "all", state: "all", device: "this", user: "me", age: "all" });
   const summary = useMemo(() => getSyncSummary(), [queue]);
 
   const refresh = () => {
@@ -146,22 +132,7 @@ export default function SyncQueue() {
   };
 
   const scopedQueue = useMemo(() => scopeQueueForRole(queue, session), [queue, session]);
-  const workflowOptions = useMemo(() => {
-    const unique = [...new Set(scopedQueue.map((record) => record.sourceWorkflow).filter(Boolean))];
-    return unique.map((id) => ({ id, label: WORKFLOW_LABELS[id] || id }));
-  }, [scopedQueue]);
-
-  const filtered = useMemo(() => {
-    return scopedQueue.filter((record) => {
-      if (!applyTab(record, activeTab)) return false;
-      if (filters.workflow !== "all" && record.sourceWorkflow !== filters.workflow) return false;
-      if (filters.state !== "all" && record.status !== filters.state) return false;
-      if (filters.device === "this" && record.deviceId !== session?.deviceId) return false;
-      if (filters.user === "me" && record.userId !== session?.actorUserId && record.createdBy !== session?.actorName) return false;
-      if (!ageMatches(record, filters.age)) return false;
-      return true;
-    });
-  }, [activeTab, filters, scopedQueue, session]);
+  const filtered = useMemo(() => scopedQueue.filter((record) => applyTab(record, activeTab)), [activeTab, scopedQueue]);
 
   const handleRetry = (record) => {
     createScanOpsEvent(SCANOPS_EVENT_TYPES.SYNC_RETRY_REQUESTED, {
@@ -226,7 +197,7 @@ export default function SyncQueue() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
-      <PageHeader title="Sync Queue" subtitle="Conflict-aware recovery for offline scanner evidence" />
+      <PageHeader title={session?.actorRole === "Staff" ? "Sync Status" : "Sync Review"} subtitle="Saved locally, waiting to sync, or needs review" />
       <main className="flex-1 px-4 py-5 pb-8 space-y-4 overflow-y-auto overflow-x-hidden" data-scanops-scroll>
         <section className="bg-card rounded-2xl border border-border p-5 min-w-0">
           <div className="flex items-start gap-3">
@@ -234,42 +205,30 @@ export default function SyncQueue() {
               {offline ? <WifiOff className="w-5 h-5" /> : issueCount ? <AlertTriangle className="w-5 h-5" /> : <Wifi className="w-5 h-5" />}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Queue Status</p>
-              <h2 className="text-lg font-black text-foreground mt-1 break-words">{summary.pending} pending · {summary.failed} failed · {reviewCount} review · {summary.synced} synced</h2>
-              <p className="text-sm text-muted-foreground mt-1 break-words">Evidence recovery only. Sync Queue never overwrites source truth, posts inventory, closes exceptions, approves counts, creates products, or prints tickets.</p>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Current Status</p>
+              <h2 className="text-lg font-black text-foreground mt-1 break-words">{summary.pending} waiting · {reviewCount + summary.failed} needs review · {summary.synced} done</h2>
+              <p className="text-sm text-muted-foreground mt-1 break-words">Saved-local evidence only. This screen never overwrites source truth, posts inventory, approves counts, creates products, or prints tickets.</p>
             </div>
           </div>
           <button onClick={handleRetryAll} disabled={retryableCount === 0} className={`${BUTTON_SECONDARY} mt-4`}>
-            <RefreshCw className="w-4 h-4" />Retry Safe Pending / Failed
+            <RefreshCw className="w-4 h-4" />Retry Safe Waiting Items
           </button>
           <p className="text-xs text-muted-foreground mt-3">Connection: {connection.statusLabel || "Online"} · Scope: {session?.actorRole === "Staff" ? "own device/user" : session?.actorRole === "Admin" ? "all sync records" : "store/team sync records"}</p>
         </section>
 
-        <section className="grid grid-cols-5 gap-2 min-w-0">
-          <TabButton id="pending" label="Pending" count={summary.pending} active={activeTab === "pending"} onClick={setActiveTab} />
-          <TabButton id="failed" label="Failed" count={summary.failed} active={activeTab === "failed"} onClick={setActiveTab} />
-          <TabButton id="conflicts" label="Conflicts" count={reviewCount} active={activeTab === "conflicts"} onClick={setActiveTab} />
-          <TabButton id="synced" label="Synced" count={summary.synced} active={activeTab === "synced"} onClick={setActiveTab} />
-          <TabButton id="discarded" label="Discarded" count={summary.discarded} active={activeTab === "discarded"} onClick={setActiveTab} />
-        </section>
-
-        <section className="bg-card rounded-2xl border border-border p-4 min-w-0">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3">Compact filters</p>
-          <div className="grid grid-cols-2 gap-3">
-            <FilterSelect label="Workflow" value={filters.workflow} onChange={(value) => setFilters((current) => ({ ...current, workflow: value }))} options={[{ id: "all", label: "All Sources" }, ...workflowOptions]} />
-            <FilterSelect label="State" value={filters.state} onChange={(value) => setFilters((current) => ({ ...current, state: value }))} options={stateOptionsForTab(activeTab)} />
-            <FilterSelect label="Device" value={filters.device} onChange={(value) => setFilters((current) => ({ ...current, device: value }))} options={[{ id: "this", label: "This Device" }, { id: "all", label: "All Devices" }]} />
-            <FilterSelect label="User" value={filters.user} onChange={(value) => setFilters((current) => ({ ...current, user: value }))} options={[{ id: "me", label: "Me" }, { id: "all", label: session?.actorRole === "Staff" ? "Allowed Records" : "All Users" }]} />
-            <FilterSelect label="Age" value={filters.age} onChange={(value) => setFilters((current) => ({ ...current, age: value }))} options={[{ id: "all", label: "All" }, { id: "today", label: "Today" }, { id: "24h", label: "Last 24h" }, { id: "7d", label: "Last 7d" }]} />
-          </div>
+        <section className="grid grid-cols-3 gap-2 min-w-0">
+          <TabButton id="pending" label="Waiting" count={summary.pending} active={activeTab === "pending"} onClick={setActiveTab} />
+          <TabButton id="review" label="Needs Review" count={reviewCount + summary.failed} active={activeTab === "review"} onClick={setActiveTab} />
+          <TabButton id="synced" label="Done" count={summary.synced} active={activeTab === "synced"} onClick={setActiveTab} />
+          {session?.actorRole !== "Staff" && <TabButton id="discarded" label="Discarded" count={summary.discarded} active={activeTab === "discarded"} onClick={setActiveTab} />}
         </section>
 
         <section className="space-y-3 min-w-0">
           {filtered.length === 0 ? (
             <div className="bg-card rounded-2xl border border-border p-6 text-center min-w-0">
               <CheckCircle2 className="w-10 h-10 text-muted-foreground mx-auto" />
-              <p className="text-sm font-bold text-foreground mt-3">No {activeTab} records</p>
-              <p className="text-xs text-muted-foreground mt-1">Scanner evidence will appear here when workflow records are queued, failed, conflicted, duplicated, synced, or discarded.</p>
+              <p className="text-sm font-bold text-foreground mt-3">No records here</p>
+              <p className="text-xs text-muted-foreground mt-1">Scanner evidence appears here as waiting, needs review, or done.</p>
             </div>
           ) : (
             filtered.map((record) => <SyncCard key={record.id} record={record} onView={() => setSelected(record)} onRetry={() => handleRetry(record)} />)
@@ -287,27 +246,6 @@ function TabButton({ id, label, count, active, onClick }) {
       <span className="block text-[10px] opacity-80 mt-0.5">{count}</span>
     </button>
   );
-}
-
-function FilterSelect({ label, value, onChange, options }) {
-  return (
-    <label className="min-w-0">
-      <span className="block text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1 truncate">{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} className={FIELD_CLASS}>
-        {options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-      </select>
-    </label>
-  );
-}
-
-function stateOptionsForTab(tab) {
-  const common = [{ id: "all", label: "All" }];
-  if (tab === "pending") return [...common, { id: SYNC_STATUSES.SYNC_PENDING, label: "Pending" }, { id: SYNC_STATUSES.QUEUED, label: "Queued" }, { id: SYNC_STATUSES.SYNCING, label: "Syncing" }];
-  if (tab === "failed") return [...common, { id: SYNC_STATUSES.SYNC_FAILED, label: "Failed" }];
-  if (tab === "conflicts") return [...common, { id: SYNC_STATUSES.CONFLICT, label: "Conflict" }, { id: SYNC_STATUSES.DUPLICATE, label: "Duplicate" }, { id: SYNC_STATUSES.NEEDS_REVIEW, label: "Needs Review" }, { id: SYNC_STATUSES.ESCALATED, label: "Escalated" }];
-  if (tab === "synced") return [...common, { id: SYNC_STATUSES.SYNCED, label: "Synced" }];
-  if (tab === "discarded") return [...common, { id: SYNC_STATUSES.DISCARDED, label: "Discarded" }];
-  return common;
 }
 
 function SyncCard({ record, onView, onRetry }) {
@@ -447,7 +385,7 @@ function SyncDetail({ record, session, onBack, onRetry, onResolve }) {
 
         <div className="space-y-3">
           <button onClick={onRetry} disabled={!isSyncRetryAllowed(record)} className={BUTTON_PRIMARY}><RotateCcw className="w-4 h-4" />Retry Sync</button>
-          <button onClick={onBack} className={BUTTON_SECONDARY}>Back to Sync Queue</button>
+          <button onClick={onBack} className={BUTTON_SECONDARY}>Back to Sync Status</button>
         </div>
       </main>
     </div>

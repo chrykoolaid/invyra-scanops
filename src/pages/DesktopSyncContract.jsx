@@ -87,12 +87,12 @@ function QueueCard({ event, selected, onClick }) {
 function SyncStatusPanel({ context, summary }) {
   return (
     <SectionCard className="space-y-3">
-      <PanelHeader icon={MonitorSmartphone} title="Sync Status" helper="Contract preview only. Desktop transport is not connected yet." />
+      <PanelHeader icon={MonitorSmartphone} title="Sync Status" helper="Saved locally. Desktop transport is not connected yet." />
       <div className="grid grid-cols-2 gap-2">
         <MetricPill label="Mode" value={context.mode} />
-        <MetricPill label="Transport" value={context.transport} />
+        <MetricPill label="Transport" value="Not connected" />
         <MetricPill label="Desktop" value={context.desktop} />
-        <MetricPill label="Queue" value={`${summary.total} outbound`} />
+        <MetricPill label="Waiting" value={summary.total} />
       </div>
       <div className="grid grid-cols-3 gap-2">
         <MetricPill label="Review" value={summary.reviewRequired} />
@@ -109,7 +109,7 @@ function SyncStatusPanel({ context, summary }) {
 function ContextPanel({ context }) {
   return (
     <SectionCard className="space-y-3">
-      <PanelHeader icon={ShieldCheck} title="Current Contract Context" helper="Stage AF governance context is attached to every outbound payload." />
+      <PanelHeader icon={ShieldCheck} title="Current Sync Context" helper="Device, shift, and user context attached to saved-local evidence." />
       <InfoLine label="User" value={`${context.actorName} · ${context.actorRole}`} />
       <InfoLine label="Device" value={`${context.deviceLabel || context.deviceId}`} />
       <InfoLine label="Shift" value={context.shiftLabel} />
@@ -121,7 +121,7 @@ function ContextPanel({ context }) {
 function QueuePanel({ queue, selectedId, onSelect }) {
   return (
     <SectionCard className="space-y-3">
-      <PanelHeader icon={Database} title="Outbound Queue" helper="Local/demo payloads that would be packaged for Inventory Desktop review." />
+      <PanelHeader icon={Database} title="Sync Review Queue" helper="Manager/Admin payload preview for Inventory Desktop review." />
       <div className="space-y-2">
         {queue.map((event) => (
           <QueueCard key={event.eventId} event={event} selected={event.eventId === selectedId} onClick={() => onSelect(event.eventId)} />
@@ -135,7 +135,7 @@ function PayloadSummary({ event, onValidate, onViewPayload, showPayload, validat
   if (!event) return null;
   return (
     <SectionCard className="space-y-3">
-      <PanelHeader icon={FileJson2} title="Selected Payload" helper="Payload envelope, governance proof, collaboration metadata, and workflow payload." />
+      <PanelHeader icon={FileJson2} title="Selected Payload" helper="Manager/Admin payload envelope, governance proof, collaboration metadata, and workflow payload." />
       <div className="rounded-2xl bg-secondary/60 p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -195,7 +195,7 @@ function DesktopResponsePanel({ response }) {
   if (!response) return null;
   return (
     <SectionCard className="space-y-3">
-      <PanelHeader icon={GitBranch} title="Desktop Response Preview" helper="Mock desktop response object. No real desktop connection exists in Stage AH." />
+      <PanelHeader icon={GitBranch} title="Desktop Response Preview" helper="Inspect-only response object. No real desktop connection exists." />
       <div className="rounded-2xl bg-secondary/60 p-3 space-y-2">
         <div className="flex items-start justify-between gap-3">
           <p className="min-w-0 break-words text-sm font-black text-foreground">{response.responseStatus}</p>
@@ -297,9 +297,30 @@ export default function DesktopSyncContract() {
     setValidatedAt(null);
   };
 
+  if (context.actorRole === "Staff") {
+    return (
+      <PageShell>
+        <PageHeader title="Sync Status" subtitle="Saved locally, waiting to sync, or needs review" />
+        <WorkflowMain>
+          <SyncStatusPanel context={context} summary={summary} />
+          <ContextPanel context={context} />
+          <SectionCard className="space-y-3">
+            <PanelHeader icon={LockKeyhole} title="Staff view" helper="Contract preview, payload inspection, validation events, and desktop response preview are Manager/Admin diagnostics." />
+            <div className="grid grid-cols-3 gap-2">
+              <MetricPill label="Saved" value={summary.total} />
+              <MetricPill label="Review" value={summary.reviewRequired} />
+              <MetricPill label="Blocked" value={summary.blocked} />
+            </div>
+            <p className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-xs font-bold text-muted-foreground">Your work is saved locally. Ask a supervisor if an item needs review. No live sync, printer routing, or inventory mutation is performed here.</p>
+          </SectionCard>
+        </WorkflowMain>
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell>
-      <PageHeader title="Desktop Sync Contract" subtitle="Handheld event queue, payload validation, and desktop response preview" />
+      <PageHeader title="Sync Review" subtitle="Manager/Admin contract preview and payload validation" />
       <WorkflowMain>
         <SyncStatusPanel context={context} summary={summary} />
         <ContextPanel context={context} />

@@ -19,7 +19,6 @@ import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { useScanOpsSession } from "../lib/scanOpsSession";
 import {
   CHECK_STATUSES,
-  ISSUE_SEVERITIES,
   ISSUE_STATUSES,
   UAT_PACKS,
   addPilotIssueNote,
@@ -323,17 +322,18 @@ function IssueCreatePanel({ selectedPack, session, onCreated }) {
       <div>
         <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Severity</p>
         <div className="mt-2 grid grid-cols-3 gap-2">
-          {ISSUE_SEVERITIES.map((item) => (
-            <button key={item} type="button" onClick={() => setSeverity(item)} className={`min-h-10 rounded-2xl px-2 text-xs font-black ${severity === item ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}>{item}</button>
-          ))}
+          {["Blocked", "Warning", "Observation"].map((label) => {
+            const mapped = label === "Blocked" ? "Blocker" : label === "Warning" ? "Medium" : "Observation";
+            return <button key={label} type="button" onClick={() => setSeverity(mapped)} className={`min-h-10 rounded-2xl px-2 text-xs font-black ${severity === mapped ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}>{label}</button>;
+          })}
         </div>
       </div>
       <label className="block">
-        <span className="text-xs font-black uppercase tracking-wider text-muted-foreground">Expected Behavior</span>
+        <span className="text-xs font-black uppercase tracking-wider text-muted-foreground">Which screen / expected result</span>
         <textarea value={expected} onChange={(event) => setExpected(event.target.value)} rows={2} className="mt-2 w-full resize-none rounded-2xl border border-input bg-card px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20" />
       </label>
       <label className="block">
-        <span className="text-xs font-black uppercase tracking-wider text-muted-foreground">Observed Behavior</span>
+        <span className="text-xs font-black uppercase tracking-wider text-muted-foreground">What happened / note</span>
         <textarea value={observed} onChange={(event) => setObserved(event.target.value)} rows={2} className="mt-2 w-full resize-none rounded-2xl border border-input bg-card px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20" />
       </label>
       <MiniButton onClick={create} disabled={!canCreate} variant="primary">Create Issue</MiniButton>
@@ -343,18 +343,16 @@ function IssueCreatePanel({ selectedPack, session, onCreated }) {
 
 function IssueList({ issues, selectedIssueId, setSelectedIssueId, filter, setFilter }) {
   const filtered = issues.filter((issue) => {
-    if (filter === "all") return true;
-    if (filter === "open") return issue.status !== "Closed";
-    if (filter === "blocker") return issue.severity === "Blocker";
-    if (filter === "warning") return ["High", "Medium", "Low", "Observation"].includes(issue.severity);
-    return true;
+    if (filter === "blocked") return issue.status !== "Closed" && ["Blocker", "High"].includes(issue.severity);
+    if (filter === "reviewed") return issue.status === "Closed" || issue.status === "Locally Reviewed";
+    return issue.status !== "Closed";
   });
 
   return (
     <SectionCard className="space-y-3">
-      <PanelHeader icon={AlertTriangle} title="Pilot Issue Log" helper="Local UAT blockers and observations." />
-      <div className="grid grid-cols-4 gap-2">
-        {[["all", "All"], ["blocker", "Blocker"], ["warning", "Warning"], ["open", "Open"]].map(([id, label]) => (
+      <PanelHeader icon={AlertTriangle} title="Pilot Issue Log" helper="Simple status sections for local UAT blockers and observations." />
+      <div className="grid grid-cols-3 gap-2">
+        {[["needs_action", "Needs Action"], ["blocked", "Blocked"], ["reviewed", "Reviewed"]].map(([id, label]) => (
           <button key={id} type="button" onClick={() => setFilter(id)} className={`min-h-10 rounded-2xl px-2 text-xs font-black ${filter === id ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}>{label}</button>
         ))}
       </div>
@@ -372,7 +370,7 @@ function IssueList({ issues, selectedIssueId, setSelectedIssueId, filter, setFil
               </div>
             </div>
           </button>
-        )) : <p className="rounded-2xl bg-secondary/50 px-3 py-3 text-sm font-bold text-muted-foreground">No pilot issues match this filter.</p>}
+        )) : <p className="rounded-2xl bg-secondary/50 px-3 py-3 text-sm font-bold text-muted-foreground">No pilot issues in this section.</p>}
       </div>
     </SectionCard>
   );
@@ -451,7 +449,7 @@ function IssueDetail({ issue, session, onChanged }) {
 }
 
 function IssuesWorkspace({ model, selectedPack, session, selectedIssueId, setSelectedIssueId, onChanged }) {
-  const [filter, setFilter] = useState("open");
+  const [filter, setFilter] = useState("needs_action");
   const selectedIssue = model.issues.find((issue) => issue.issueId === selectedIssueId) || model.openIssues[0] || model.issues[0] || null;
 
   return (
@@ -579,9 +577,29 @@ export default function PilotReadiness() {
 
   const refresh = () => setRefreshKey((value) => value + 1);
 
+  if (session.actorRole === "Staff") {
+    return (
+      <PageShell>
+        <PageHeader title="Report Pilot Issue" subtitle="Tell a supervisor what happened" />
+        <WorkflowMain key={refreshKey}>
+          <IssueCreatePanel selectedPack="core" session={session} onCreated={() => refresh()} />
+          <SectionCard className="space-y-3">
+            <PanelHeader icon={LockKeyhole} title="Staff view" helper="UAT packs, release gate, role matrix, reports, contract preview, and payload inspection are hidden from Staff." />
+            <div className="grid grid-cols-3 gap-2">
+              <MetricPill label="Your role" value={session.actorRole} />
+              <MetricPill label="Issue log" value="Local" />
+              <MetricPill label="Sync" value="No live sync" />
+            </div>
+            <p className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-xs font-bold text-muted-foreground">Report what happened, which screen it happened on, and whether it blocked your work. A supervisor or manager reviews the issue later.</p>
+          </SectionCard>
+        </WorkflowMain>
+      </PageShell>
+    );
+  }
+
   return (
     <PageShell>
-      <PageHeader title="Pilot Readiness" subtitle="UAT scripts, safety checks, and release-gate proof" />
+      <PageHeader title="Pilot Readiness" subtitle="Manager/Admin UAT scripts, safety checks, and release-gate proof" />
       <WorkflowMain key={refreshKey}>
         <ModeTabs mode={mode} setMode={setMode} />
 
@@ -621,7 +639,7 @@ export default function PilotReadiness() {
         <SectionCard className="border-border bg-background/70">
           <div className="flex items-start gap-3">
             <Route className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            <p className="text-xs font-bold leading-snug text-muted-foreground">Stage AJ is a pilot-readiness gate for Phase 2. It records local UAT evidence, issues, and release-gate proof only. It does not sync to desktop, route to printers, approve changes, or mutate inventory, prices, promotions, waste, or accounting.</p>
+            <p className="text-xs font-bold leading-snug text-muted-foreground">Stage AK keeps Pilot Readiness behind Manager/Admin or UAT mode. It records local UAT evidence, issues, and release-gate proof only; it does not sync to desktop, route to printers, approve changes, or mutate inventory, prices, promotions, waste, or accounting.</p>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <MiniButton onClick={() => navigate("/store-ops-dashboard")}>Open Store Ops</MiniButton>

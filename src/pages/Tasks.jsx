@@ -19,6 +19,7 @@ import PageHeader from "../components/scanner/PageHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
 import { SectionCard, TextInputField } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
+import { hasRoleAtLeast } from "../lib/scanOpsPermissions";
 import { useScanOpsSession } from "../lib/scanOpsSession";
 import {
   buildTaskEventPayload,
@@ -32,7 +33,6 @@ import {
   getTaskDueStateLabel,
   getTaskLinkedWorkflow,
   getTaskPriority,
-  getTaskSourceOptions,
   getTaskStats,
   getTaskStatusLabel,
   normalizeTask,
@@ -154,7 +154,6 @@ export default function Tasks() {
   const session = useScanOpsSession();
   const [tasks, setTasks] = useState(() => getInitialTaskQueue());
   const [activeTab, setActiveTab] = useState(() => session.actorRole === "Staff" ? "mine" : "team");
-  const [filters, setFilters] = useState({ assigned: "all", priority: "all", due: "all", source: "all", status: "all" });
   const [selectedTaskId, setSelectedTaskId] = useState(null);
   const [completionNote, setCompletionNote] = useState("");
   const [blockReason, setBlockReason] = useState("");
@@ -163,21 +162,10 @@ export default function Tasks() {
   const [lastEvent, setLastEvent] = useState(null);
 
   const selectedTask = useMemo(() => tasks.map(normalizeTask).find((task) => task.taskId === selectedTaskId || task.id === selectedTaskId) || null, [selectedTaskId, tasks]);
-  const sourceOptions = useMemo(() => getTaskSourceOptions(tasks), [tasks]);
-  const taskFilters = { ...filters, tab: activeTab };
-  const visibleTasks = useMemo(() => sortTasksByOperationalPriority(filterTasks(tasks, taskFilters, session)), [tasks, taskFilters, session]);
+  const taskFilters = { tab: activeTab };
+  const visibleTasks = useMemo(() => sortTasksByOperationalPriority(filterTasks(tasks, taskFilters, session)), [tasks, activeTab, session]);
   const stats = useMemo(() => getTaskStats(tasks, session), [tasks, session]);
 
-  const updateFilter = (key, value) => {
-    setFilters((current) => ({ ...current, [key]: value }));
-    createScanOpsEvent(SCANOPS_EVENT_TYPES.TASK_FILTER_CHANGED, {
-      source_module: "Tasks",
-      filter_key: key,
-      filter_value: value,
-      sync_exempt: true,
-      status: "viewed",
-    });
-  };
 
   const recordAndSet = (task, nextStatus, eventType, extra = {}) => {
     const updated = updateTaskStatus(tasks, task.taskId, nextStatus, extra, session);
@@ -253,7 +241,6 @@ export default function Tasks() {
     const reset = resetTaskQueue();
     setTasks(reset);
     setSelectedTaskId(null);
-    setFilters({ assigned: "all", priority: "all", due: "all", source: "all", status: "all" });
     setActiveTab(session.actorRole === "Staff" ? "mine" : "team");
     setLastEvent(null);
   };
@@ -387,7 +374,7 @@ export default function Tasks() {
             <div className="min-w-0 flex-1">
               <p className="text-xs font-black uppercase tracking-wider text-primary">Stage X</p>
               <h2 className="mt-1 text-lg font-black text-foreground">Task Intelligence</h2>
-              <p className="mt-1 break-words text-sm font-semibold text-muted-foreground">Assigned, prioritised, source-linked frontline work.</p>
+              <p className="mt-1 break-words text-sm font-semibold text-muted-foreground">Simple status sections for source-linked frontline work.</p>
             </div>
           </div>
           <div className="grid grid-cols-4 gap-2">
@@ -411,15 +398,9 @@ export default function Tasks() {
           ))}
         </section>
 
-        <SectionCard className="space-y-3">
-          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Filters</p>
-          <div className="grid grid-cols-2 gap-3">
-            <TouchSelect label="Assigned to" value={filters.assigned} onChange={(value) => updateFilter("assigned", value)} options={ASSIGNED_OPTIONS} />
-            <TouchSelect label="Priority" value={filters.priority} onChange={(value) => updateFilter("priority", value)} options={PRIORITY_OPTIONS} />
-            <TouchSelect label="Due" value={filters.due} onChange={(value) => updateFilter("due", value)} options={DUE_OPTIONS} />
-            <TouchSelect label="Source" value={filters.source} onChange={(value) => updateFilter("source", value)} options={sourceOptions} />
-            <TouchSelect label="Status" value={filters.status} onChange={(value) => updateFilter("status", value)} options={STATUS_OPTIONS} />
-          </div>
+        <SectionCard className="space-y-2">
+          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Task Sections</p>
+          <p className="text-sm font-semibold text-muted-foreground">Use the buttons above: My Tasks, Team Tasks, Escalated, and Done. Advanced task filtering belongs on desktop/admin surfaces.</p>
         </SectionCard>
 
         <section className="space-y-3 min-w-0">
@@ -427,27 +408,29 @@ export default function Tasks() {
             <div className="rounded-2xl border border-border bg-card p-5 text-center">
               <Clock3 className="mx-auto h-8 w-8 text-muted-foreground" />
               <p className="mt-3 font-black text-foreground">No tasks here</p>
-              <p className="mt-1 text-sm font-semibold text-muted-foreground">Try another tab or filter.</p>
+              <p className="mt-1 text-sm font-semibold text-muted-foreground">Try another task section.</p>
             </div>
           ) : (
             visibleTasks.map((task) => <TaskCard key={task.taskId} task={task} onOpen={() => setSelectedTaskId(task.taskId)} />)
           )}
         </section>
 
-        <SectionCard className="space-y-3">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-secondary text-secondary-foreground">
-              <RotateCcw className="h-5 w-5" />
+        {hasRoleAtLeast(session.actorRole, "Manager") && (
+          <SectionCard className="space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-secondary text-secondary-foreground">
+                <RotateCcw className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-black text-foreground">UAT helper</p>
+                <p className="mt-1 break-words text-sm font-semibold text-muted-foreground">Manager/Admin only. Resets local task fixtures; existing workflow evidence remains untouched.</p>
+              </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-black text-foreground">Testing helper</p>
-              <p className="mt-1 break-words text-sm font-semibold text-muted-foreground">Resets only local task fixtures. Existing workflow evidence remains untouched.</p>
-            </div>
-          </div>
-          <button type="button" onClick={resetForTesting} className={BUTTON_SECONDARY}>
-            <RotateCcw className="h-4 w-4" />Reset Tasks
-          </button>
-        </SectionCard>
+            <button type="button" onClick={resetForTesting} className={BUTTON_SECONDARY}>
+              <RotateCcw className="h-4 w-4" />Reset Tasks
+            </button>
+          </SectionCard>
+        )}
       </main>
     </div>
   );

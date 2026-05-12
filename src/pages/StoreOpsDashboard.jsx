@@ -8,7 +8,6 @@ import {
   FileJson2,
   Gauge,
   GitBranch,
-  LayoutDashboard,
   LockKeyhole,
   MessageSquarePlus,
   Route,
@@ -23,6 +22,7 @@ import {
   STORE_OPS_WORKFLOW_ROUTES,
   addStoreOpsReviewNote,
   canUseStoreOpsTriageControls,
+  canViewFullStoreOpsCommandCenter,
   filterStoreOpsDashboardEvents,
   keepStoreOpsExceptionDeferred,
   markStoreOpsLocallyReviewed,
@@ -90,12 +90,12 @@ function MiniButton({ children, onClick, disabled = false, variant = "secondary"
 function StoreStatusPanel({ model, session }) {
   return (
     <SectionCard className="space-y-3">
-      <PanelHeader icon={LayoutDashboard} title="Store Status" helper="Local visibility only. Desktop sync and printer routing are not connected in this stage." />
+      <PanelHeader icon={ShieldCheck} title="Store Exceptions Status" helper="Local visibility only. Desktop sync and printer routing are not connected in this stage." />
       <div className="grid grid-cols-2 gap-2">
         <MetricPill label="Mode" value={model.context.mode} />
         <MetricPill label="Desktop" value={model.context.desktop} />
         <MetricPill label="Sync" value={model.context.sync} />
-        <MetricPill label="Open" value={`${model.events.length} exceptions`} />
+        <MetricPill label="Needs" value={`${model.events.length} items`} />
       </div>
       <div className="rounded-2xl border border-border bg-background/70 p-3 space-y-2">
         <InfoLine label="User" value={`${session.actorName} · ${session.actorRole}`} />
@@ -132,13 +132,13 @@ function PriorityExceptionCard({ event, selected, onClick }) {
 function PriorityPanel({ events, selectedId, onSelect, onOpenCommand }) {
   return (
     <SectionCard className="space-y-3">
-      <PanelHeader icon={AlertTriangle} title="Priority Exceptions" helper="Risk-ranked work that needs review, blocking attention, or deferred acknowledgement." />
+      <PanelHeader icon={AlertTriangle} title="Needs Action" helper="Work that needs review before the store can continue smoothly." />
       <div className="space-y-2">
         {events.length ? events.map((event) => (
           <PriorityExceptionCard key={event.dashboardEventId} event={event} selected={event.dashboardEventId === selectedId} onClick={() => onSelect(event.dashboardEventId)} />
         )) : <p className="rounded-2xl bg-secondary/50 px-3 py-3 text-sm font-bold text-muted-foreground">No priority exceptions visible for this role.</p>}
       </div>
-      <MiniButton variant="primary" onClick={onOpenCommand}>Open Exceptions</MiniButton>
+      <MiniButton variant="primary" onClick={onOpenCommand}>Review Items</MiniButton>
     </SectionCard>
   );
 }
@@ -146,7 +146,7 @@ function PriorityPanel({ events, selectedId, onSelect, onOpenCommand }) {
 function WorkflowHealthPanel({ workflows }) {
   return (
     <SectionCard className="space-y-3">
-      <PanelHeader icon={Gauge} title="Workflow Health" helper="Compact health summary across Phase 2 store-operation workflows." />
+      <PanelHeader icon={Gauge} title="Queue Summary" helper="Simple status summary across store-operation workflows." />
       <div className="space-y-2">
         {workflows.map((workflow) => (
           <div key={workflow.workflow} className="rounded-2xl border border-border bg-background/70 p-3">
@@ -172,7 +172,7 @@ function WorkflowHealthPanel({ workflows }) {
 function SyncReviewSummary({ summary, onViewQueue }) {
   return (
     <SectionCard className="space-y-3">
-      <PanelHeader icon={Database} title="Sync & Review Summary" helper="Derived from Stage AH outbound queue and desktop response preview states." />
+      <PanelHeader icon={Database} title="Sync Review Summary" helper="Saved-local evidence waiting for desktop review." />
       <div className="grid grid-cols-2 gap-2">
         <MetricPill label="Queued" value={summary.total} />
         <MetricPill label="Review" value={summary.visibleReviewRequired} />
@@ -182,12 +182,12 @@ function SyncReviewSummary({ summary, onViewQueue }) {
       <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2">
         <p className="text-xs font-black leading-snug text-amber-800">Contract preview only. No live desktop connection, no force sync, no price / stock / waste mutation.</p>
       </div>
-      <MiniButton onClick={onViewQueue}>View Sync Queue</MiniButton>
+      <MiniButton onClick={onViewQueue}>Open Sync Review</MiniButton>
     </SectionCard>
   );
 }
 
-function FilterButton({ filter, active, onClick }) {
+function StatusButton({ filter, active, onClick }) {
   return (
     <button
       type="button"
@@ -202,11 +202,11 @@ function FilterButton({ filter, active, onClick }) {
 function ExceptionList({ events, selectedId, onSelect }) {
   return (
     <SectionCard className="space-y-3">
-      <PanelHeader icon={ClipboardCheck} title="Exceptions" helper="Review-required, blocked, and deferred items. Selecting does not mutate records." />
+      <PanelHeader icon={ClipboardCheck} title="Exception Queue" helper="Needs action, blocked, waiting-sync, and reviewed items. Selecting does not mutate records." />
       <div className="space-y-2">
         {events.length ? events.map((event) => (
           <PriorityExceptionCard key={event.dashboardEventId} event={event} selected={event.dashboardEventId === selectedId} onClick={() => onSelect(event.dashboardEventId)} />
-        )) : <p className="rounded-2xl bg-secondary/50 px-3 py-3 text-sm font-bold text-muted-foreground">No exceptions match this filter.</p>}
+        )) : <p className="rounded-2xl bg-secondary/50 px-3 py-3 text-sm font-bold text-muted-foreground">No items in this section.</p>}
       </div>
     </SectionCard>
   );
@@ -217,7 +217,7 @@ function PayloadPreview({ event }) {
     <div className="rounded-2xl border border-border bg-background/70 p-3">
       <div className="flex items-center gap-2">
         <FileJson2 className="h-4 w-4 text-primary" />
-        <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Payload Preview</p>
+        <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Payload Preview · Manager/Admin</p>
       </div>
       <pre className="mt-3 max-h-56 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words rounded-2xl bg-secondary/60 p-3 text-[10px] font-semibold leading-relaxed text-muted-foreground">
         {JSON.stringify({
@@ -253,7 +253,7 @@ function DesktopResponsePreview({ event }) {
     <div className="rounded-2xl border border-border bg-background/70 p-3">
       <div className="flex items-center gap-2">
         <GitBranch className="h-4 w-4 text-primary" />
-        <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Desktop Response Preview</p>
+        <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Desktop Response Preview · Manager/Admin</p>
       </div>
       <div className="mt-3 space-y-2">
         <InfoLine label="Response" value={titleCase(event.desktopResponseStatus)} />
@@ -287,6 +287,7 @@ function SelectedExceptionPanel({ event, onRefresh }) {
   const [showResponse, setShowResponse] = useState(true);
   const [note, setNote] = useState("Needs desktop review before any operational mutation.");
   const triageAllowed = canUseStoreOpsTriageControls(session);
+  const payloadAllowed = canViewFullStoreOpsCommandCenter(session);
 
   if (!event) {
     return (
@@ -317,7 +318,7 @@ function SelectedExceptionPanel({ event, onRefresh }) {
 
   return (
     <SectionCard className="space-y-3">
-      <PanelHeader icon={LockKeyhole} title="Selected Exception" helper="Safe local inspection only. No approvals, stock edits, price edits, write-offs, or printer routing." />
+      <PanelHeader icon={LockKeyhole} title="Selected Item" helper="Safe local inspection only. No approvals, stock edits, price edits, write-offs, or printer routing." />
       <div className="rounded-2xl bg-secondary/60 p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -350,13 +351,13 @@ function SelectedExceptionPanel({ event, onRefresh }) {
 
       <div className="grid grid-cols-2 gap-2">
         <MiniButton onClick={() => navigate(sourceRoute)}>View Source</MiniButton>
-        <MiniButton onClick={() => navigate("/desktop-sync-contract")}>Open Sync Contract</MiniButton>
-        <MiniButton onClick={() => setShowPayload((value) => !value)}>{showPayload ? "Hide Payload" : "View Payload"}</MiniButton>
-        <MiniButton onClick={() => setShowResponse((value) => !value)}>{showResponse ? "Hide Response" : "View Response"}</MiniButton>
+        {payloadAllowed && <MiniButton onClick={() => navigate("/desktop-sync-contract")}>Open Sync Review</MiniButton>}
+        {payloadAllowed && <MiniButton onClick={() => setShowPayload((value) => !value)}>{showPayload ? "Hide Payload" : "View Payload"}</MiniButton>}
+        {payloadAllowed && <MiniButton onClick={() => setShowResponse((value) => !value)}>{showResponse ? "Hide Response" : "View Response"}</MiniButton>}
       </div>
 
-      {showResponse && <DesktopResponsePreview event={event} />}
-      {showPayload && <PayloadPreview event={event} />}
+      {payloadAllowed && showResponse && <DesktopResponsePreview event={event} />}
+      {payloadAllowed && showPayload && <PayloadPreview event={event} />}
 
       <div className="space-y-2">
         <label className="block">
@@ -371,11 +372,11 @@ function SelectedExceptionPanel({ event, onRefresh }) {
         <div className="grid grid-cols-2 gap-2">
           <MiniButton onClick={addNote} disabled={!note.trim()}><MessageSquarePlus className="mr-1 inline h-3.5 w-3.5" />Add Note</MiniButton>
           <MiniButton onClick={keepDeferred}>Keep Deferred</MiniButton>
-          <MiniButton onClick={markReviewed} disabled={!triageAllowed} variant="primary">Mark Locally Reviewed</MiniButton>
-          <MiniButton onClick={() => navigate("/desktop-sync-contract")}>View AH Payloads</MiniButton>
+          <MiniButton onClick={markReviewed} disabled={!triageAllowed} variant="primary">Mark Reviewed</MiniButton>
+          {payloadAllowed && <MiniButton onClick={() => navigate("/desktop-sync-contract")}>View Payloads</MiniButton>}
         </div>
         {!triageAllowed && (
-          <p className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-xs font-bold text-muted-foreground">Staff can inspect and add local notes, but manager-style local triage review is Supervisor/Manager/Admin only.</p>
+          <p className="rounded-2xl border border-border bg-background/70 px-3 py-2 text-xs font-bold text-muted-foreground">Staff can inspect and add local notes. Review completion and payload inspection stay Supervisor/Manager/Admin only.</p>
         )}
       </div>
 
@@ -391,8 +392,7 @@ export default function StoreOpsDashboard() {
   const navigate = useNavigate();
   const session = useScanOpsSession();
   const model = useStoreOpsDashboard();
-  const [mode, setMode] = useState("dashboard");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState("needs_action");
   const [selectedId, setSelectedId] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -402,7 +402,7 @@ export default function StoreOpsDashboard() {
   useEffect(() => {
     createScanOpsEvent(SCANOPS_EVENT_TYPES.STORE_OPS_DASHBOARD_VIEWED, {
       status: "viewed",
-      dashboardMode: "local_command_center",
+      dashboardMode: "store_exceptions",
       desktopConnected: false,
       visibleExceptions: model.events.length,
     });
@@ -421,44 +421,37 @@ export default function StoreOpsDashboard() {
 
   const select = (id) => {
     setSelectedId(id);
-    setMode("command");
   };
 
   const refresh = () => setRefreshKey((value) => value + 1);
 
   return (
     <PageShell>
-      <PageHeader title="Store Ops Dashboard" subtitle="Exception visibility, review queues, and sync-safe store operations" />
+      <PageHeader title="Store Exceptions" subtitle="Items that need review before the store can continue smoothly" />
       <WorkflowMain key={refreshKey}>
-        <div className="grid grid-cols-2 gap-2">
-          <button type="button" onClick={() => setMode("dashboard")} className={`min-h-11 rounded-2xl px-3 text-xs font-black ${mode === "dashboard" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}>Dashboard</button>
-          <button type="button" onClick={() => setMode("command")} className={`min-h-11 rounded-2xl px-3 text-xs font-black ${mode === "command" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}>Command Center</button>
-        </div>
+        <StoreStatusPanel model={model} session={session} />
 
-        {mode === "dashboard" ? (
+        <SectionCard className="space-y-3">
+          <PanelHeader icon={ShieldCheck} title="Review Sections" helper="Simple handheld sections replace desktop-style filters." />
+          <div className="grid grid-cols-2 gap-2">
+            {STORE_OPS_FILTERS.map((item) => <StatusButton key={item.id} filter={item} active={filter === item.id} onClick={() => setFilter(item.id)} />)}
+          </div>
+        </SectionCard>
+
+        <ExceptionList events={filteredEvents} selectedId={selectedEvent?.dashboardEventId} onSelect={select} />
+        <SelectedExceptionPanel event={selectedEvent} onRefresh={refresh} />
+
+        {canViewFullStoreOpsCommandCenter(session) && (
           <>
-            <StoreStatusPanel model={model} session={session} />
-            <PriorityPanel events={model.priorityEvents} selectedId={selectedEvent?.dashboardEventId} onSelect={select} onOpenCommand={() => setMode("command")} />
             <WorkflowHealthPanel workflows={model.workflowHealth} />
-            <SyncReviewSummary summary={model.syncSummary} onViewQueue={() => navigate("/desktop-sync-contract")} />
-          </>
-        ) : (
-          <>
-            <SectionCard className="space-y-3">
-              <PanelHeader icon={ShieldCheck} title="Exception Command Center" helper="Review-required and blocked work. Triage is local only; approvals stay out of scope." />
-              <div className="grid grid-cols-3 gap-2">
-                {STORE_OPS_FILTERS.map((item) => <FilterButton key={item.id} filter={item} active={filter === item.id} onClick={() => setFilter(item.id)} />)}
-              </div>
-            </SectionCard>
-            <ExceptionList events={filteredEvents} selectedId={selectedEvent?.dashboardEventId} onSelect={select} />
-            <SelectedExceptionPanel event={selectedEvent} onRefresh={refresh} />
+            <SyncReviewSummary summary={model.syncSummary} onViewQueue={() => navigate("/sync-queue")} />
           </>
         )}
 
         <SectionCard className="border-border bg-background/70">
           <div className="flex items-start gap-3">
             <Route className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-            <p className="text-xs font-bold leading-snug text-muted-foreground">Stage AI is a local command-center layer on top of Stage AH. It can inspect, note, defer, and route attention, but it cannot approve, print, sync, or mutate operational records.</p>
+            <p className="text-xs font-bold leading-snug text-muted-foreground">Stage AK keeps this as a handheld review surface. It can inspect, note, and mark local review, but it cannot approve, print, sync, or mutate operational records.</p>
           </div>
         </SectionCard>
       </WorkflowMain>
