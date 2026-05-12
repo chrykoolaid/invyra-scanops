@@ -21,6 +21,7 @@ import SyncQueue from './pages/SyncQueue';
 import ShelfTickets from './pages/ShelfTickets';
 import Transfers from './pages/Transfers';
 import ProductIdentityReview from './pages/ProductIdentityReview';
+import ScanOpsReporting from './pages/ScanOpsReporting';
 
 
 const ScrollToTopOnRouteChange = () => {
@@ -88,6 +89,7 @@ const AuthenticatedApp = () => {
         <Route path="/shelf-tickets" element={<ShelfTickets />} />
         <Route path="/transfers" element={<Transfers />} />
         <Route path="/product-identity-review" element={<ProductIdentityReview />} />
+        <Route path="/scanops-reporting" element={<ScanOpsReporting />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>
     </div>
