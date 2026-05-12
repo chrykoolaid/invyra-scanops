@@ -24,6 +24,7 @@ export const SHELF_TICKET_SOURCE_TYPES = {
   MISSING_TICKET: "MISSING_TICKET",
   DAMAGED_TICKET: "DAMAGED_TICKET",
   UNCLEAR_LABEL: "UNCLEAR_LABEL",
+  MARKDOWN_LABEL: "MARKDOWN_LABEL",
 };
 
 export const SHELF_TICKET_FORMATS = [
@@ -32,6 +33,7 @@ export const SHELF_TICKET_FORMATS = [
   { id: "MISSING_LABEL_REPLACEMENT", label: "Missing Label", templateKey: "MISSING_LABEL_REPLACEMENT", size: "Shelf Edge", orientation: "Landscape" },
   { id: "WRONG_PRODUCT_LABEL_REPLACEMENT", label: "Wrong Label", templateKey: "WRONG_PRODUCT_LABEL_REPLACEMENT", size: "Shelf Edge", orientation: "Landscape" },
   { id: "PRICE_MISMATCH_REVIEW_LABEL", label: "Price Review", templateKey: "PRICE_MISMATCH_REVIEW_LABEL", size: "Review Label", orientation: "Landscape" },
+  { id: "MARKDOWN_LABEL", label: "Markdown Label", templateKey: "MARKDOWN_LABEL", size: "Shelf Edge", orientation: "Landscape" },
 ];
 
 function safeRead(key, fallback = []) {
@@ -106,6 +108,7 @@ function sourceLabel(sourceType) {
     [SHELF_TICKET_SOURCE_TYPES.MISSING_TICKET]: "Missing Ticket",
     [SHELF_TICKET_SOURCE_TYPES.DAMAGED_TICKET]: "Damaged Ticket",
     [SHELF_TICKET_SOURCE_TYPES.UNCLEAR_LABEL]: "Unclear Label",
+    [SHELF_TICKET_SOURCE_TYPES.MARKDOWN_LABEL]: "Markdown Label",
   }[sourceType] || "Shelf Ticket";
 }
 
@@ -323,6 +326,7 @@ export function recommendedTicketFormatForRequest(request = {}) {
   if (request.sourceType === SHELF_TICKET_SOURCE_TYPES.WRONG_PRODUCT_LABEL) return "WRONG_PRODUCT_LABEL_REPLACEMENT";
   if (request.sourceType === SHELF_TICKET_SOURCE_TYPES.MISSING_TICKET || request.sourceType === SHELF_TICKET_SOURCE_TYPES.DAMAGED_TICKET) return "MISSING_LABEL_REPLACEMENT";
   if (request.sourceType === SHELF_TICKET_SOURCE_TYPES.PRICE_CHECK_MISMATCH) return "PRICE_MISMATCH_REVIEW_LABEL";
+  if (request.sourceType === SHELF_TICKET_SOURCE_TYPES.MARKDOWN_LABEL) return "MARKDOWN_LABEL";
   return "STANDARD_SHELF_LABEL";
 }
 
@@ -341,7 +345,7 @@ export function buildShelfTicketPreview(request = {}, formatId = recommendedTick
   const isPromo = format.id === "PROMO_SHELF_LABEL" || request.promoPrice != null;
   const primaryPrice = isPromo ? request.promoPrice ?? request.expectedShelfPrice ?? request.regularPrice : request.expectedShelfPrice ?? request.regularPrice ?? request.shelfLabelPrice;
   const secondaryPrice = isPromo && request.regularPrice != null ? request.regularPrice : request.shelfLabelPrice;
-  const badgeText = isPromo ? "PROMO" : format.id === "PRICE_MISMATCH_REVIEW_LABEL" ? "REVIEW" : request.sourceLabel || "SHELF";
+  const badgeText = isPromo ? "PROMO" : format.id === "MARKDOWN_LABEL" ? "MARKDOWN" : format.id === "PRICE_MISMATCH_REVIEW_LABEL" ? "REVIEW" : request.sourceLabel || "SHELF";
   const footerText = isPromo && request.promoEndDate ? `Ends ${request.promoEndDate}` : request.shelfLocation || "Location pending";
   return {
     labelTitle: String(request.itemName || "Scanned item").toUpperCase(),
