@@ -11,6 +11,7 @@ import ProductLookup from './pages/ProductLookup';
 import StockCount from './pages/StockCount';
 import Receiving from './pages/Receiving';
 import Replenish from './pages/Replenish';
+import PriceCheck from './pages/PriceCheck';
 import GapScan from './pages/GapScan';
 import Markdowns from './pages/Markdowns';
 import Waste from './pages/Waste';
@@ -79,6 +80,7 @@ const AuthenticatedApp = () => {
         <Route path="/stock-count" element={<StockCount />} />
         <Route path="/receiving" element={<Receiving />} />
         <Route path="/replenish" element={<Replenish />} />
+        <Route path="/price-check" element={<PriceCheck />} />
         <Route path="/gap-scan" element={<GapScan />} />
         <Route path="/markdowns" element={<Markdowns />} />
         <Route path="/waste" element={<Waste />} />

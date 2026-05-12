@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Activity, BadgeHelp, BarChart3, Bell, ClipboardCheck, Database, Gauge, GitPullRequest, Info, ListChecks, LogOut, MonitorSmartphone, RefreshCw, ScanLine, Settings, ShieldCheck, Ticket, Wifi, X } from "lucide-react";
+import { Activity, BadgeHelp, BadgePercent, BarChart3, Bell, ClipboardCheck, Database, Gauge, GitPullRequest, Info, ListChecks, LogOut, MonitorSmartphone, RefreshCw, ScanLine, Settings, ShieldCheck, Ticket, Wifi, X } from "lucide-react";
 import { createScanOpsAuditEvent, getVisibleAuditEvents } from "../../lib/scanOpsAudit";
 import { SCANOPS_EVENT_TYPES } from "../../lib/scanOpsEvents";
 import { canApproveOverride, canChangeContext, canManageOffline, auditScopeLabel } from "../../lib/scanOpsPermissions";
@@ -19,6 +19,7 @@ const MENU_SECTIONS = [
     { id: "device", label: "Device Info", icon: MonitorSmartphone, description: "Session, scanner, and store context" },
   ]},
   { title: "Daily Controls", items: [
+    { id: "price_check_route", label: "Price Check", icon: BadgePercent, description: "Verify shelf price and promo labels" },
     { id: "sync", label: "Sync Now", icon: RefreshCw, description: "Push queued scanner events" },
     { id: "scanner", label: "Scanner Test", icon: ScanLine, description: "Check barcode / PLU input" },
     { id: "tickets", label: "Shelf Ticket Queue Status", icon: Ticket, description: "View desktop ticket queue handoff" },
@@ -143,6 +144,7 @@ export default function OperationalMenuPanel({ onClose }) {
   const action = (item) => {
     if (item.id === "tasks_route") { navigate("/tasks"); onClose(); return; }
     if (item.id === "sync_queue_route") { navigate("/sync-queue"); onClose(); return; }
+    if (item.id === "price_check_route") { navigate("/price-check"); onClose(); return; }
     if (item.id === "product_identity_review_route") { navigate("/product-identity-review"); onClose(); return; }
     if (item.id === "scanops_reporting_route") { navigate("/scanops-reporting"); onClose(); return; }
     if (item.id === "sync") { const before = getSyncSummary(); const attempts = retryAllSyncEvents().filter(Boolean).length; const event = createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.SYNC_NOW_REQUESTED, { status: "sync_requested", queued_before: before.queued, pending_before: before.pending, failed_before: before.failed, conflict_before: before.conflict, needs_review_before: before.needsReview, retry_attempts: attempts }); setLastAction(`Sync Now recorded · ${event.traceId || event.trace_id}`); setPanel("audit"); return; }
