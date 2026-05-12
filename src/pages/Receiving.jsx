@@ -7,6 +7,7 @@ import {
   EmptyState,
   InfoLine,
   ItemSummaryCard,
+  MetricPill,
   PageShell,
   QuantityStepper,
   SectionCard,
@@ -16,6 +17,8 @@ import {
 } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
+import { useScanOpsSession } from "../lib/scanOpsSession";
+import { hasRoleAtLeast } from "../lib/scanOpsPermissions";
 import {
   buildWorkflowItemAttributeSnapshot,
   getDefaultExpiryDate,
@@ -25,87 +28,160 @@ import {
   summarizeAttributeSnapshot,
 } from "../lib/scanOpsItemAttributes";
 import {
-  buildReceivingRequest,
-  getOptionLabel,
-  RECEIVING_CONDITION_OPTIONS,
-  RECEIVING_DISCREPANCY_OPTIONS,
-  RECEIVING_MODES,
-  saveReceivingRequest,
-  normalizeReceivingLine,
-  upsertReceivingLine,
-} from "../lib/scanOpsRequestLifecycle";
+  addReceivingEvidence,
+  batchReadOnly,
+  createReceivingBatch,
+  differenceLabel,
+  expectedQuantityForItem,
+  getReceivingBatches,
+  makeReceivingLine,
+  optionLabel,
+  RECEIVING_CONDITION_OPTIONS_STAGEW,
+  RECEIVING_EXCEPTION_OPTIONS_STAGEW,
+  reviewReceivingException,
+  saveReceivingBatches,
+  submitReceivingBatch,
+  unitForItem,
+} from "../lib/scanOpsReceivingTransfers";
 
 const SUPPLIERS = [
   { id: "fresh_fields", label: "Fresh Fields Co.", helper: "Fresh produce and dairy" },
   { id: "dairy_direct", label: "Dairy Direct Ltd.", helper: "Chilled dairy delivery" },
   { id: "green_harvest", label: "Green Harvest", helper: "Produce supplier" },
   { id: "metro_dry_goods", label: "Metro Dry Goods", helper: "Grocery and pantry" },
+  { id: "manual_supplier", label: "Manual supplier", helper: "Delivery without supplier master" },
 ];
 
-function getSupplierLabel(id) {
-  return SUPPLIERS.find((supplier) => supplier.id === id)?.label || id || "—";
+const REVIEW_ACTIONS = [
+  { id: "Accepted", label: "Accept Evidence" },
+  { id: "Follow-up Requested", label: "Request Follow-up" },
+  { id: "Supplier Issue", label: "Mark Supplier Issue" },
+];
+
+function supplierLabel(id) {
+  return SUPPLIERS.find((supplier) => supplier.id === id)?.label || id || "Manual supplier";
 }
 
-function getExpectedQty(item) {
-  const value = Number(item?.pendingDeliveryQty ?? item?.pending_delivery_qty ?? 24);
-  return Number.isFinite(value) ? value : 24;
+function countOpenExceptions(batch) {
+  return (batch?.exceptions || []).filter((exception) => !["Accepted", "Closed", "Rejected"].includes(exception.status)).length;
 }
 
-function getUnit(item) {
-  return item?.unitType || item?.unit_type || "each";
+function canSeeBatch(batch, session) {
+  if (!batch) return false;
+  if (hasRoleAtLeast(session.actorRole, "Supervisor")) return true;
+  return (batch.assigned_user_id || batch.actor_id) === session.actorUserId;
 }
 
-function lineDiff(line) {
-  if (line.expectedQty == null) return "—";
-  const diff = Number(line.receivedQty || 0) - Number(line.expectedQty || 0);
-  return diff > 0 ? `+${diff}` : String(diff);
+function receivingScopeLabel(session) {
+  if (session.actorRole === "Admin") return "All receiving batches";
+  if (session.actorRole === "Manager") return "Store receiving batches";
+  if (session.actorRole === "Supervisor") return "Team receiving batches";
+  return "Assigned receiving batches";
+}
+
+function statusClass(status) {
+  if (["Exception Review", "Review Required"].includes(status)) return "bg-destructive/10 text-destructive";
+  if (["Accepted", "Closed"].includes(status)) return "bg-primary/10 text-primary";
+  return "bg-secondary text-muted-foreground";
 }
 
 export default function Receiving() {
+  const session = useScanOpsSession();
   const [scanValue, setScanValue] = useState("");
+  const [batches, setBatches] = useState(() => getReceivingBatches());
+  const [activeBatchId, setActiveBatchId] = useState(null);
+  const [view, setView] = useState("landing");
   const [supplierId, setSupplierId] = useState("fresh_fields");
-  const [poReference, setPoReference] = useState("PO-10293");
-  const [receivingMode, setReceivingMode] = useState(RECEIVING_MODES.AGAINST_PO);
+  const [poReference, setPoReference] = useState("PO-1042");
+  const [deliveryRef, setDeliveryRef] = useState("DEL-7781");
   const [item, setItem] = useState(null);
-  const [quantity, setQuantity] = useState(6);
-  const [condition, setCondition] = useState("good");
-  const [discrepancy, setDiscrepancy] = useState("none");
+  const [quantity, setQuantity] = useState(0);
+  const [exceptionType, setExceptionType] = useState("none");
+  const [condition, setCondition] = useState("normal");
+  const [evidenceNote, setEvidenceNote] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
   const [lotBatch, setLotBatch] = useState("");
   const [quantityType, setQuantityType] = useState("each");
   const [enteredWeight, setEnteredWeight] = useState("");
-  const [weightSource, setWeightSource] = useState("label_weight");
-  const [batch, setBatch] = useState([]);
-  const [view, setView] = useState("entry");
-  const [submittedRequest, setSubmittedRequest] = useState(null);
+  const [weightSource, setWeightSource] = useState("manual_entry");
+  const [submittedBatch, setSubmittedBatch] = useState(null);
 
-  const supplierName = getSupplierLabel(supplierId);
-  const unit = getUnit(item);
-  const expectedQty = getExpectedQty(item);
-  const againstPoNeedsReference = receivingMode === RECEIVING_MODES.AGAINST_PO && !String(poReference || "").trim();
-  const setupReady = Boolean(supplierId) && !againstPoNeedsReference;
-  const batchDiscrepancyCount = useMemo(() => batch.filter((line) => line.discrepancy && line.discrepancy !== "none").length, [batch]);
+  const visibleBatches = useMemo(() => batches.filter((batch) => canSeeBatch(batch, session)), [batches, session]);
+  const activeBatch = useMemo(() => batches.find((batch) => batch.id === activeBatchId) || null, [batches, activeBatchId]);
+  const readOnly = batchReadOnly(activeBatch?.status) || !activeBatch;
+  const canReview = hasRoleAtLeast(session.actorRole, "Supervisor");
+  const expectedQty = expectedQuantityForItem(item);
+  const unit = unitForItem(item || {});
+  const diff = expectedQty == null ? null : Number((Number(quantity || 0) - expectedQty).toFixed(3));
+
+  const persist = (nextBatches) => {
+    setBatches(nextBatches);
+    saveReceivingBatches(nextBatches);
+  };
+
+  const replaceBatch = (nextBatch) => {
+    const nextBatches = batches.some((batch) => batch.id === nextBatch.id)
+      ? batches.map((batch) => (batch.id === nextBatch.id ? nextBatch : batch))
+      : [nextBatch, ...batches];
+    persist(nextBatches);
+    setActiveBatchId(nextBatch.id);
+    return nextBatch;
+  };
+
+  const openBatch = (batch) => {
+    setActiveBatchId(batch.id);
+    setView("batch");
+    setItem(null);
+    setScanValue("");
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.RECEIVING_BATCH_OPENED, {
+      source_module: "Receiving",
+      batch_id: batch.id,
+      batch_ref: batch.batch_ref,
+      status: batch.status,
+      applies_stock_directly: false,
+    });
+  };
+
+  const startBatch = () => {
+    const batch = createReceivingBatch({
+      supplierId,
+      supplierName: supplierLabel(supplierId),
+      poRef: poReference,
+      deliveryRef,
+    });
+    replaceBatch(batch);
+    setView("batch");
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.RECEIVING_BATCH_STARTED, {
+      source_module: "Receiving",
+      batch_id: batch.id,
+      batch_ref: batch.batch_ref,
+      supplier_name: batch.supplier_name,
+      purchase_order_ref: batch.po_ref,
+      delivery_ref: batch.delivery_ref,
+      status: batch.status,
+      applies_stock_directly: false,
+    });
+  };
 
   const scan = (value) => {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
     if (!found) return;
-    const rawScanValue = typeof value === "object" ? value?._searchMatch?.matchedValue || value?.barcode || value?.gtin || "" : String(value || "").trim();
+    const rawValue = typeof value === "object" ? value?._searchMatch?.matchedValue || value?.barcode || value?.gtin || "" : String(value || "").trim();
+    const expected = expectedQuantityForItem(found);
     setItem(found);
-    const defaultQty = Math.min(6, Math.max(1, getExpectedQty(found)));
-    setQuantity(defaultQty);
-    setCondition("good");
-    setDiscrepancy("none");
+    setQuantity(expected == null ? 1 : Math.max(0, expected));
+    setExceptionType("none");
+    setCondition("normal");
+    setEvidenceNote("");
     setExpiryDate(getDefaultExpiryDate(found));
     setLotBatch(getDefaultLotBatch(found));
     setQuantityType(getDefaultQuantityType(found));
     setEnteredWeight("");
-    setWeightSource(rawScanValue?.startsWith("2") ? "label_weight" : "manual_entry");
-    setView("entry");
-    setSubmittedRequest(null);
+    setWeightSource(rawValue?.startsWith("2") ? "label_weight" : "manual_entry");
   };
 
-  const addToBatch = () => {
-    if (!item || !setupReady) return;
+  const saveEvidence = () => {
+    if (!activeBatch || !item || readOnly) return;
     const attributeSnapshot = buildWorkflowItemAttributeSnapshot({
       workflowType: "receiving",
       item,
@@ -115,27 +191,56 @@ export default function Receiving() {
       quantityType,
       enteredQuantity: enteredWeight || quantity,
       weightSource,
-      source: "receiving_evidence_card",
+      source: "stage_w_receiving_exception_card",
     });
     saveWorkflowItemAttributeSnapshot(attributeSnapshot);
-    const line = normalizeReceivingLine({
+    const line = makeReceivingLine({
+      batch: activeBatch,
       item,
-      quantity,
+      receivedQuantity: quantity,
+      exceptionType,
       condition,
-      discrepancy,
-      supplierId,
-      supplierName,
-      poReference: poReference || "",
-      receivingMode,
+      evidenceNote,
       attributeSnapshot,
     });
-    setBatch((current) => upsertReceivingLine(current, line));
-    createScanOpsEvent(attributeSnapshot.weighted_snapshot ? SCANOPS_EVENT_TYPES.WEIGHTED_ITEM_EVIDENCE_CAPTURED : SCANOPS_EVENT_TYPES.ATTRIBUTE_EVIDENCE_CAPTURED, {
+    const nextBatch = addReceivingEvidence(activeBatch, line);
+    replaceBatch(nextBatch);
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.RECEIVING_ITEM_ADDED, {
       source_module: "Receiving",
-      item_name: line.itemName,
+      batch_id: activeBatch.id,
+      batch_ref: activeBatch.batch_ref,
+      item_name: line.item_snapshot?.itemName,
       sku: line.sku,
       barcode: line.barcode,
+      plu: line.plu,
+      expected_quantity: line.expected_quantity,
+      received_quantity: line.received_quantity,
+      difference_quantity: line.difference_quantity,
+      exception_type: line.exception_type,
+      condition: line.condition_snapshot,
+      status: line.line_status,
+      applies_stock_directly: false,
+      applies_price_directly: false,
+    });
+    if (line.line_status === "Review Required") {
+      createScanOpsEvent(SCANOPS_EVENT_TYPES.RECEIVING_EXCEPTION_RECORDED, {
+        source_module: "Receiving",
+        batch_id: activeBatch.id,
+        batch_ref: activeBatch.batch_ref,
+        item_name: line.item_snapshot?.itemName,
+        exception_type: line.exception_type,
+        expected_quantity: line.expected_quantity,
+        received_quantity: line.received_quantity,
+        difference_quantity: line.difference_quantity,
+        applies_stock_directly: false,
+      });
+    }
+    createScanOpsEvent(attributeSnapshot.weighted_snapshot ? SCANOPS_EVENT_TYPES.WEIGHTED_ITEM_EVIDENCE_CAPTURED : SCANOPS_EVENT_TYPES.ATTRIBUTE_EVIDENCE_CAPTURED, {
+      source_module: "Receiving",
       workflow_type: "receiving",
+      item_name: line.item_snapshot?.itemName,
+      sku: line.sku,
+      barcode: line.barcode,
       expiry_date: attributeSnapshot.expiry_snapshot?.expiry_date || null,
       lot_batch: attributeSnapshot.lot_batch_snapshot?.lot_batch_value || null,
       weighted_candidate: Boolean(attributeSnapshot.weighted_snapshot?.weighted_candidate),
@@ -146,181 +251,107 @@ export default function Receiving() {
       applies_price_directly: false,
       status: "attribute_evidence_saved",
     });
-    createScanOpsEvent(SCANOPS_EVENT_TYPES.RECEIVING_ITEM_ADDED, {
-      source_module: "Receiving",
-      supplier_id: supplierId,
-      supplier_name: supplierName,
-      purchase_order_ref: receivingMode === RECEIVING_MODES.AGAINST_PO ? poReference : null,
-      receiving_mode: receivingMode,
-      item_name: line.itemName,
-      sku: line.sku,
-      barcode: line.barcode,
-      plu: item.plu || item.scaleCode,
-      match_reason: item._searchMatch?.displayReason || null,
-      expected_qty: line.expectedQty,
-      received_qty: line.receivedQty,
-      unit_type: line.unit,
-      condition,
-      discrepancy,
-      expiry_date: attributeSnapshot.expiry_snapshot?.expiry_date || null,
-      lot_batch: attributeSnapshot.lot_batch_snapshot?.lot_batch_value || null,
-      weighted_candidate: Boolean(attributeSnapshot.weighted_snapshot?.weighted_candidate),
-      status: "draft_line_added",
-      applies_stock_directly: false,
-    });
     setItem(null);
     setScanValue("");
-    setQuantity(6);
-    setCondition("good");
-    setDiscrepancy("none");
-    setExpiryDate("");
-    setLotBatch("");
+    setQuantity(0);
+    setExceptionType("none");
+    setCondition("normal");
+    setEvidenceNote("");
     setEnteredWeight("");
   };
 
-  const removeLine = (requestItemId) => {
-    setBatch((current) => current.filter((line) => line.requestItemId !== requestItemId));
-  };
-
-  const submitReceiving = () => {
-    if (!batch.length || !setupReady) return;
-    const request = saveReceivingRequest(buildReceivingRequest({
-      supplierId,
-      supplierName,
-      poReference: receivingMode === RECEIVING_MODES.AGAINST_PO ? poReference : poReference || undefined,
-      receivingMode,
-      items: batch,
-    }));
+  const submitBatch = () => {
+    if (!activeBatch || !(activeBatch.lines || []).length) return;
+    const nextBatch = submitReceivingBatch(activeBatch);
+    replaceBatch(nextBatch);
+    setSubmittedBatch(nextBatch);
+    setView("done");
     createScanOpsEvent(SCANOPS_EVENT_TYPES.RECEIVING_EVIDENCE_SUBMITTED, {
       source_module: "Receiving",
-      receiving_request_id: request.requestId,
-      supplier_id: supplierId,
-      supplier_name: supplierName,
-      purchase_order_ref: request.poReference || null,
-      receiving_mode: receivingMode,
-      item_count: batch.length,
-      discrepancy_count: batchDiscrepancyCount,
-      status: request.status,
+      batch_id: nextBatch.id,
+      batch_ref: nextBatch.batch_ref,
+      supplier_name: nextBatch.supplier_name,
+      item_count: nextBatch.lines.length,
+      discrepancy_count: nextBatch.exceptions.length,
+      status: nextBatch.status,
       applies_stock_directly: false,
       official_inventory_applies_after_sync: true,
     });
-    setSubmittedRequest(request);
-    setView("done");
-    setItem(null);
-    setScanValue("");
   };
 
-  const primaryActionLabel = item ? "Add to Batch" : batch.length ? "Review Batch" : "Add to Batch";
-  const primaryAction = item ? addToBatch : () => setView("review");
-  const primaryDisabled = item ? (!setupReady || quantity <= 0) : !batch.length;
+  const reviewException = (exceptionId, decision) => {
+    if (!activeBatch || !canReview) return;
+    const nextBatch = reviewReceivingException(activeBatch, exceptionId, decision, decision);
+    replaceBatch(nextBatch);
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.RECEIVING_EXCEPTION_REVIEWED, {
+      source_module: "Receiving",
+      batch_id: activeBatch.id,
+      batch_ref: activeBatch.batch_ref,
+      exception_id: exceptionId,
+      review_decision: decision,
+      applies_stock_directly: false,
+    });
+  };
+
+  const subtitle = view === "landing" ? receivingScopeLabel(session) : activeBatch ? `${activeBatch.batch_ref} · ${activeBatch.status}` : "Receiving batch";
 
   return (
     <PageShell>
       <WorkflowHeader
         title="Receiving"
-        subtitle={view === "review" ? "Review receiving evidence" : "Supplier / PO evidence"}
+        subtitle={subtitle}
         scanValue={scanValue}
         onScanValueChange={setScanValue}
         onScan={scan}
+        showSearch={view === "batch" && !readOnly}
+        disabled={readOnly}
       />
       <WorkflowMain>
-        <SectionCard className="space-y-3">
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setReceivingMode(RECEIVING_MODES.AGAINST_PO)}
-              className={`min-h-11 rounded-2xl px-3 text-xs font-black ${receivingMode === RECEIVING_MODES.AGAINST_PO ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
-            >
-              Against PO
-            </button>
-            <button
-              type="button"
-              onClick={() => setReceivingMode(RECEIVING_MODES.ADHOC_DELIVERY)}
-              className={`min-h-11 rounded-2xl px-3 text-xs font-black ${receivingMode === RECEIVING_MODES.ADHOC_DELIVERY ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
-            >
-              Ad-hoc Delivery
-            </button>
-          </div>
-          <TouchSelect label="Supplier" value={supplierId} onChange={setSupplierId} options={SUPPLIERS} />
-          <TextInputField
-            label={receivingMode === RECEIVING_MODES.AGAINST_PO ? "PO / Delivery Ref" : "Delivery Ref / Notes"}
-            value={poReference}
-            onChange={setPoReference}
-            placeholder={receivingMode === RECEIVING_MODES.AGAINST_PO ? "Required for against-PO receiving" : "Optional ad-hoc delivery reference"}
-          />
-          {againstPoNeedsReference && (
-            <p className="rounded-2xl bg-destructive/10 px-3 py-2 text-xs font-bold text-destructive">
-              PO / delivery reference is required before an against-PO receiving batch can be submitted.
-            </p>
-          )}
-          {receivingMode === RECEIVING_MODES.ADHOC_DELIVERY && (
-            <p className="rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-bold text-muted-foreground">
-              Ad-hoc receiving records evidence only. Inventory must approve/post stock later.
-            </p>
-          )}
-        </SectionCard>
-
-        {view === "done" && submittedRequest ? (
+        {view === "done" && submittedBatch ? (
           <DoneCard
-            title="Receiving evidence submitted"
-            helper="No stock has been posted yet. The desktop inventory system must review/post the receiving record."
+            title="Receiving batch submitted"
+            helper="Evidence is saved for Inventory review. No handheld stock posting occurred."
             rows={[
-              { label: "Request", value: submittedRequest.requestId },
-              { label: "Status", value: submittedRequest.status === "sync_pending" ? "Sync pending" : "Submitted" },
-              { label: "Supplier", value: submittedRequest.supplierName },
-              { label: "Items", value: String(submittedRequest.items.length) },
+              { label: "Batch", value: submittedBatch.batch_ref },
+              { label: "Status", value: submittedBatch.status },
+              { label: "Lines", value: String(submittedBatch.lines.length) },
+              { label: "Exceptions", value: String(submittedBatch.exceptions.length) },
               { label: "Stock mutation", value: "No direct stock mutation" },
             ]}
           />
-        ) : view === "review" ? (
+        ) : view === "landing" ? (
+          <ReceivingLanding
+            visibleBatches={visibleBatches}
+            supplierId={supplierId}
+            setSupplierId={setSupplierId}
+            poReference={poReference}
+            setPoReference={setPoReference}
+            deliveryRef={deliveryRef}
+            setDeliveryRef={setDeliveryRef}
+            onStart={startBatch}
+            onOpen={openBatch}
+          />
+        ) : activeBatch ? (
           <>
-            <SectionCard className="space-y-3">
-              <div>
-                <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Review Receiving Batch</p>
-                <h2 className="mt-1 text-lg font-black text-foreground">{batch.length} item{batch.length === 1 ? "" : "s"} ready</h2>
-              </div>
-              <div className="space-y-2 rounded-2xl bg-secondary/50 p-3">
-                <InfoLine label="Supplier" value={supplierName} />
-                <InfoLine label="PO / Reference" value={poReference || (receivingMode === RECEIVING_MODES.ADHOC_DELIVERY ? "Ad-hoc delivery" : "—")} />
-                <InfoLine label="Mode" value={receivingMode === RECEIVING_MODES.AGAINST_PO ? "Against PO" : "Ad-hoc Delivery"} />
-                <InfoLine label="Discrepancies" value={String(batchDiscrepancyCount)} />
-              </div>
-              <div className="space-y-2">
-                {batch.map((line) => (
-                  <div key={line.requestItemId} className="rounded-2xl border border-border bg-card p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="break-words text-sm font-black text-foreground">{line.itemName}</p>
-                        <p className="mt-1 break-words text-xs font-bold text-muted-foreground">
-                          Expected {line.expectedQty ?? "—"} · Received {line.receivedQty} · Diff {lineDiff(line)}
-                        </p>
-                        <p className="mt-1 break-words text-xs font-bold text-muted-foreground">
-                          Condition: {getOptionLabel(RECEIVING_CONDITION_OPTIONS, line.condition)}
-                          {line.discrepancy !== "none" ? ` · Discrepancy: ${getOptionLabel(RECEIVING_DISCREPANCY_OPTIONS, line.discrepancy)}` : ""}
-                        </p>
-                        {line.attributeSnapshot && <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">{summarizeAttributeSnapshot(line.attributeSnapshot)}</p>}
-                      </div>
-                      <button type="button" onClick={() => removeLine(line.requestItemId)} className="shrink-0 rounded-xl bg-secondary px-2 py-1 text-[11px] font-black text-muted-foreground active:bg-border">
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </SectionCard>
-            <StickyActions leftLabel="Back" rightLabel="Submit Receiving Evidence" onLeft={() => setView("entry")} onRight={submitReceiving} rightDisabled={!batch.length || !setupReady} />
-          </>
-        ) : (
-          <>
-            {item ? (
+            <ReceivingBatchHeader batch={activeBatch} />
+
+            {!readOnly && item ? (
               <>
                 <ItemSummaryCard item={item}>
-                  <p className="text-xs font-bold text-muted-foreground">
-                    Expected {expectedQty} · Already received 0 · Shelf {item.shelfStock ?? item.shelf_stock ?? "—"} · Backroom {item.backroomStock ?? item.backroom_stock ?? "—"} · SOH {item.stockOnHand ?? item.stock_on_hand ?? "—"}
-                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    <MetricPill label="Expected" value={expectedQty == null ? "Unavailable" : expectedQty} suffix={expectedQty == null ? "" : unit} />
+                    <MetricPill label="Received" value={quantity} suffix={unit} />
+                    <MetricPill label="Diff" value={differenceLabel(diff)} suffix={diff == null ? "" : unit} />
+                  </div>
                 </ItemSummaryCard>
                 <SectionCard className="space-y-3">
-                  <QuantityStepper label="Received qty" value={quantity} onChange={setQuantity} unit={unit} min={0} />
+                  <QuantityStepper label="Received" value={quantity} onChange={setQuantity} unit={unit} min={0} />
+                  {expectedQty == null ? (
+                    <p className="rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-bold text-muted-foreground">Expected unavailable. This line will save as evidence only.</p>
+                  ) : diff !== 0 ? (
+                    <p className="rounded-2xl bg-destructive/10 px-3 py-2 text-xs font-bold text-destructive">Difference {differenceLabel(diff)} {unit}. Review evidence will be created.</p>
+                  ) : null}
+                  <TouchSelect label="Exception" value={exceptionType} onChange={setExceptionType} options={RECEIVING_EXCEPTION_OPTIONS_STAGEW} />
                   <AttributeEvidenceFields
                     item={item}
                     scanValue={scanValue}
@@ -335,55 +366,179 @@ export default function Receiving() {
                     weightSource={weightSource}
                     onWeightSourceChange={setWeightSource}
                   />
-                  <TouchSelect label="Condition" value={condition} onChange={setCondition} options={RECEIVING_CONDITION_OPTIONS} />
-                  <TouchSelect label="Discrepancy" value={discrepancy} onChange={setDiscrepancy} options={RECEIVING_DISCREPANCY_OPTIONS} />
+                  <TouchSelect label="Condition" value={condition} onChange={setCondition} options={RECEIVING_CONDITION_OPTIONS_STAGEW} />
+                  <TextInputField label="Evidence note" value={evidenceNote} onChange={setEvidenceNote} placeholder="Short note for desktop review" />
                 </SectionCard>
+                <StickyActions leftLabel="Clear Item" rightLabel="Save Evidence" onLeft={() => { setItem(null); setScanValue(""); }} onRight={saveEvidence} rightDisabled={quantity < 0} />
               </>
+            ) : !readOnly ? (
+              <EmptyState title="Scan or search receiving item." helper="The header search supports item name, PLU, SKU, barcode, and alias barcode." />
             ) : (
-              <EmptyState title="No item selected." helper="Search or scan an item from the header when the supplier setup is ready." />
+              <EmptyState title="Batch is read-only." helper="Submitted, accepted, closed, or cancelled receiving batches cannot be edited by handheld staff." />
             )}
 
-            <SectionCard>
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Current receiving batch</p>
-                  <p className="mt-1 text-2xl font-black text-foreground">{batch.length} {batch.length === 1 ? "item" : "items"}</p>
-                </div>
-                <p className="shrink-0 rounded-full bg-secondary px-3 py-1 text-xs font-black text-muted-foreground">{batchDiscrepancyCount} discrepancies</p>
-              </div>
-              {batch.length ? (
-                <div className="mt-3 space-y-2">
-                  {batch.map((line) => (
-                    <div key={line.requestItemId} className="rounded-2xl bg-secondary/60 p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="break-words text-sm font-black text-foreground">{line.itemName}</p>
-                          <p className="mt-1 break-words text-xs font-bold text-muted-foreground">
-                            Expected {line.expectedQty ?? "—"} · Received {line.receivedQty} · {getOptionLabel(RECEIVING_CONDITION_OPTIONS, line.condition)}
-                            {line.discrepancy !== "none" ? ` · ${getOptionLabel(RECEIVING_DISCREPANCY_OPTIONS, line.discrepancy)}` : ""}
-                          </p>
-                          {line.attributeSnapshot && <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">{summarizeAttributeSnapshot(line.attributeSnapshot)}</p>}
-                        </div>
-                        <p className="shrink-0 text-xs font-black text-foreground">x {line.receivedQty} {line.unit}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-3 rounded-2xl bg-secondary/50 px-3 py-2 text-sm font-bold text-muted-foreground">Batch is empty.</p>
-              )}
-            </SectionCard>
+            <ReceivingLineList batch={activeBatch} />
+            <ReceivingExceptionList batch={activeBatch} canReview={canReview} onReview={reviewException} />
 
-            <StickyActions
-              leftLabel="Clear Item"
-              rightLabel={primaryActionLabel}
-              onLeft={() => { setItem(null); setScanValue(""); }}
-              onRight={primaryAction}
-              rightDisabled={primaryDisabled}
-            />
+            {!readOnly && (
+              <StickyActions
+                leftLabel="Back to Batches"
+                rightLabel="Submit Batch"
+                onLeft={() => { setView("landing"); setActiveBatchId(null); setItem(null); setScanValue(""); }}
+                onRight={submitBatch}
+                rightDisabled={!(activeBatch.lines || []).length}
+              />
+            )}
           </>
+        ) : (
+          <EmptyState title="No receiving batch selected." helper="Open or start a receiving batch first." />
         )}
       </WorkflowMain>
     </PageShell>
+  );
+}
+
+function ReceivingLanding({ visibleBatches, supplierId, setSupplierId, poReference, setPoReference, deliveryRef, setDeliveryRef, onStart, onOpen }) {
+  return (
+    <>
+      <SectionCard className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Active Batches</p>
+            <h2 className="mt-1 text-lg font-black text-foreground">Receiving queue</h2>
+          </div>
+          <span className="rounded-full bg-secondary px-3 py-1 text-xs font-black text-muted-foreground">{visibleBatches.length} active</span>
+        </div>
+        {visibleBatches.length ? (
+          <div className="space-y-2">
+            {visibleBatches.map((batch) => (
+              <button key={batch.id} type="button" onClick={() => onOpen(batch)} className="w-full rounded-2xl border border-border bg-card p-3 text-left active:bg-secondary/60">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-black text-foreground">{batch.batch_ref} · {batch.supplier_name}</p>
+                    <p className="mt-1 break-words text-xs font-bold text-muted-foreground">Lines: {(batch.lines || []).length} · Exceptions: {countOpenExceptions(batch)}</p>
+                    <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">Delivery ref: {batch.delivery_ref || "—"}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black ${statusClass(batch.status)}`}>{batch.status}</span>
+                </div>
+                <p className="mt-3 rounded-xl bg-primary px-3 py-2 text-center text-xs font-black text-primary-foreground">Continue Receiving</p>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="No active receiving batches." helper="Start a batch when a delivery arrives." />
+        )}
+      </SectionCard>
+
+      <SectionCard className="space-y-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Start Receiving Batch</p>
+          <h2 className="mt-1 text-lg font-black text-foreground">Delivery setup</h2>
+        </div>
+        <TouchSelect label="Supplier" value={supplierId} onChange={setSupplierId} options={SUPPLIERS} />
+        <TextInputField label="PO / Delivery Ref" value={poReference} onChange={setPoReference} placeholder="PO-1042" />
+        <TextInputField label="Delivery ref" value={deliveryRef} onChange={setDeliveryRef} placeholder="DEL-7781" />
+        <button type="button" onClick={onStart} className="min-h-12 w-full rounded-2xl bg-primary px-4 text-sm font-black text-primary-foreground active:scale-[0.98]">
+          Start Receiving Batch
+        </button>
+      </SectionCard>
+    </>
+  );
+}
+
+function ReceivingBatchHeader({ batch }) {
+  const lines = batch.lines || [];
+  const receivedLines = lines.length;
+  const expectedLines = batch.po_ref ? Math.max(receivedLines, 1) : "—";
+  return (
+    <SectionCard className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Receiving Batch</p>
+          <h2 className="mt-1 break-words text-lg font-black text-foreground">{batch.batch_ref}</h2>
+          <p className="mt-1 break-words text-xs font-bold text-muted-foreground">{batch.supplier_name} · {batch.delivery_ref || "No delivery ref"}</p>
+        </div>
+        <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black ${statusClass(batch.status)}`}>{batch.status}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <MetricPill label="Expected" value={expectedLines} suffix={expectedLines === "—" ? "" : "lines"} />
+        <MetricPill label="Received" value={receivedLines} suffix="lines" />
+        <MetricPill label="Exceptions" value={countOpenExceptions(batch)} />
+      </div>
+      <p className="rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-bold text-muted-foreground">Handheld evidence only. Inventory desktop remains the stock posting authority.</p>
+    </SectionCard>
+  );
+}
+
+function ReceivingLineList({ batch }) {
+  const lines = batch.lines || [];
+  return (
+    <SectionCard className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Received Lines</p>
+          <h2 className="mt-1 text-lg font-black text-foreground">{lines.length} saved</h2>
+        </div>
+      </div>
+      {lines.length ? (
+        <div className="space-y-2">
+          {lines.map((line) => (
+            <div key={line.id} className="rounded-2xl bg-secondary/60 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-black text-foreground">{line.item_snapshot?.itemName || "Scanned item"}</p>
+                  <p className="mt-1 break-words text-xs font-bold text-muted-foreground">Expected {line.expected_quantity ?? "Unavailable"} · Received {line.received_quantity} · Diff {differenceLabel(line.difference_quantity)}</p>
+                  <p className="mt-1 break-words text-xs font-bold text-muted-foreground">Exception: {optionLabel(RECEIVING_EXCEPTION_OPTIONS_STAGEW, line.exception_type)} · Condition: {optionLabel(RECEIVING_CONDITION_OPTIONS_STAGEW, line.condition_snapshot)}</p>
+                  {line.attribute_snapshot && <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">{summarizeAttributeSnapshot(line.attribute_snapshot)}</p>}
+                  {line.evidence_note && <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">Note: {line.evidence_note}</p>}
+                </div>
+                <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black ${line.line_status === "Review Required" ? "bg-destructive/10 text-destructive" : "bg-primary/10 text-primary"}`}>{line.line_status}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState title="No receiving evidence yet." helper="Scan an item and save normal or exception evidence." />
+      )}
+    </SectionCard>
+  );
+}
+
+function ReceivingExceptionList({ batch, canReview, onReview }) {
+  const exceptions = batch.exceptions || [];
+  if (!exceptions.length) return null;
+  return (
+    <SectionCard className="space-y-3">
+      <div>
+        <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Receiving Exceptions</p>
+        <h2 className="mt-1 text-lg font-black text-foreground">{exceptions.length} review item{exceptions.length === 1 ? "" : "s"}</h2>
+      </div>
+      <div className="space-y-2">
+        {exceptions.map((exception) => (
+          <div key={exception.id} className="rounded-2xl border border-border bg-card p-3">
+            <p className="break-words text-sm font-black text-foreground">{exception.item_name}</p>
+            <div className="mt-2 space-y-2 rounded-2xl bg-secondary/50 p-3">
+              <InfoLine label="Expected" value={exception.expected_quantity ?? "Unavailable"} />
+              <InfoLine label="Received" value={exception.received_quantity} />
+              <InfoLine label="Difference" value={differenceLabel(exception.difference_quantity)} />
+              <InfoLine label="Exception" value={optionLabel(RECEIVING_EXCEPTION_OPTIONS_STAGEW, exception.exception_type)} />
+              <InfoLine label="Status" value={exception.status} />
+            </div>
+            {exception.evidence_note && <p className="mt-2 rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-bold text-muted-foreground">{exception.evidence_note}</p>}
+            {canReview ? (
+              <div className="mt-3 grid grid-cols-1 gap-2">
+                {REVIEW_ACTIONS.map((action) => (
+                  <button key={action.id} type="button" onClick={() => onReview(exception.id, action.id)} className="min-h-10 rounded-xl bg-secondary px-3 text-xs font-black text-secondary-foreground active:bg-border">
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-bold text-muted-foreground">Supervisor, Manager, or Admin review required.</p>
+            )}
+          </div>
+        ))}
+      </div>
+    </SectionCard>
   );
 }

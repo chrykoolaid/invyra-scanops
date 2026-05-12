@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
 import {
@@ -6,29 +6,48 @@ import {
   EmptyState,
   InfoLine,
   ItemSummaryCard,
+  MetricPill,
   PageShell,
   QuantityStepper,
   SectionCard,
   StickyActions,
+  TextInputField,
   WorkflowMain,
 } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
+import { useScanOpsSession } from "../lib/scanOpsSession";
+import { hasRoleAtLeast } from "../lib/scanOpsPermissions";
 import {
-  buildTransferRequest,
   getOptionLabel,
-  saveTransferRequest,
   TRANSFER_LOCATION_OPTIONS,
   TRANSFER_REASON_OPTIONS,
   TRANSFER_REQUEST_TYPES,
   TRANSFER_REQUEST_TYPE_OPTIONS,
 } from "../lib/scanOpsRequestLifecycle";
+import {
+  addTransferDispatchEvidence,
+  addTransferReceiveEvidence,
+  batchReadOnly,
+  createTransferBatch,
+  differenceLabel,
+  getTransferBatches,
+  makeTransferDispatchLine,
+  makeTransferReceiveLine,
+  optionLabel,
+  reviewTransferException,
+  saveTransferBatches,
+  submitTransferBatch,
+  TRANSFER_CONDITION_OPTIONS_STAGEW,
+  TRANSFER_EXCEPTION_OPTIONS_STAGEW,
+  unitForItem,
+} from "../lib/scanOpsReceivingTransfers";
 
-const STEP_LABELS = ["Type", "Locations", "Item", "Qty", "Review", "Submitted"];
-
-function getUnit(item) {
-  return item?.unitType || item?.unit_type || "each";
-}
+const REVIEW_ACTIONS = [
+  { id: "Accepted", label: "Accept Evidence" },
+  { id: "Follow-up Requested", label: "Request Follow-up" },
+  { id: "Supplier Issue", label: "Mark Issue" },
+];
 
 function getAvailableAtSource(item, sourceLocationId) {
   if (!item) return 0;
@@ -49,42 +68,135 @@ function defaultRouteForType(transferType) {
   return { source: "backroom_a", destination: "dairy_shelf" };
 }
 
+function countOpenExceptions(batch) {
+  return (batch?.exceptions || []).filter((exception) => !["Accepted", "Closed", "Rejected"].includes(exception.status)).length;
+}
+
+function canSeeTransfer(batch, session) {
+  if (!batch) return false;
+  if (hasRoleAtLeast(session.actorRole, "Supervisor")) return true;
+  return (batch.assigned_user_id || batch.actor_id) === session.actorUserId;
+}
+
+function transferScopeLabel(session) {
+  if (session.actorRole === "Admin") return "All transfer batches";
+  if (session.actorRole === "Manager") return "Store transfer batches";
+  if (session.actorRole === "Supervisor") return "Team transfer batches";
+  return "Assigned transfer batches";
+}
+
+function statusClass(status) {
+  if (["Exception Review", "Partially Received"].includes(status)) return "bg-destructive/10 text-destructive";
+  if (["Accepted", "Closed", "Received"].includes(status)) return "bg-primary/10 text-primary";
+  return "bg-secondary text-muted-foreground";
+}
+
 export default function Transfers() {
+  const session = useScanOpsSession();
   const [scanValue, setScanValue] = useState("");
-  const [step, setStep] = useState(1);
+  const [batches, setBatches] = useState(() => getTransferBatches());
+  const [activeBatchId, setActiveBatchId] = useState(null);
+  const [view, setView] = useState("landing");
+  const [phase, setPhase] = useState("dispatch");
   const [transferType, setTransferType] = useState(TRANSFER_REQUEST_TYPES.BACKROOM_TO_SHELF);
   const [sourceLocationId, setSourceLocationId] = useState("backroom_a");
   const [destinationLocationId, setDestinationLocationId] = useState("dairy_shelf");
   const [reason, setReason] = useState("replenishment");
   const [item, setItem] = useState(null);
-  const [quantity, setQuantity] = useState(6);
-  const [submittedRequest, setSubmittedRequest] = useState(null);
+  const [dispatchQuantity, setDispatchQuantity] = useState(6);
+  const [dispatchCondition, setDispatchCondition] = useState("normal");
+  const [dispatchNote, setDispatchNote] = useState("");
+  const [selectedDispatchId, setSelectedDispatchId] = useState(null);
+  const [receivedQuantity, setReceivedQuantity] = useState(0);
+  const [receiveException, setReceiveException] = useState("none");
+  const [receiveCondition, setReceiveCondition] = useState("normal");
+  const [receiveNote, setReceiveNote] = useState("");
+  const [submittedBatch, setSubmittedBatch] = useState(null);
 
-  const unit = getUnit(item);
-  const availableAtSource = getAvailableAtSource(item, sourceLocationId);
+  const visibleBatches = useMemo(() => batches.filter((batch) => canSeeTransfer(batch, session)), [batches, session]);
+  const activeBatch = useMemo(() => batches.find((batch) => batch.id === activeBatchId) || null, [batches, activeBatchId]);
+  const selectedDispatch = useMemo(() => (activeBatch?.dispatch_lines || []).find((line) => line.id === selectedDispatchId) || null, [activeBatch, selectedDispatchId]);
+  const readOnly = batchReadOnly(activeBatch?.status) || !activeBatch;
+  const canReview = hasRoleAtLeast(session.actorRole, "Supervisor");
   const sameLocation = sourceLocationId && destinationLocationId && sourceLocationId === destinationLocationId;
+  const availableAtSource = getAvailableAtSource(item, sourceLocationId);
+  const unit = unitForItem(item || {});
+  const receiveDiff = selectedDispatch ? Number((Number(receivedQuantity || 0) - Number(selectedDispatch.dispatch_quantity || 0)).toFixed(3)) : null;
+
+  const persist = (nextBatches) => {
+    setBatches(nextBatches);
+    saveTransferBatches(nextBatches);
+  };
+
+  const replaceBatch = (nextBatch) => {
+    const nextBatches = batches.some((batch) => batch.id === nextBatch.id)
+      ? batches.map((batch) => (batch.id === nextBatch.id ? nextBatch : batch))
+      : [nextBatch, ...batches];
+    persist(nextBatches);
+    setActiveBatchId(nextBatch.id);
+    return nextBatch;
+  };
 
   const setTypeAndRoute = (nextType) => {
     setTransferType(nextType);
     const route = defaultRouteForType(nextType);
     setSourceLocationId(route.source);
     setDestinationLocationId(route.destination);
-    if (!reason) setReason("replenishment");
+  };
+
+  const openTransfer = (batch) => {
+    setActiveBatchId(batch.id);
+    setView("batch");
+    setPhase((batch.dispatch_lines || []).length ? "receive" : "dispatch");
+    setItem(null);
+    setScanValue("");
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_BATCH_OPENED, {
+      source_module: "Transfers",
+      transfer_id: batch.id,
+      transfer_ref: batch.transfer_ref,
+      status: batch.status,
+      applies_stock_directly: false,
+    });
+  };
+
+  const startTransfer = () => {
+    if (sameLocation) return;
+    const batch = createTransferBatch({
+      transferType,
+      sourceLocationId,
+      sourceLocationLabel: getOptionLabel(TRANSFER_LOCATION_OPTIONS, sourceLocationId),
+      destinationLocationId,
+      destinationLocationLabel: getOptionLabel(TRANSFER_LOCATION_OPTIONS, destinationLocationId),
+      reason,
+    });
+    replaceBatch(batch);
+    setView("batch");
+    setPhase("dispatch");
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_STARTED, {
+      source_module: "Transfers",
+      transfer_id: batch.id,
+      transfer_ref: batch.transfer_ref,
+      transfer_type: transferType,
+      source_location_id: sourceLocationId,
+      destination_location_id: destinationLocationId,
+      reason,
+      status: batch.status,
+      applies_stock_directly: false,
+    });
   };
 
   const scan = (value) => {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
     if (!found) return;
     setItem(found);
-    const available = getAvailableAtSource(found, sourceLocationId);
-    setQuantity(Math.min(6, Math.max(1, Number(available || 1))));
-    setSubmittedRequest(null);
-    setStep(4);
+    const available = getAvailableAtSource(found, activeBatch?.source_location_id || sourceLocationId);
+    setDispatchQuantity(Math.min(6, Math.max(1, Number(available || 1))));
+    setDispatchCondition("normal");
+    setDispatchNote("");
     createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_ITEM_SCANNED, {
       source_module: "Transfers",
-      transfer_type: transferType,
-      source_location_id: sourceLocationId,
-      destination_location_id: destinationLocationId,
+      transfer_id: activeBatch?.id || null,
+      transfer_ref: activeBatch?.transfer_ref || null,
       item_name: found?.name,
       sku: found?.sku,
       barcode: found?.barcode,
@@ -95,198 +207,464 @@ export default function Transfers() {
     });
   };
 
-  const next = () => {
-    if (step === 2 && sameLocation) return;
-    if (step === 3 && !item) return;
-    if (step === 4 && (!item || quantity <= 0)) return;
-    setStep((current) => Math.min(5, current + 1));
+  const saveDispatch = () => {
+    if (!activeBatch || !item || readOnly || dispatchQuantity <= 0) return;
+    const line = makeTransferDispatchLine({
+      transfer: activeBatch,
+      item,
+      dispatchQuantity,
+      condition: dispatchCondition,
+      evidenceNote: dispatchNote,
+    });
+    const nextBatch = addTransferDispatchEvidence(activeBatch, line);
+    replaceBatch(nextBatch);
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_DISPATCH_EVIDENCE_SAVED, {
+      source_module: "Transfers",
+      transfer_id: activeBatch.id,
+      transfer_ref: activeBatch.transfer_ref,
+      dispatch_line_id: line.id,
+      item_name: line.item_snapshot?.itemName,
+      dispatch_quantity: line.dispatch_quantity,
+      condition: line.condition_note,
+      status: nextBatch.status,
+      applies_stock_directly: false,
+    });
+    setItem(null);
+    setScanValue("");
+    setDispatchQuantity(6);
+    setDispatchCondition("normal");
+    setDispatchNote("");
+    setPhase("receive");
   };
 
-  const back = () => {
-    if (step <= 1) return;
-    setStep((current) => Math.max(1, current - 1));
+  const chooseDispatchForReceive = (line) => {
+    setSelectedDispatchId(line.id);
+    setReceivedQuantity(line.dispatch_quantity);
+    setReceiveException("none");
+    setReceiveCondition("normal");
+    setReceiveNote("");
+    setPhase("receive");
+  };
+
+  const saveReceive = () => {
+    if (!activeBatch || !selectedDispatch || readOnly) return;
+    const receiveLine = makeTransferReceiveLine({
+      transfer: activeBatch,
+      dispatchLine: selectedDispatch,
+      receivedQuantity,
+      exceptionType: receiveException,
+      condition: receiveCondition,
+      evidenceNote: receiveNote,
+    });
+    const nextBatch = addTransferReceiveEvidence(activeBatch, selectedDispatch, receiveLine);
+    replaceBatch(nextBatch);
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_RECEIVE_EVIDENCE_SAVED, {
+      source_module: "Transfers",
+      transfer_id: activeBatch.id,
+      transfer_ref: activeBatch.transfer_ref,
+      dispatch_line_id: selectedDispatch.id,
+      receive_line_id: receiveLine.id,
+      item_name: selectedDispatch.item_snapshot?.itemName,
+      dispatched_quantity: receiveLine.dispatched_quantity,
+      received_quantity: receiveLine.received_quantity,
+      difference_quantity: receiveLine.difference_quantity,
+      exception_type: receiveLine.exception_type,
+      status: receiveLine.line_status,
+      applies_stock_directly: false,
+    });
+    if (receiveLine.line_status === "Review Required") {
+      createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_EXCEPTION_RECORDED, {
+        source_module: "Transfers",
+        transfer_id: activeBatch.id,
+        transfer_ref: activeBatch.transfer_ref,
+        item_name: selectedDispatch.item_snapshot?.itemName,
+        exception_type: receiveLine.exception_type,
+        difference_quantity: receiveLine.difference_quantity,
+        applies_stock_directly: false,
+      });
+    }
+    setSelectedDispatchId(null);
+    setReceivedQuantity(0);
+    setReceiveException("none");
+    setReceiveCondition("normal");
+    setReceiveNote("");
   };
 
   const submitTransfer = () => {
-    if (!item || !sourceLocationId || !destinationLocationId || sameLocation || quantity <= 0) return;
-    const request = saveTransferRequest(buildTransferRequest({
-      transferType,
-      sourceLocationId,
-      destinationLocationId,
-      reason,
-      item,
-      quantity,
-      availableAtSource,
-    }));
-    createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_REQUEST_SUBMITTED, {
+    if (!activeBatch || !(activeBatch.dispatch_lines || []).length) return;
+    const nextBatch = submitTransferBatch(activeBatch);
+    replaceBatch(nextBatch);
+    setSubmittedBatch(nextBatch);
+    setView("done");
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_BATCH_SUBMITTED, {
       source_module: "Transfers",
-      transfer_request_id: request.requestId,
-      transfer_type: transferType,
-      source_location_id: sourceLocationId,
-      source_location_label: getOptionLabel(TRANSFER_LOCATION_OPTIONS, sourceLocationId),
-      destination_location_id: destinationLocationId,
-      destination_location_label: getOptionLabel(TRANSFER_LOCATION_OPTIONS, destinationLocationId),
-      reason,
-      reason_label: getOptionLabel(TRANSFER_REASON_OPTIONS, reason),
-      item_name: item.name,
-      sku: item.sku,
-      barcode: item.barcode,
-      plu: item.plu || item.scaleCode,
-      requested_qty: quantity,
-      available_at_source: availableAtSource,
-      unit_type: unit,
-      status: request.status,
+      transfer_id: nextBatch.id,
+      transfer_ref: nextBatch.transfer_ref,
+      dispatch_line_count: nextBatch.dispatch_lines.length,
+      receive_line_count: nextBatch.receive_lines.length,
+      exception_count: nextBatch.exceptions.length,
+      status: nextBatch.status,
       applies_stock_directly: false,
       official_inventory_applies_after_sync: true,
     });
-    setSubmittedRequest(request);
-    setStep(6);
-    setScanValue("");
   };
 
-  const rightDisabled =
-    (step === 2 && (!sourceLocationId || !destinationLocationId || sameLocation || !reason)) ||
-    (step === 3 && !item) ||
-    (step === 4 && (!item || quantity <= 0)) ||
-    (step === 5 && (!item || quantity <= 0 || sameLocation));
+  const reviewException = (exceptionId, decision) => {
+    if (!activeBatch || !canReview) return;
+    const nextBatch = reviewTransferException(activeBatch, exceptionId, decision, decision);
+    replaceBatch(nextBatch);
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_EXCEPTION_RECORDED, {
+      source_module: "Transfers",
+      transfer_id: activeBatch.id,
+      transfer_ref: activeBatch.transfer_ref,
+      exception_id: exceptionId,
+      review_decision: decision,
+      applies_stock_directly: false,
+    });
+  };
+
+  const subtitle = view === "landing" ? transferScopeLabel(session) : activeBatch ? `${activeBatch.transfer_ref} · ${activeBatch.status}` : "Transfer batch";
 
   return (
     <PageShell>
       <WorkflowHeader
         title="Transfers"
-        subtitle={`Step ${step} of 6 · ${STEP_LABELS[step - 1]}`}
+        subtitle={subtitle}
         scanValue={scanValue}
         onScanValueChange={setScanValue}
         onScan={scan}
-        showSearch={step === 3 && !submittedRequest}
+        showSearch={view === "batch" && phase === "dispatch" && !readOnly}
+        disabled={readOnly}
       />
       <WorkflowMain>
-        <Progress step={step} />
-
-        {step === 1 && (
-          <SectionCard className="space-y-3">
-            <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Transfer Type</p>
-            <div className="grid grid-cols-1 gap-2">
-              {TRANSFER_REQUEST_TYPE_OPTIONS.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => setTypeAndRoute(option.id)}
-                  className={`min-h-14 rounded-2xl px-4 py-3 text-left active:scale-[0.99] ${transferType === option.id ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
-                >
-                  <span className="block text-sm font-black">{option.label}</span>
-                  <span className={`mt-0.5 block text-xs font-bold ${transferType === option.id ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{option.helper}</span>
-                </button>
-              ))}
-            </div>
-          </SectionCard>
-        )}
-
-        {step === 2 && (
-          <SectionCard className="space-y-3">
-            <TouchSelect label="From" value={sourceLocationId} onChange={setSourceLocationId} options={TRANSFER_LOCATION_OPTIONS} />
-            <TouchSelect label="To" value={destinationLocationId} onChange={setDestinationLocationId} options={TRANSFER_LOCATION_OPTIONS} />
-            <TouchSelect label="Reason" value={reason} onChange={setReason} options={TRANSFER_REASON_OPTIONS} />
-            {sameLocation && (
-              <p className="rounded-2xl bg-destructive/10 px-3 py-2 text-xs font-bold text-destructive">
-                Source and destination cannot be the same.
-              </p>
-            )}
-          </SectionCard>
-        )}
-
-        {step === 3 && (
-          <>
-            {item ? (
-              <ItemSummaryCard item={item}>
-                <p className="text-xs font-bold text-muted-foreground">
-                  Available in source: {availableAtSource} {unit} · Current shelf SOH: {item.shelfStock ?? item.shelf_stock ?? "—"}
-                </p>
-              </ItemSummaryCard>
-            ) : (
-              <EmptyState title="No item selected." helper="Use the header search or hardware scan trigger to choose the item for this transfer request." />
-            )}
-          </>
-        )}
-
-        {step === 4 && (
-          <>
-            <ItemSummaryCard item={item}>
-              <p className="text-xs font-bold text-muted-foreground">
-                Available in source: {availableAtSource} {unit} · Current shelf SOH: {item?.shelfStock ?? item?.shelf_stock ?? "—"}
-              </p>
-            </ItemSummaryCard>
-            <SectionCard>
-              <QuantityStepper label="Quantity" value={quantity} onChange={setQuantity} unit={unit} min={1} />
-              {quantity > availableAtSource && (
-                <p className="mt-3 rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-bold text-muted-foreground">
-                  Quantity exceeds the local source snapshot. Inventory review/posting is still required before stock moves.
-                </p>
-              )}
-            </SectionCard>
-          </>
-        )}
-
-        {step === 5 && (
-          <SectionCard className="space-y-3">
-            <div>
-              <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Review Transfer</p>
-              <h2 className="mt-1 text-lg font-black text-foreground">Submit transfer request</h2>
-            </div>
-            <div className="space-y-2 rounded-2xl bg-secondary/50 p-3">
-              <InfoLine label="From" value={getOptionLabel(TRANSFER_LOCATION_OPTIONS, sourceLocationId)} />
-              <InfoLine label="To" value={getOptionLabel(TRANSFER_LOCATION_OPTIONS, destinationLocationId)} />
-              <InfoLine label="Reason" value={getOptionLabel(TRANSFER_REASON_OPTIONS, reason)} />
-            </div>
-            <div className="rounded-2xl border border-border bg-card p-3">
-              <p className="break-words text-sm font-black text-foreground">{item?.name || "Scan required"}</p>
-              <p className="mt-1 break-words text-xs font-bold text-muted-foreground">
-                Qty: {quantity} {unit} · Available in source: {availableAtSource} {unit}
-              </p>
-              <p className="mt-1 text-xs font-bold text-muted-foreground">No stock is moved until Inventory approves/posts this request.</p>
-            </div>
-          </SectionCard>
-        )}
-
-        {step === 6 && submittedRequest && (
+        {view === "done" && submittedBatch ? (
           <DoneCard
-            title="Transfer request submitted"
-            helper="No stock has been moved yet. The desktop inventory system must approve/post the movement."
+            title="Transfer evidence submitted"
+            helper="Dispatch and receive evidence is saved separately. No handheld stock posting occurred."
             rows={[
-              { label: "Request", value: submittedRequest.requestId },
-              { label: "Status", value: submittedRequest.status === "sync_pending" ? "Sync pending" : "Submitted" },
-              { label: "From", value: getOptionLabel(TRANSFER_LOCATION_OPTIONS, submittedRequest.sourceLocationId) },
-              { label: "To", value: getOptionLabel(TRANSFER_LOCATION_OPTIONS, submittedRequest.destinationLocationId) },
+              { label: "Transfer", value: submittedBatch.transfer_ref },
+              { label: "Status", value: submittedBatch.status },
+              { label: "Dispatch lines", value: String(submittedBatch.dispatch_lines.length) },
+              { label: "Receive lines", value: String(submittedBatch.receive_lines.length) },
               { label: "Stock mutation", value: "No direct stock mutation" },
             ]}
           />
-        )}
-
-        {step < 6 && (
-          <StickyActions
-            leftLabel={step === 1 ? "Cancel" : "Back"}
-            rightLabel={step === 5 ? "Submit Transfer Request" : "Continue"}
-            onLeft={step === 1 ? () => { setSubmittedRequest(null); setItem(null); setScanValue(""); } : back}
-            onRight={step === 5 ? submitTransfer : next}
-            rightDisabled={rightDisabled}
+        ) : view === "landing" ? (
+          <TransferLanding
+            visibleBatches={visibleBatches}
+            transferType={transferType}
+            setTypeAndRoute={setTypeAndRoute}
+            sourceLocationId={sourceLocationId}
+            setSourceLocationId={setSourceLocationId}
+            destinationLocationId={destinationLocationId}
+            setDestinationLocationId={setDestinationLocationId}
+            reason={reason}
+            setReason={setReason}
+            sameLocation={sameLocation}
+            onStart={startTransfer}
+            onOpen={openTransfer}
           />
+        ) : activeBatch ? (
+          <>
+            <TransferBatchHeader batch={activeBatch} />
+
+            {!readOnly && (
+              <SectionCard className="space-y-3">
+                <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Workflow Step</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setPhase("dispatch")} className={`min-h-11 rounded-2xl px-3 text-xs font-black ${phase === "dispatch" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}>Dispatch</button>
+                  <button type="button" onClick={() => setPhase("receive")} className={`min-h-11 rounded-2xl px-3 text-xs font-black ${phase === "receive" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}>Receive</button>
+                </div>
+              </SectionCard>
+            )}
+
+            {!readOnly && phase === "dispatch" && (
+              <TransferDispatchWorkspace
+                item={item}
+                unit={unit}
+                availableAtSource={availableAtSource}
+                dispatchQuantity={dispatchQuantity}
+                setDispatchQuantity={setDispatchQuantity}
+                dispatchCondition={dispatchCondition}
+                setDispatchCondition={setDispatchCondition}
+                dispatchNote={dispatchNote}
+                setDispatchNote={setDispatchNote}
+                onSave={saveDispatch}
+                onClear={() => { setItem(null); setScanValue(""); }}
+              />
+            )}
+
+            {!readOnly && phase === "receive" && (
+              <TransferReceiveWorkspace
+                batch={activeBatch}
+                selectedDispatch={selectedDispatch}
+                chooseDispatchForReceive={chooseDispatchForReceive}
+                receivedQuantity={receivedQuantity}
+                setReceivedQuantity={setReceivedQuantity}
+                receiveException={receiveException}
+                setReceiveException={setReceiveException}
+                receiveCondition={receiveCondition}
+                setReceiveCondition={setReceiveCondition}
+                receiveNote={receiveNote}
+                setReceiveNote={setReceiveNote}
+                receiveDiff={receiveDiff}
+                onSave={saveReceive}
+                onClear={() => setSelectedDispatchId(null)}
+              />
+            )}
+
+            {readOnly && <EmptyState title="Transfer is read-only." helper="Accepted, closed, submitted, or cancelled transfers cannot be edited from the handheld." />}
+
+            <TransferEvidenceList batch={activeBatch} chooseDispatchForReceive={readOnly ? null : chooseDispatchForReceive} />
+            <TransferExceptionList batch={activeBatch} canReview={canReview} onReview={reviewException} />
+
+            {!readOnly && (
+              <StickyActions
+                leftLabel="Back to Transfers"
+                rightLabel="Submit Transfer"
+                onLeft={() => { setView("landing"); setActiveBatchId(null); setItem(null); setScanValue(""); }}
+                onRight={submitTransfer}
+                rightDisabled={!(activeBatch.dispatch_lines || []).length}
+              />
+            )}
+          </>
+        ) : (
+          <EmptyState title="No transfer selected." helper="Open or start a transfer batch first." />
         )}
       </WorkflowMain>
     </PageShell>
   );
 }
 
-function Progress({ step }) {
+function TransferLanding({ visibleBatches, transferType, setTypeAndRoute, sourceLocationId, setSourceLocationId, destinationLocationId, setDestinationLocationId, reason, setReason, sameLocation, onStart, onOpen }) {
   return (
-    <SectionCard>
-      <div className="grid grid-cols-6 gap-1.5">
-        {STEP_LABELS.map((label, index) => {
-          const active = index + 1 <= step;
-          return <div key={label} className={`h-2 rounded-full ${active ? "bg-primary" : "bg-secondary"}`} />;
-        })}
+    <>
+      <SectionCard className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Active Transfers</p>
+            <h2 className="mt-1 text-lg font-black text-foreground">Transfer queue</h2>
+          </div>
+          <span className="rounded-full bg-secondary px-3 py-1 text-xs font-black text-muted-foreground">{visibleBatches.length} active</span>
+        </div>
+        {visibleBatches.length ? (
+          <div className="space-y-2">
+            {visibleBatches.map((batch) => (
+              <button key={batch.id} type="button" onClick={() => onOpen(batch)} className="w-full rounded-2xl border border-border bg-card p-3 text-left active:bg-secondary/60">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-black text-foreground">{batch.transfer_ref} · {batch.source_location} to {batch.destination_location}</p>
+                    <p className="mt-1 break-words text-xs font-bold text-muted-foreground">Lines: {(batch.dispatch_lines || []).length} · Exceptions: {countOpenExceptions(batch)}</p>
+                    <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">Reason: {getOptionLabel(TRANSFER_REASON_OPTIONS, batch.reason)}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black ${statusClass(batch.status)}`}>{batch.status}</span>
+                </div>
+                <p className="mt-3 rounded-xl bg-primary px-3 py-2 text-center text-xs font-black text-primary-foreground">Open Transfer</p>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <EmptyState title="No active transfers." helper="Start a transfer when stock needs dispatch and receive evidence." />
+        )}
+      </SectionCard>
+
+      <SectionCard className="space-y-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Start Transfer</p>
+          <h2 className="mt-1 text-lg font-black text-foreground">Route setup</h2>
+        </div>
+        <TouchSelect label="Transfer type" value={transferType} onChange={setTypeAndRoute} options={TRANSFER_REQUEST_TYPE_OPTIONS} />
+        <TouchSelect label="From" value={sourceLocationId} onChange={setSourceLocationId} options={TRANSFER_LOCATION_OPTIONS} />
+        <TouchSelect label="To" value={destinationLocationId} onChange={setDestinationLocationId} options={TRANSFER_LOCATION_OPTIONS} />
+        <TouchSelect label="Reason" value={reason} onChange={setReason} options={TRANSFER_REASON_OPTIONS} />
+        {sameLocation && <p className="rounded-2xl bg-destructive/10 px-3 py-2 text-xs font-bold text-destructive">Source and destination cannot be the same.</p>}
+        <button type="button" onClick={onStart} disabled={sameLocation} className="min-h-12 w-full rounded-2xl bg-primary px-4 text-sm font-black text-primary-foreground active:scale-[0.98] disabled:opacity-40">
+          Start Transfer
+        </button>
+      </SectionCard>
+    </>
+  );
+}
+
+function TransferBatchHeader({ batch }) {
+  return (
+    <SectionCard className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Transfer Batch</p>
+          <h2 className="mt-1 break-words text-lg font-black text-foreground">{batch.transfer_ref}</h2>
+          <p className="mt-1 break-words text-xs font-bold text-muted-foreground">{batch.source_location} → {batch.destination_location}</p>
+        </div>
+        <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black ${statusClass(batch.status)}`}>{batch.status}</span>
       </div>
-      <div className="mt-2 grid grid-cols-6 gap-1.5 text-center text-[10px] font-black text-muted-foreground">
-        {STEP_LABELS.map((label) => <span key={label} className="truncate">{label}</span>)}
+      <div className="grid grid-cols-3 gap-2">
+        <MetricPill label="Dispatch" value={(batch.dispatch_lines || []).length} suffix="lines" />
+        <MetricPill label="Receive" value={(batch.receive_lines || []).length} suffix="lines" />
+        <MetricPill label="Exceptions" value={countOpenExceptions(batch)} />
+      </div>
+      <p className="rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-bold text-muted-foreground">Dispatch and receive evidence stay separate. Inventory desktop posts final movement.</p>
+    </SectionCard>
+  );
+}
+
+function TransferDispatchWorkspace({ item, unit, availableAtSource, dispatchQuantity, setDispatchQuantity, dispatchCondition, setDispatchCondition, dispatchNote, setDispatchNote, onSave, onClear }) {
+  return (
+    <>
+      {item ? (
+        <>
+          <ItemSummaryCard item={item}>
+            <div className="grid grid-cols-2 gap-2">
+              <MetricPill label="Available" value={availableAtSource} suffix={unit} />
+              <MetricPill label="Dispatch" value={dispatchQuantity} suffix={unit} />
+            </div>
+          </ItemSummaryCard>
+          <SectionCard className="space-y-3">
+            <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Transfer Dispatch</p>
+            <QuantityStepper label="Dispatch quantity" value={dispatchQuantity} onChange={setDispatchQuantity} unit={unit} min={0} />
+            <TouchSelect label="Condition" value={dispatchCondition} onChange={setDispatchCondition} options={TRANSFER_CONDITION_OPTIONS_STAGEW} />
+            <TextInputField label="Evidence note" value={dispatchNote} onChange={setDispatchNote} placeholder="Optional dispatch note" />
+          </SectionCard>
+          <StickyActions leftLabel="Clear Item" rightLabel="Save Dispatch" onLeft={onClear} onRight={onSave} rightDisabled={dispatchQuantity <= 0} />
+        </>
+      ) : (
+        <EmptyState title="Scan or search item to dispatch." helper="Dispatch evidence records what left the source. It does not post stock." />
+      )}
+    </>
+  );
+}
+
+function TransferReceiveWorkspace({ batch, selectedDispatch, chooseDispatchForReceive, receivedQuantity, setReceivedQuantity, receiveException, setReceiveException, receiveCondition, setReceiveCondition, receiveNote, setReceiveNote, receiveDiff, onSave, onClear }) {
+  const dispatchLines = batch.dispatch_lines || [];
+  const receivedIds = new Set((batch.receive_lines || []).map((line) => line.dispatch_line_id));
+  if (!selectedDispatch) {
+    return (
+      <SectionCard className="space-y-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Transfer Receive</p>
+          <h2 className="mt-1 text-lg font-black text-foreground">Choose dispatched line</h2>
+        </div>
+        {dispatchLines.length ? (
+          <div className="space-y-2">
+            {dispatchLines.map((line) => {
+              const received = receivedIds.has(line.id);
+              return (
+                <button key={line.id} type="button" onClick={() => chooseDispatchForReceive(line)} className="w-full rounded-2xl bg-secondary/60 p-3 text-left active:bg-border">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-black text-foreground">{line.item_snapshot?.itemName || "Scanned item"}</p>
+                      <p className="mt-1 break-words text-xs font-bold text-muted-foreground">Dispatched: {line.dispatch_quantity} {line.unit_label} · {optionLabel(TRANSFER_CONDITION_OPTIONS_STAGEW, line.condition_note)}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black ${received ? "bg-primary/10 text-primary" : "bg-secondary text-muted-foreground"}`}>{received ? "Received" : "Open"}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <EmptyState title="No dispatch evidence yet." helper="Save dispatch evidence before destination receiving." />
+        )}
+      </SectionCard>
+    );
+  }
+
+  return (
+    <>
+      <SectionCard className="space-y-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Transfer Receive</p>
+          <h2 className="mt-1 break-words text-lg font-black text-foreground">{selectedDispatch.item_snapshot?.itemName || "Scanned item"}</h2>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <MetricPill label="Dispatched" value={selectedDispatch.dispatch_quantity} suffix={selectedDispatch.unit_label} />
+          <MetricPill label="Received" value={receivedQuantity} suffix={selectedDispatch.unit_label} />
+          <MetricPill label="Diff" value={differenceLabel(receiveDiff)} suffix={selectedDispatch.unit_label} />
+        </div>
+        <QuantityStepper label="Received" value={receivedQuantity} onChange={setReceivedQuantity} unit={selectedDispatch.unit_label} min={0} />
+        {receiveDiff !== 0 && <p className="rounded-2xl bg-destructive/10 px-3 py-2 text-xs font-bold text-destructive">Difference {differenceLabel(receiveDiff)} {selectedDispatch.unit_label}. Transfer exception evidence will be saved.</p>}
+        <TouchSelect label="Exception" value={receiveException} onChange={setReceiveException} options={TRANSFER_EXCEPTION_OPTIONS_STAGEW} />
+        <TouchSelect label="Condition" value={receiveCondition} onChange={setReceiveCondition} options={TRANSFER_CONDITION_OPTIONS_STAGEW} />
+        <TextInputField label="Evidence note" value={receiveNote} onChange={setReceiveNote} placeholder="Example: 2 units missing from tote" />
+      </SectionCard>
+      <StickyActions leftLabel="Choose Another" rightLabel="Save Receive" onLeft={onClear} onRight={onSave} rightDisabled={receivedQuantity < 0} />
+    </>
+  );
+}
+
+function TransferEvidenceList({ batch, chooseDispatchForReceive }) {
+  const dispatchLines = batch.dispatch_lines || [];
+  const receiveLines = batch.receive_lines || [];
+  return (
+    <SectionCard className="space-y-3">
+      <div>
+        <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Transfer Evidence</p>
+        <h2 className="mt-1 text-lg font-black text-foreground">Dispatch / receive proof</h2>
+      </div>
+      {dispatchLines.length ? (
+        <div className="space-y-2">
+          {dispatchLines.map((line) => {
+            const receive = receiveLines.find((row) => row.dispatch_line_id === line.id);
+            return (
+              <div key={line.id} className="rounded-2xl bg-secondary/60 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-black text-foreground">{line.item_snapshot?.itemName || "Scanned item"}</p>
+                    <p className="mt-1 break-words text-xs font-bold text-muted-foreground">Dispatch: {line.dispatch_quantity} {line.unit_label} · {optionLabel(TRANSFER_CONDITION_OPTIONS_STAGEW, line.condition_note)}</p>
+                    {line.evidence_note && <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">Dispatch note: {line.evidence_note}</p>}
+                    {receive ? (
+                      <p className="mt-1 break-words text-xs font-bold text-muted-foreground">Receive: {receive.received_quantity} {receive.unit_label} · Diff {differenceLabel(receive.difference_quantity)} · {optionLabel(TRANSFER_EXCEPTION_OPTIONS_STAGEW, receive.exception_type)}</p>
+                    ) : (
+                      <p className="mt-1 break-words text-xs font-bold text-muted-foreground">Receive evidence pending.</p>
+                    )}
+                  </div>
+                  {chooseDispatchForReceive && !receive && (
+                    <button type="button" onClick={() => chooseDispatchForReceive(line)} className="shrink-0 rounded-xl bg-primary px-3 py-2 text-xs font-black text-primary-foreground">Receive</button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <EmptyState title="No transfer evidence yet." helper="Scan an item and save dispatch evidence first." />
+      )}
+    </SectionCard>
+  );
+}
+
+function TransferExceptionList({ batch, canReview, onReview }) {
+  const exceptions = batch.exceptions || [];
+  if (!exceptions.length) return null;
+  return (
+    <SectionCard className="space-y-3">
+      <div>
+        <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Transfer Exceptions</p>
+        <h2 className="mt-1 text-lg font-black text-foreground">{exceptions.length} review item{exceptions.length === 1 ? "" : "s"}</h2>
+      </div>
+      <div className="space-y-2">
+        {exceptions.map((exception) => (
+          <div key={exception.id} className="rounded-2xl border border-border bg-card p-3">
+            <p className="break-words text-sm font-black text-foreground">{exception.item_name}</p>
+            <div className="mt-2 space-y-2 rounded-2xl bg-secondary/50 p-3">
+              <InfoLine label="Dispatched" value={exception.dispatched_quantity} />
+              <InfoLine label="Received" value={exception.received_quantity} />
+              <InfoLine label="Difference" value={differenceLabel(exception.difference_quantity)} />
+              <InfoLine label="Exception" value={optionLabel(TRANSFER_EXCEPTION_OPTIONS_STAGEW, exception.exception_type)} />
+              <InfoLine label="Status" value={exception.status} />
+            </div>
+            {exception.evidence_note && <p className="mt-2 rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-bold text-muted-foreground">{exception.evidence_note}</p>}
+            {canReview ? (
+              <div className="mt-3 grid grid-cols-1 gap-2">
+                {REVIEW_ACTIONS.map((action) => (
+                  <button key={action.id} type="button" onClick={() => onReview(exception.id, action.id)} className="min-h-10 rounded-xl bg-secondary px-3 text-xs font-black text-secondary-foreground active:bg-border">
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-bold text-muted-foreground">Supervisor, Manager, or Admin review required.</p>
+            )}
+          </div>
+        ))}
       </div>
     </SectionCard>
   );
