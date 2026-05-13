@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
+import PageHeader from "../components/scanner/PageHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
 import {
   DoneCard,
@@ -425,9 +426,11 @@ export default function Transfers() {
 
   return (
     <PageShell>
+      <PageHeader title="Transfers" subtitle={subtitle} />
       <WorkflowHeader
         title="Transfers"
         subtitle={subtitle}
+        showHeaderChrome={false}
         scanValue={scanValue}
         onScanValueChange={setScanValue}
         onScan={scan}

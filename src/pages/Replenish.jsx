@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { AlertTriangle, ClipboardList, MapPin, PackageCheck, PackageX, ShieldAlert, Warehouse } from "lucide-react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
+import PageHeader from "../components/scanner/PageHeader";
 import { BatchList, DoneCard, EmptyState, FieldError, InfoLine, ItemSummaryCard, MetricPill, OperatorAlert, PageShell, QuantityStepper, SectionCard, StickyActions, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import {
@@ -201,7 +202,8 @@ export default function Replenish() {
 
   return (
     <PageShell>
-      <WorkflowHeader title="Replenishment" subtitle="Backroom-to-shelf execution" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} />
+      <PageHeader title="Replenishment" subtitle="Backroom-to-shelf execution" />
+      <WorkflowHeader title="Replenishment" subtitle="Backroom-to-shelf execution" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} showHeaderChrome={false} />
       <WorkflowMain>
         {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} tone={operatorError.tone || "warning"} actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}
         <SectionCard className="space-y-2">

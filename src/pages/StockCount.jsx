@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import AttributeEvidenceFields from "../components/scanner/AttributeEvidenceFields";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
+import PageHeader from "../components/scanner/PageHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
 import { DoneCard, EmptyState, FieldError, InfoLine, ItemSummaryCard, MetricPill, OperatorAlert, PageShell, QuantityStepper, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
@@ -838,9 +839,14 @@ export default function StockCount() {
 
   return (
     <PageShell>
+      <PageHeader
+        title="Stock Count"
+        subtitle={view === "landing" ? "Session workspace" : view === "new" ? "Start count session" : view === "review" ? "Variance review" : activeSession?.status || "Count stock by scan or search"}
+      />
       <WorkflowHeader
         title="Stock Count"
         subtitle={view === "landing" ? "Session workspace" : view === "new" ? "Start count session" : view === "review" ? "Variance review" : activeSession?.status || "Count stock by scan or search"}
+        showHeaderChrome={false}
         scanValue={scanValue}
         onScanValueChange={setScanValue}
         onScan={scan}

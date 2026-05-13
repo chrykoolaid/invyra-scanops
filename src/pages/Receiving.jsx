@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
+import PageHeader from "../components/scanner/PageHeader";
 import AttributeEvidenceFields from "../components/scanner/AttributeEvidenceFields";
 import TouchSelect from "../components/scanner/TouchSelect";
 import {
@@ -372,9 +373,11 @@ export default function Receiving() {
 
   return (
     <PageShell>
+      <PageHeader title="Receiving" subtitle={subtitle} />
       <WorkflowHeader
         title="Receiving"
         subtitle={subtitle}
+        showHeaderChrome={false}
         scanValue={scanValue}
         onScanValueChange={setScanValue}
         onScan={scan}

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
+import PageHeader from "../components/scanner/PageHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
 import { BatchList, EmptyState, ItemSummaryCard, PageShell, SectionCard, StickyActions, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
@@ -50,7 +51,8 @@ export default function GapScan() {
 
   return (
     <PageShell>
-      <WorkflowHeader title="Gap Scan" subtitle="Capture shelf gap evidence" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} />
+      <PageHeader title="Gap Scan" subtitle="Capture shelf gap evidence" />
+      <WorkflowHeader title="Gap Scan" subtitle="Capture shelf gap evidence" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} showHeaderChrome={false} />
       <WorkflowMain>
         {item ? <>
           <ItemSummaryCard item={item} />

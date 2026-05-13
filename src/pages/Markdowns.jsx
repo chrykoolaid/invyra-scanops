@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
+import PageHeader from "../components/scanner/PageHeader";
 import GovernanceContextStrip from "../components/scanner/GovernanceContextStrip";
 import TouchSelect from "../components/scanner/TouchSelect";
 import {
@@ -328,9 +329,11 @@ export default function Markdowns() {
 
   return (
     <PageShell>
+      <PageHeader title="Markdowns" subtitle="Approval-led · prices unchanged" />
       <WorkflowHeader
         title="Markdowns"
         subtitle="Approval-led · prices unchanged"
+        showHeaderChrome={false}
         scanValue={scanValue}
         onScanValueChange={setScanValue}
         onScan={scan}

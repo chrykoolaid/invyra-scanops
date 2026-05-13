@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
+import PageHeader from "../components/scanner/PageHeader";
 import {
   DoneCard,
   EmptyState,
@@ -234,9 +235,11 @@ export default function ShelfTickets() {
 
   return (
     <PageShell>
+      <PageHeader title="Shelf Tickets" subtitle="Shelf ticket requests" />
       <WorkflowHeader
         title="Shelf Tickets"
         subtitle="Shelf ticket requests"
+        showHeaderChrome={false}
         scanValue={scanValue}
         onScanValueChange={setScanValue}
         onScan={handleScan}

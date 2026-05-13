@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
+import PageHeader from "../components/scanner/PageHeader";
 import GovernanceContextStrip from "../components/scanner/GovernanceContextStrip";
 import TouchSelect from "../components/scanner/TouchSelect";
 import {
@@ -339,9 +340,11 @@ export default function Waste() {
 
   return (
     <PageShell>
+      <PageHeader title="Waste Review" subtitle="Waste, shrink, and adjustment review" />
       <WorkflowHeader
         title="Waste Review"
         subtitle="Waste, shrink, and adjustment review"
+        showHeaderChrome={false}
         scanValue={scanValue}
         onScanValueChange={setScanValue}
         onScan={scan}
