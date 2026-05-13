@@ -4,8 +4,10 @@ import GovernanceContextStrip from "../components/scanner/GovernanceContextStrip
 import TouchSelect from "../components/scanner/TouchSelect";
 import {
   EmptyState,
+  FieldError,
   InfoLine,
   ItemSummaryCard,
+  OperatorAlert,
   PageShell,
   QuantityStepper,
   SectionCard,
@@ -209,6 +211,7 @@ export default function Waste() {
   const [selectedReviewId, setSelectedReviewId] = useState(null);
   const [inlineMessage, setInlineMessage] = useState("");
   const [latestContract, setLatestContract] = useState(null);
+  const [operatorError, setOperatorError] = useState(null);
 
   const selectedReview = useMemo(() => reviews.find((review) => review.reviewId === selectedReviewId) || reviews[0] || null, [reviews, selectedReviewId]);
   const filteredReviews = useMemo(() => filterWasteReviews(reviews, filter), [reviews, filter]);
@@ -235,6 +238,7 @@ export default function Waste() {
   const scan = (value) => {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
     if (!found) return;
+    setOperatorError(null);
     const rawScanValue = typeof value === "object" ? value?._searchMatch?.matchedValue || value?.barcode || value?.gtin || "" : String(value || "").trim();
     setItem(found);
     setScanValue(rawScanValue);
@@ -250,11 +254,24 @@ export default function Waste() {
   };
 
   const saveDraft = () => {
-    if (!item || quantity <= 0 || !reasonCode) return;
+    if (!item) {
+      setOperatorError({ title: "Item required", helper: "Scan or search an item before saving a waste review." });
+      return;
+    }
+    if (quantity <= 0 || Number.isNaN(Number(quantity))) {
+      setOperatorError({ title: "Quantity missing", helper: "Enter a valid waste quantity before saving. Your item stays on screen." });
+      return;
+    }
+    if (!reasonCode) {
+      setOperatorError({ title: "Reason required", helper: "Choose a waste reason before saving. Your item stays on screen." });
+      return;
+    }
+    setOperatorError(null);
     const permission = canPerformScanOpsAction(GOVERNED_ACTIONS.WASTE_SUBMIT, governance);
     if (!permission.allowed) {
       recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", null, permission);
-      setInlineMessage(permission.reason);
+      setOperatorError({ title: "Permission required", helper: permission.reason || "This waste action is blocked for the current role." });
+      setInlineMessage("");
       return;
     }
     recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", null, permission, { eventLabel: "Waste review draft saved" });
@@ -272,7 +289,8 @@ export default function Waste() {
     const permission = canPerformScanOpsAction(GOVERNED_ACTIONS.WASTE_SUBMIT, governance);
     if (!permission.allowed) {
       recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", selectedReview.reviewId, permission);
-      setInlineMessage(permission.reason);
+      setOperatorError({ title: "Permission required", helper: permission.reason || "This waste action is blocked for the current role." });
+      setInlineMessage("");
       return;
     }
     const updated = submitWasteReview(selectedReview.reviewId);
@@ -286,7 +304,8 @@ export default function Waste() {
     const permission = canPerformScanOpsAction(actionKey, governance);
     if (!permission.allowed) {
       recordGovernedAction(actionKey, "Waste Review", selectedReview.reviewId, permission);
-      setInlineMessage(permission.reason);
+      setOperatorError({ title: selectedReview?.approvalRoleRequired === "Manager" ? "Manager approval required" : "Supervisor required", helper: permission.reason || "This review is blocked until approved by an authorised role." });
+      setInlineMessage("");
       return;
     }
     const updated = decideWasteReview(selectedReview.reviewId, action, action === "approve" ? "Approved from handheld governance review" : `${action} from handheld governance review`);
@@ -299,7 +318,8 @@ export default function Waste() {
     const permission = canPerformScanOpsAction(GOVERNED_ACTIONS.ADJUSTMENT_CONTRACT_CREATE, governance);
     if (!permission.allowed) {
       recordGovernedAction(GOVERNED_ACTIONS.ADJUSTMENT_CONTRACT_CREATE, "Waste Review", selectedReview.reviewId, permission);
-      setInlineMessage(permission.reason);
+      setOperatorError({ title: "Manager required", helper: permission.reason || "Adjustment contracts require Manager/Admin approval." });
+      setInlineMessage("");
       return;
     }
     const result = createAdjustmentContract(selectedReview.reviewId);
@@ -329,6 +349,7 @@ export default function Waste() {
       />
       <WorkflowMain>
         <GovernanceContextStrip />
+        {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} tone={operatorError.tone || "warning"} actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}
         {inlineMessage && (
           <div className="rounded-2xl border border-border bg-card px-4 py-3 text-sm font-bold leading-snug text-muted-foreground">
             {inlineMessage}
@@ -362,7 +383,7 @@ export default function Waste() {
               ))}
             </div>
           ) : (
-            <EmptyState title="No reviews in this queue." helper="Scan an item to create a waste/shrink review draft. Blocked markdown records appear here when available." />
+            <EmptyState title="No reviews in this queue." helper="Scan an item to start a waste log. Blocked markdown records appear here when available." />
           )}
         </SectionCard>
 
@@ -378,8 +399,10 @@ export default function Waste() {
                 <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Create Review Draft</p>
                 <h2 className="mt-1 text-lg font-black text-foreground">Evidence and reason</h2>
               </div>
-              <QuantityStepper label="Review qty" value={quantity} onChange={setQuantity} unit={unit} min={1} />
-              <TouchSelect label="Reason" value={reasonCode} onChange={setReasonCode} options={WASTE_REVIEW_REASON_OPTIONS} helper={reason.helper} />
+              <QuantityStepper label="Review qty" value={(quantity)} onChange={(value) => { setQuantity(value); if (operatorError?.title === "Quantity missing") setOperatorError(null); }} unit={unit} min={1} />
+              {(quantity <= 0 || Number.isNaN(Number(quantity))) && <FieldError title="Quantity missing" helper="Enter a valid quantity before saving." />}
+              <TouchSelect label="Reason" value={reasonCode} onChange={(value) => { setReasonCode(value); if (operatorError?.title === "Reason required") setOperatorError(null); }} options={WASTE_REVIEW_REASON_OPTIONS} helper={reason.helper} />
+              {!reasonCode && <FieldError title="Reason required" helper="Choose a waste reason before saving." />}
               <div className="rounded-2xl bg-secondary/50 p-3 space-y-2">
                 <InfoLine label="Review type" value={getWasteReviewOptionLabel(WASTE_REVIEW_TYPE_OPTIONS, reason.reviewType)} />
                 <InfoLine label="Reorder impact" value={reason.reorderImpact === "INCLUDED_IN_REORDER_INTELLIGENCE" ? "Included in reorder intelligence" : "Excluded from reorder demand"} />
@@ -411,7 +434,7 @@ export default function Waste() {
         <ContractCard contract={latestContract} />
 
         {!item && !selectedReview ? (
-          <EmptyState title="Waste Review is ready." helper="Scan/search to create a waste or shrink review." />
+          <EmptyState title="Waste Review is ready." helper="Scan an item to start a waste log or select an existing review." />
         ) : null}
       </WorkflowMain>
       <StickyActions
@@ -422,13 +445,15 @@ export default function Waste() {
             setItem(null);
             setScanValue("");
             setInlineMessage("");
+            setOperatorError(null);
           } else {
             refreshReviews(selectedReviewId);
+            setOperatorError(null);
             setInlineMessage("Waste Review queue refreshed.");
           }
         }}
         onRight={saveDraft}
-        rightDisabled={!item || quantity <= 0 || !reasonCode}
+        rightDisabled={false}
       />
     </PageShell>
   );

@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle2, Minus, Package, Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, Minus, Package, Plus, Trash2 } from "lucide-react";
 
 export function PageShell({ children }) {
   return <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">{children}</div>;
@@ -27,6 +27,52 @@ export function EmptyState({ title = "No item selected.", helper = "" }) {
     <div className="rounded-2xl border border-dashed border-border bg-card/70 px-4 py-3 text-sm font-bold text-muted-foreground">
       <p>{title}</p>
       {helper && <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground/80">{helper}</p>}
+    </div>
+  );
+}
+
+
+export function OperatorAlert({ title, helper = "", tone = "warning", actions = [] }) {
+  const toneMap = {
+    warning: "border-amber-200 bg-amber-50/70 text-amber-800",
+    danger: "border-destructive/20 bg-destructive/10 text-destructive",
+    info: "border-border bg-secondary/50 text-muted-foreground",
+    success: "border-primary/20 bg-primary/5 text-primary",
+  };
+  const Icon = tone === "success" ? CheckCircle2 : tone === "info" ? Info : AlertTriangle;
+  return (
+    <div className={`rounded-2xl border px-4 py-3 ${toneMap[tone] || toneMap.warning}`}>
+      <div className="flex items-start gap-3">
+        <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="break-words text-sm font-black text-foreground">{title}</p>
+          {helper && <p className="mt-1 break-words text-xs font-semibold leading-snug text-muted-foreground">{helper}</p>}
+        </div>
+      </div>
+      {actions.length > 0 && (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {actions.map((action) => (
+            <button
+              key={action.label}
+              type="button"
+              onClick={action.onClick}
+              disabled={action.disabled}
+              className={`min-h-10 rounded-xl px-3 text-xs font-black active:scale-[0.98] disabled:opacity-40 ${action.variant === "primary" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function FieldError({ title, helper }) {
+  return (
+    <div className="rounded-2xl border border-destructive/20 bg-destructive/10 px-3 py-2">
+      <p className="text-xs font-black text-destructive">{title}</p>
+      {helper && <p className="mt-1 text-xs font-semibold leading-snug text-destructive/80">{helper}</p>}
     </div>
   );
 }

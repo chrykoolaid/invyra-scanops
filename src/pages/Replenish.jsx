@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { AlertTriangle, ClipboardList, MapPin, PackageCheck, PackageX, ShieldAlert, Warehouse } from "lucide-react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
-import { BatchList, DoneCard, EmptyState, InfoLine, ItemSummaryCard, MetricPill, PageShell, QuantityStepper, SectionCard, StickyActions, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
+import { BatchList, DoneCard, EmptyState, FieldError, InfoLine, ItemSummaryCard, MetricPill, OperatorAlert, PageShell, QuantityStepper, SectionCard, StickyActions, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import {
   getOpenReplenishmentTasks,
@@ -149,6 +149,7 @@ export default function Replenish() {
   const [evidenceNote, setEvidenceNote] = useState("");
   const [records, setRecords] = useState(() => getReplenishmentTasks());
   const [savedResult, setSavedResult] = useState(null);
+  const [operatorError, setOperatorError] = useState(null);
 
   const selectedAction = getReplenishmentAction(actionId);
   const openCount = getOpenReplenishmentTasks().length;
@@ -156,10 +157,12 @@ export default function Replenish() {
   const scan = (value) => {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
     if (!found) return;
+    setOperatorError(null);
     const need = getShelfNeedSnapshot(found);
     setItem(found);
     setQuantity(Math.max(0, Number(need.recommendedMove || 0)));
     setSavedResult(null);
+    setOperatorError(null);
   };
 
   const clearItem = () => {
@@ -168,10 +171,23 @@ export default function Replenish() {
     setNotes("");
     setEvidenceNote("");
     setSavedResult(null);
+    setOperatorError(null);
   };
 
   const submitAction = () => {
-    if (!item) return;
+    if (!item) {
+      setOperatorError({ title: "Item required", helper: "Scan or search an item before saving replenishment work." });
+      return;
+    }
+    if (quantity === "" || Number.isNaN(Number(quantity)) || Number(quantity) < 0) {
+      setOperatorError({ title: "Quantity missing", helper: "Enter a valid quantity before saving. Your item stays on screen." });
+      return;
+    }
+    if (!actionId) {
+      setOperatorError({ title: "Action required", helper: "Choose what happened before saving the replenishment result." });
+      return;
+    }
+    setOperatorError(null);
     const issueLabel = ISSUE_OPTIONS.find((option) => option.id === issue)?.label || issue;
     const result = saveReplenishmentAction({ item, actionId, quantity, issueReason: issueLabel, notes, evidenceNote });
     if (!result) return;
@@ -187,6 +203,7 @@ export default function Replenish() {
     <PageShell>
       <WorkflowHeader title="Replenishment" subtitle="Backroom-to-shelf execution" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} />
       <WorkflowMain>
+        {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} tone={operatorError.tone || "warning"} actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}
         <SectionCard className="space-y-2">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -216,7 +233,8 @@ export default function Replenish() {
         {item ? (
           <>
             <ItemSummaryCard item={item} />
-            <ShelfNeedCard item={item} quantity={quantity} setQuantity={setQuantity} />
+            <ShelfNeedCard item={item} quantity={quantity} setQuantity={(value) => { setQuantity(value); if (operatorError?.title === "Quantity missing") setOperatorError(null); }} />
+            {(quantity === "" || Number.isNaN(Number(quantity)) || Number(quantity) < 0) && <FieldError title="Quantity missing" helper="Enter a valid quantity before saving." />}
 
             <SectionCard className="space-y-3">
               <div>
@@ -258,7 +276,7 @@ export default function Replenish() {
             </SectionCard>
           </>
         ) : (
-          <EmptyState title="Scan or search an item to start replenishment." helper="Scan/search, then save one replenishment outcome." />
+          <EmptyState title="No replenishment item selected." helper="Scan an item, confirm quantity and outcome, then save. Nothing is posted until saved." />
         )}
 
         <RecentReplenishmentList records={records} />

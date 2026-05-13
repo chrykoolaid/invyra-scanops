@@ -130,6 +130,7 @@ export default function SyncQueue() {
   const [connection, setConnection] = useState(() => getInventoryConnection());
   const [retryingIds, setRetryingIds] = useState(() => new Set());
   const [retryingAll, setRetryingAll] = useState(false);
+  const [syncMessage, setSyncMessage] = useState(null);
   const summary = useMemo(() => getSyncSummary(), [queue]);
 
   const refresh = () => {
@@ -156,6 +157,11 @@ export default function SyncQueue() {
       sync_exempt: true,
     });
     const result = retrySyncEvent(record.id);
+    if (result && FAILED_STATUSES.has(result.status)) {
+      setSyncMessage({ title: "Sync failed", helper: "Try again when the connection is stable. Your local work is still saved." });
+    } else {
+      setSyncMessage({ title: "Retry checked", helper: "If the item cannot sync yet, it will stay in the queue for review." });
+    }
     setSelected(result || record);
     setRetryingIds((current) => {
       const next = new Set(current);
@@ -169,6 +175,7 @@ export default function SyncQueue() {
     if (retryingAll || retryableCount === 0) return;
     setRetryingAll(true);
     createScanOpsEvent(SCANOPS_EVENT_TYPES.INVENTORY_PUSH_STARTED, { source_module: "Sync Queue", status: "retry_started", sync_exempt: true });
+    setSyncMessage(null);
     const results = retryAllSyncEvents();
     createScanOpsEvent(SCANOPS_EVENT_TYPES.INVENTORY_PUSH_SUCCEEDED, {
       source_module: "Sync Queue",
@@ -178,6 +185,7 @@ export default function SyncQueue() {
       sync_exempt: true,
     });
     setRetryingAll(false);
+    setSyncMessage({ title: "Retry checked", helper: `${results.length} item${results.length === 1 ? "" : "s"} checked. Failed items stay saved locally for retry/review.` });
     refresh();
   };
 
@@ -230,8 +238,14 @@ export default function SyncQueue() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
-      <PageHeader title="Sync Queue" subtitle="Pending sync, synced, sync failed, or needs review" />
+      <PageHeader title="Sync Queue" subtitle="Pending sync and review items" />
       <main className="flex-1 px-4 py-5 pb-8 space-y-4 overflow-y-auto overflow-x-hidden" data-scanops-scroll>
+        {syncMessage && (
+          <section className="rounded-2xl border border-border bg-card px-4 py-3 min-w-0">
+            <p className="text-sm font-black text-foreground">{syncMessage.title}</p>
+            <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">{syncMessage.helper}</p>
+          </section>
+        )}
         <section className="bg-card rounded-2xl border border-border p-5 min-w-0">
           <div className="flex items-start gap-3">
             <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${offline ? "bg-amber-500/10 text-amber-700" : issueCount ? "bg-destructive/10 text-destructive" : "bg-emerald-500/10 text-emerald-700"}`}>
@@ -260,8 +274,8 @@ export default function SyncQueue() {
           {filtered.length === 0 ? (
             <div className="bg-card rounded-2xl border border-border p-6 text-center min-w-0">
               <CheckCircle2 className="w-10 h-10 text-muted-foreground mx-auto" />
-              <p className="text-sm font-bold text-foreground mt-3">No records here</p>
-              <p className="text-xs text-muted-foreground mt-1">Scanner work appears here as pending sync, sync failed, needs review, or synced.</p>
+              <p className="text-sm font-bold text-foreground mt-3">{activeTab === "pending" ? "No pending sync items" : activeTab === "review" ? "No failed or review items" : activeTab === "synced" ? "No synced items yet" : "No discarded items"}</p>
+              <p className="text-xs text-muted-foreground mt-1">{activeTab === "pending" ? "New offline work will appear here." : "Scanner work stays saved locally until it syncs or is reviewed."}</p>
             </div>
           ) : (
             filtered.map((record) => <SyncCard key={record.id} record={record} onView={() => setSelected(record)} onRetry={() => handleRetry(record)} retrying={retryingIds.has(record.id)} />)
@@ -302,7 +316,7 @@ function SyncCard({ record, onView, onRetry, retrying = false }) {
         <SmallFact label="User / device" value={`${record.createdBy || "Operator"} · ${record.deviceId || "device"}`} />
         <SmallFact label="Source" value={record.sourceRef || record.sourceRequestId || workflowTitle(record)} />
       </div>
-      {record.failureReason && <p className="rounded-xl bg-destructive/10 text-destructive text-xs font-semibold p-3 break-words">{record.failureReason}</p>}
+      {record.failureReason && <p className="rounded-xl bg-destructive/10 text-destructive text-xs font-semibold p-3 break-words">Sync failed. Try again when the connection is stable.</p>}
       {record.matchingEvidence && <p className="rounded-xl bg-violet-500/10 text-violet-700 text-xs font-semibold p-3 break-words">Matching evidence: {record.matchingEvidence.submitted_by || "Operator"} · {record.matchingEvidence.source || "Sync Queue"} · {record.matchingEvidence.status || "open"}</p>}
       <div className="grid grid-cols-2 gap-2">
         <button onClick={onView} className={MINI_BUTTON}><Eye className="w-3.5 h-3.5" />{actionLabel}</button>
@@ -348,6 +362,12 @@ function SyncDetail({ record, session, onBack, onRetry, onResolve, retrying = fa
     <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
       <PageHeader title={detailTitle(record)} subtitle={record.title || workflowTitle(record)} />
       <main className="flex-1 px-4 py-5 pb-8 space-y-4 overflow-y-auto overflow-x-hidden" data-scanops-scroll>
+        {syncMessage && (
+          <section className="rounded-2xl border border-border bg-card px-4 py-3 min-w-0">
+            <p className="text-sm font-black text-foreground">{syncMessage.title}</p>
+            <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">{syncMessage.helper}</p>
+          </section>
+        )}
         <section className="bg-card rounded-2xl border border-border p-5 min-w-0">
           <div className="flex items-start gap-3">
             <DetailIcon status={record.status} />
@@ -355,7 +375,7 @@ function SyncDetail({ record, session, onBack, onRetry, onResolve, retrying = fa
               <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${statusTone(record.status)}`}>{statusLabel(record)}</span>
               <h2 className="text-lg font-black text-foreground mt-3 break-words">{record.title || workflowTitle(record)}</h2>
               <p className="text-sm text-muted-foreground mt-1 break-words">{record.summary || record.payloadSummary}</p>
-              {record.failureReason && <p className="mt-3 rounded-xl bg-destructive/10 text-destructive text-xs font-semibold p-3 break-words">{record.failureReason}</p>}
+              {record.failureReason && <p className="mt-3 rounded-xl bg-destructive/10 text-destructive text-xs font-semibold p-3 break-words">Sync failed. Your work is still saved locally. Try again when the connection is stable.</p>}
             </div>
           </div>
         </section>
@@ -366,17 +386,17 @@ function SyncDetail({ record, session, onBack, onRetry, onResolve, retrying = fa
 
         {(isConflict || isDuplicate || isFailed || record.status === SYNC_STATUSES.NEEDS_REVIEW || isEscalated || isDiscarded) && (
           <section className="bg-card rounded-2xl border border-border p-5 min-w-0 space-y-4">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Evidence comparison</p>
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Saved work state</p>
             <div className="grid gap-3">
-              <SnapshotPanel title="Local evidence" helper={`Hash: ${record.localSnapshotHash || "saved"}`} snapshot={record.localSnapshot || record.payloadSnapshot || record.payload} />
-              <SnapshotPanel title="Server/source value" helper={`Hash: ${record.serverSnapshotHash || "not fetched"}`} snapshot={record.serverSnapshot || { source: record.sourceRef || record.sourceRequestId, note: "No server/source snapshot fetched yet. Refresh keeps local evidence intact." }} />
+              <SnapshotPanel title="Local evidence" helper="Saved on device" snapshot={record.localSnapshot || record.payloadSnapshot || record.payload} />
+              <SnapshotPanel title="Source value" helper="Not changed by handheld" snapshot={record.serverSnapshot || { source: record.sourceRef || record.sourceRequestId, note: "No source value fetched yet. Retry keeps local evidence intact." }} />
             </div>
             {record.matchingEvidence && <MatchingEvidence evidence={record.matchingEvidence} />}
           </section>
         )}
 
         <section className="bg-card rounded-2xl border border-border p-5 min-w-0 space-y-3">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Items / payload snapshot</p>
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Saved work summary</p>
           {itemRowsFor(record).length === 0 ? (
             <PayloadSnapshot payload={record.localSnapshot || record.payloadSnapshot || record.payload} />
           ) : (
@@ -429,12 +449,12 @@ function SyncDetail({ record, session, onBack, onRetry, onResolve, retrying = fa
 }
 
 function detailTitle(record) {
-  if (record.status === SYNC_STATUSES.CONFLICT) return "Sync Conflict";
-  if (record.status === SYNC_STATUSES.DUPLICATE) return "Duplicate Detected";
+  if (record.status === SYNC_STATUSES.CONFLICT) return "Needs review";
+  if (record.status === SYNC_STATUSES.DUPLICATE) return "Needs review";
   if (FAILED_STATUSES.has(record.status)) return "Sync failed";
-  if (record.status === SYNC_STATUSES.DISCARDED) return "Discarded Sync Record";
+  if (record.status === SYNC_STATUSES.DISCARDED) return "Discarded local record";
   if (record.status === SYNC_STATUSES.ESCALATED) return "Escalated Sync Review";
-  return "Sync Detail";
+  return "Sync item";
 }
 
 function DetailIcon({ status }) {

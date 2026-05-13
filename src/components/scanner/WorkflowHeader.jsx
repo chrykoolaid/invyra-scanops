@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import { getNetworkMode, getSyncSummary } from "../../lib/scanOpsSync";
 import { useScanOpsSession } from "../../lib/scanOpsSession";
 import { getItemEntryMatchLabel, getItemEntryPrimaryValue, getItemEntrySecondaryLabel, resolveItemEntry, searchItemEntries } from "../../lib/scanOpsItemEntry";
-import { createUnknownItemEvidence } from "../../lib/scanOpsUnknownItems";
 
 export default function WorkflowHeader({
   title,
@@ -169,13 +168,6 @@ export default function WorkflowHeader({
     onScanValueChange?.(value);
     clearResults();
     onScan?.(item);
-  };
-
-  const attachUnknownEvidence = () => {
-    const evidence = createUnknownItemEvidence({ enteredCode: currentValue, sourceWorkflow: title });
-    if (!evidence) return;
-    setMatches([]);
-    setLookupState("evidence_created");
   };
 
   const clearField = () => {
@@ -362,20 +354,24 @@ export default function WorkflowHeader({
                 </div>
               ) : (
                 <div className="px-2 py-2">
-                  <p className="text-sm font-black text-foreground">{online ? "No item found" : "Offline — item lookup unavailable"}</p>
-                  <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{online ? "Check barcode, PLU, SKU, shelf label, or try item name / department." : "Use a locally available item or retry when connection returns."}</p>
+                  <p className="text-sm font-black text-foreground">{online ? (String(currentValue || "").trim().length < 3 ? "Item not recognised" : "Item not found") : "Offline — item lookup unavailable"}</p>
+                  <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{online ? (String(currentValue || "").trim().length < 3 ? "Scan again or search manually." : "Try another barcode or search manually.") : "Reconnect or try again later. Work already saved locally will stay pending sync."}</p>
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onMouseDown={(event) => event.preventDefault()}
-                      onClick={attachUnknownEvidence}
-                      disabled={!String(currentValue || "").trim()}
-                      className="min-h-10 rounded-xl bg-primary px-3 text-xs font-black text-primary-foreground disabled:opacity-40"
+                      onClick={() => { clearField(); requestAnimationFrame(requestNativeKeyboard); }}
+                      className="min-h-10 rounded-xl bg-secondary px-3 text-xs font-black text-secondary-foreground"
                     >
-                      Attach Unknown Item Evidence
+                      Scan Again
                     </button>
-                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={clearField} className="min-h-10 rounded-xl bg-secondary px-3 text-xs font-black text-secondary-foreground">
-                      Clear Search
+                    <button
+                      type="button"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => requestAnimationFrame(requestNativeKeyboard)}
+                      className="min-h-10 rounded-xl bg-primary px-3 text-xs font-black text-primary-foreground"
+                    >
+                      Search Manually
                     </button>
                   </div>
                 </div>

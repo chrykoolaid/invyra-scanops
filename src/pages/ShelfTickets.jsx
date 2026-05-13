@@ -3,6 +3,7 @@ import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import {
   DoneCard,
   EmptyState,
+  OperatorAlert,
   InfoLine,
   MetricPill,
   PageShell,
@@ -129,6 +130,7 @@ export default function ShelfTickets() {
   const [formatId, setFormatId] = useState("STANDARD_SHELF_LABEL");
   const [savedContract, setSavedContract] = useState(null);
   const [importedCount, setImportedCount] = useState(0);
+  const [operatorError, setOperatorError] = useState(null);
 
   const refreshQueue = (nextSelectedId = selectedId) => {
     const imported = importShelfTicketRequestsFromPriceCheck();
@@ -180,6 +182,7 @@ export default function ShelfTickets() {
   const handleScan = (value) => {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
     if (!found) return;
+    setOperatorError(null);
     const request = createManualShelfTicketRequest(found);
     setScanValue("");
     setSavedContract(null);
@@ -193,17 +196,35 @@ export default function ShelfTickets() {
   };
 
   const saveContract = () => {
-    if (!selectedRequest) return;
+    if (!selectedRequest) {
+      setOperatorError({ title: "Ticket request required", helper: "Select a ticket request before saving the print handoff contract." });
+      return;
+    }
+    if (!formatId) {
+      setOperatorError({ title: "Ticket type required", helper: "Choose a ticket format before saving. The request stays selected." });
+      return;
+    }
+    setOperatorError(null);
     const result = saveShelfTicketPrintContract({ request: selectedRequest, formatId, copies: selectedRequest.copies || 1, quantity: selectedRequest.quantity || 1 });
-    if (!result) return;
+    if (!result) {
+      setOperatorError({ title: "Could not save ticket", helper: "Your ticket request was not submitted. Try again or keep editing." });
+      return;
+    }
     setSavedContract(result.contract);
     refreshQueue(result.request.requestId);
   };
 
   const updateStatus = (status) => {
-    if (!selectedRequest) return;
+    if (!selectedRequest) {
+      setOperatorError({ title: "Ticket request required", helper: "Select a ticket before changing its status." });
+      return;
+    }
+    setOperatorError(null);
     const result = updateShelfTicketRequestStatus(selectedRequest.requestId, status);
-    if (!result) return;
+    if (!result) {
+      setOperatorError({ title: "Could not update ticket", helper: "Your ticket change was not submitted. Keep editing and try again." });
+      return;
+    }
     setSavedContract(result.contract || null);
     refreshQueue(result.request.requestId);
   };
@@ -221,10 +242,11 @@ export default function ShelfTickets() {
         onScan={handleScan}
       />
       <WorkflowMain>
+        {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} tone={operatorError.tone || "warning"} actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}
         {savedContract && (
           <DoneCard
             title="Shelf ticket contract saved"
-            helper="Saved locally. Pending sync for desktop/print handoff. No real printer job was created."
+            helper="Ticket saved. Printing is unavailable right now; print later from the desktop handoff."
             rows={[
               { label: "Contract", value: savedContract.contractId },
               { label: "Template", value: savedContract.templateKey },
@@ -266,7 +288,7 @@ export default function ShelfTickets() {
               {activeRequests.map((request) => <QueueItem key={request.requestId} request={request} active={request.requestId === selectedId} onClick={() => chooseRequest(request)} />)}
             </div>
           ) : (
-            <p className="mt-3 rounded-2xl bg-secondary/50 px-3 py-2 text-sm font-bold text-muted-foreground">No ticket requests in this view.</p>
+            <EmptyState title="No tickets in this view." helper="Scan an item to add a shelf ticket request, or create one from Price Check." />
           )}
         </SectionCard>
 
@@ -328,7 +350,7 @@ export default function ShelfTickets() {
             </SectionCard>
           </>
         ) : (
-          <EmptyState title="No ticket selected." helper="Use Price Check → Ticket Needed, or scan/search here to create a manual shelf-ticket request." />
+          <EmptyState title="No ticket selected." helper="Scan an item to add a shelf ticket request. Printing is handled later; no printer routing is changed here." />
         )}
 
 

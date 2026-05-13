@@ -5,6 +5,7 @@ import TouchSelect from "../components/scanner/TouchSelect";
 import {
   DoneCard,
   EmptyState,
+  OperatorAlert,
   InfoLine,
   ItemSummaryCard,
   MetricPill,
@@ -106,6 +107,7 @@ export default function Receiving() {
   const [enteredWeight, setEnteredWeight] = useState("");
   const [weightSource, setWeightSource] = useState("manual_entry");
   const [submittedBatch, setSubmittedBatch] = useState(null);
+  const [operatorError, setOperatorError] = useState(null);
 
   const visibleBatches = useMemo(() => batches.filter((batch) => canSeeBatch(batch, session)), [batches, session]);
   const activeBatch = useMemo(() => batches.find((batch) => batch.id === activeBatchId) || null, [batches, activeBatchId]);
@@ -130,6 +132,7 @@ export default function Receiving() {
   };
 
   const openBatch = (batch) => {
+    setOperatorError(null);
     setActiveBatchId(batch.id);
     setView("batch");
     setItem(null);
@@ -144,6 +147,15 @@ export default function Receiving() {
   };
 
   const startBatch = () => {
+    if (!supplierId) {
+      setOperatorError({ title: "Supplier required", helper: "Choose a supplier before starting the receiving batch." });
+      return;
+    }
+    if (!String(deliveryRef || "").trim()) {
+      setOperatorError({ title: "Delivery reference required", helper: "Enter the delivery reference before starting the batch." });
+      return;
+    }
+    setOperatorError(null);
     const batch = createReceivingBatch({
       supplierId,
       supplierName: supplierLabel(supplierId),
@@ -167,6 +179,7 @@ export default function Receiving() {
   const scan = (value) => {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
     if (!found) return;
+    setOperatorError(null);
     const rawValue = typeof value === "object" ? value?._searchMatch?.matchedValue || value?.barcode || value?.gtin || "" : String(value || "").trim();
     const expected = expectedQuantityForItem(found);
     setItem(found);
@@ -182,7 +195,23 @@ export default function Receiving() {
   };
 
   const saveEvidence = () => {
-    if (!activeBatch || !item || readOnly) return;
+    if (!activeBatch) {
+      setOperatorError({ title: "Batch required", helper: "Open or start a receiving batch before saving evidence." });
+      return;
+    }
+    if (readOnly) {
+      setOperatorError({ title: "Batch is read-only", helper: "This receiving batch is locked. Your current screen was not cleared." });
+      return;
+    }
+    if (!item) {
+      setOperatorError({ title: "Item required", helper: "Scan or search an item before saving receiving evidence." });
+      return;
+    }
+    if (quantity === "" || Number.isNaN(Number(quantity)) || Number(quantity) < 0) {
+      setOperatorError({ title: "Quantity missing", helper: "Enter a valid received quantity before saving. Your item stays on screen." });
+      return;
+    }
+    setOperatorError(null);
     const attributeSnapshot = buildWorkflowItemAttributeSnapshot({
       workflowType: "receiving",
       item,
@@ -295,7 +324,15 @@ export default function Receiving() {
   };
 
   const submitBatch = () => {
-    if (!activeBatch || !(activeBatch.lines || []).length) return;
+    if (!activeBatch) {
+      setOperatorError({ title: "Batch required", helper: "Open a receiving batch before submitting." });
+      return;
+    }
+    if (!(activeBatch.lines || []).length) {
+      setOperatorError({ title: "Nothing to submit", helper: "Scan and save at least one receiving line first." });
+      return;
+    }
+    setOperatorError(null);
     const nextBatch = submitReceivingBatch(activeBatch);
     replaceBatch(nextBatch);
     const event = createScanOpsEvent(SCANOPS_EVENT_TYPES.RECEIVING_EVIDENCE_SUBMITTED, {
@@ -314,7 +351,11 @@ export default function Receiving() {
   };
 
   const reviewException = (exceptionId, decision) => {
-    if (!activeBatch || !canReview) return;
+    if (!activeBatch) return;
+    if (!canReview) {
+      setOperatorError({ title: "Supervisor required", helper: "Staff can record receiving evidence, but cannot review exceptions." });
+      return;
+    }
     const nextBatch = reviewReceivingException(activeBatch, exceptionId, decision, decision);
     replaceBatch(nextBatch);
     createScanOpsEvent(SCANOPS_EVENT_TYPES.RECEIVING_EXCEPTION_REVIEWED, {
@@ -341,6 +382,14 @@ export default function Receiving() {
         disabled={readOnly}
       />
       <WorkflowMain>
+        {operatorError && (
+          <OperatorAlert
+            title={operatorError.title}
+            helper={operatorError.helper}
+            tone={operatorError.tone || "warning"}
+            actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]}
+          />
+        )}
         {view === "done" && submittedBatch ? (
           <DoneCard
             title="Receiving batch submitted"
@@ -407,7 +456,7 @@ export default function Receiving() {
                 <StickyActions leftLabel="Clear Item" rightLabel="Save Evidence" onLeft={() => { setItem(null); setScanValue(""); }} onRight={saveEvidence} rightDisabled={quantity < 0} />
               </>
             ) : !readOnly ? (
-              <EmptyState title="Scan or search receiving item." helper="Scan/search item name, PLU, SKU, or barcode." />
+              <EmptyState title="No receiving item selected." helper="Scan an item to add receiving evidence. Saved lines will stay in this batch." />
             ) : (
               <EmptyState title="Batch is read-only." helper="This batch is locked for handheld edits." />
             )}
@@ -533,7 +582,7 @@ function ReceivingLineList({ batch }) {
           ))}
         </div>
       ) : (
-        <EmptyState title="No receiving evidence yet." helper="Scan item, then save evidence." />
+        <EmptyState title="No receiving evidence yet." helper="Scan an item, enter quantity, then save evidence." />
       )}
     </SectionCard>
   );

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { AlertTriangle, BadgePercent, CheckCircle2, ClipboardCheck, Eye, Printer, ShieldAlert, Tag, Ticket } from "lucide-react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
-import { BatchList, DoneCard, EmptyState, InfoLine, ItemSummaryCard, MetricPill, PageShell, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
+import { BatchList, DoneCard, EmptyState, FieldError, InfoLine, ItemSummaryCard, MetricPill, OperatorAlert, PageShell, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import {
   formatScanOpsMoney,
@@ -15,6 +15,7 @@ import {
   PRICE_PROMO_RESULTS,
   savePricePromoVerificationEvent,
 } from "../lib/scanOpsPricePromoVerification";
+import { getNetworkMode } from "../lib/scanOpsSync";
 
 const RESULT_ICON = {
   [PRICE_PROMO_RESULTS.LABEL_CORRECT]: CheckCircle2,
@@ -135,6 +136,7 @@ export default function PriceCheck() {
   const [notes, setNotes] = useState("");
   const [records, setRecords] = useState(() => getAllPricePromoVerificationEvents());
   const [savedResult, setSavedResult] = useState(null);
+  const [operatorError, setOperatorError] = useState(null);
 
   const selectedResult = getPricePromoResult(resultId);
   const activePromo = useMemo(() => item ? getActivePromotionForItem(item) : null, [item]);
@@ -143,6 +145,7 @@ export default function PriceCheck() {
   const scan = (value) => {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
     if (!found) return;
+    setOperatorError(null);
     setItem(found);
     const nextExpected = getExpectedShelfPrice(found);
     setShelfLabelPrice(nextExpected == null ? "" : String(nextExpected));
@@ -151,6 +154,7 @@ export default function PriceCheck() {
     setReasonId("");
     setNotes("");
     setSavedResult(null);
+    setOperatorError(null);
   };
 
   const clearItem = () => {
@@ -162,10 +166,23 @@ export default function PriceCheck() {
     setReasonId("");
     setNotes("");
     setSavedResult(null);
+    setOperatorError(null);
   };
 
   const submitVerification = () => {
-    if (!item) return;
+    if (!item) {
+      setOperatorError({ title: "Item required", helper: "Scan or search an item before saving price-check evidence." });
+      return;
+    }
+    if (getNetworkMode() === "offline" && expectedShelfPrice == null) {
+      setOperatorError({ title: "Offline — latest price unavailable", helper: "Reconnect or try again later. Do not guess the price while offline." });
+      return;
+    }
+    if (shelfLabelPrice === "" || Number.isNaN(Number(shelfLabelPrice))) {
+      setOperatorError({ title: "Shelf label price missing", helper: "Enter the shelf label price before saving. Your item stays on screen." });
+      return;
+    }
+    setOperatorError(null);
     const result = savePricePromoVerificationEvent({ item, resultId, reasonId, shelfLabelPrice, promoLabelVisible, notes });
     if (!result) return;
     setRecords(result.events);
@@ -182,6 +199,7 @@ export default function PriceCheck() {
     <PageShell>
       <WorkflowHeader title="Price Check" subtitle="Price + promo label verification" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} />
       <WorkflowMain>
+        {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} tone={operatorError.tone || "warning"} actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}
         <SectionCard className="space-y-2">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -225,7 +243,7 @@ export default function PriceCheck() {
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <TextInputField label="Shelf label price" value={shelfLabelPrice} onChange={setShelfLabelPrice} type="number" placeholder={expectedShelfPrice == null ? "0.00" : String(expectedShelfPrice)} />
+                <TextInputField label="Shelf label price" value={shelfLabelPrice} onChange={(value) => { setShelfLabelPrice(value); if (operatorError?.title === "Shelf label price missing") setOperatorError(null); }} type="number" placeholder={expectedShelfPrice == null ? "0.00" : String(expectedShelfPrice)} />
                 <div className="min-w-0">
                   <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Promo label visible?</p>
                   <div className="mt-2 grid grid-cols-2 gap-2">
@@ -237,8 +255,9 @@ export default function PriceCheck() {
 
               <div className="rounded-2xl bg-secondary/60 p-3">
                 <InfoLine label="Promo state" value={activePromo?.active ? activePromo.name : "No active promo"} />
-                <InfoLine label="Price source" value="Local product snapshot" />
+                <InfoLine label="Price source" value={getNetworkMode() === "offline" ? "Local snapshot only" : "Local product snapshot"} />
               </div>
+              {(shelfLabelPrice === "" || Number.isNaN(Number(shelfLabelPrice))) && <FieldError title="Shelf label price missing" helper="Enter the shelf label price before saving." />}
             </SectionCard>
 
             <SectionCard className="space-y-3">
@@ -267,7 +286,7 @@ export default function PriceCheck() {
             </SectionCard>
           </>
         ) : (
-          <EmptyState title="No item selected." helper="Scan/search an item to record price-check evidence." />
+          <EmptyState title="No price-check item selected." helper="Scan an item to compare the shelf label. Offline checks use local snapshots only." />
         )}
 
         <RecentPriceChecks records={records} />

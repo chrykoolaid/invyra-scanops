@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import AttributeEvidenceFields from "../components/scanner/AttributeEvidenceFields";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
-import { DoneCard, EmptyState, InfoLine, ItemSummaryCard, MetricPill, PageShell, QuantityStepper, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
+import { DoneCard, EmptyState, FieldError, InfoLine, ItemSummaryCard, MetricPill, OperatorAlert, PageShell, QuantityStepper, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import {
@@ -288,6 +288,7 @@ export default function StockCount() {
   const [weightSource, setWeightSource] = useState("label_weight");
   const [note, setNote] = useState("");
   const [lastSyncMessage, setLastSyncMessage] = useState("");
+  const [operatorError, setOperatorError] = useState(null);
 
   const activeSession = useMemo(() => sessions.find((entry) => (entry.id || entry.count_session_id) === activeSessionId) || null, [activeSessionId, sessions]);
   const visibleSessions = useMemo(() => sessions.filter((session) => isSessionVisibleToRole(session, actorSession)), [actorSession, sessions]);
@@ -308,6 +309,7 @@ export default function StockCount() {
   const refreshLines = (sessionId = activeSessionId) => setLines(sessionId ? getCountSessionItems(sessionId) : []);
 
   const resetItem = () => {
+    setOperatorError(null);
     setItem(null);
     setScanValue("");
     setCounted(1);
@@ -322,6 +324,7 @@ export default function StockCount() {
 
   const goLanding = () => {
     resetItem();
+    setOperatorError(null);
     setActiveSessionId(null);
     setLines([]);
     refreshSessions();
@@ -330,6 +333,7 @@ export default function StockCount() {
   };
 
   const openSession = (session) => {
+    setOperatorError(null);
     let nextSession = session;
     const sessionId = session.id || session.count_session_id;
     if (session.status === STOCK_COUNT_STATUSES.DRAFT) {
@@ -349,6 +353,11 @@ export default function StockCount() {
   };
 
   const startNewSession = () => {
+    if (!String(sessionName || "").trim()) {
+      setOperatorError({ title: "Session name required", helper: "Enter a short count session name before starting." });
+      return;
+    }
+    setOperatorError(null);
     const nextSession = createCountSession(countType, {
       session_name: sessionName || `${getOptionLabel(STOCK_COUNT_AREA_OPTIONS, area)} Count`,
       area,
@@ -385,9 +394,13 @@ export default function StockCount() {
   };
 
   const scan = (value) => {
-    if (!canAddCountEvidence) return;
+    if (!canAddCountEvidence) {
+      setOperatorError({ title: "Count session is read-only", helper: "This session cannot accept new count evidence. Your work was not changed." });
+      return;
+    }
     const found = findProduct(value);
     if (!found) return;
+    setOperatorError(null);
     const rawScanValue = typeof value === "object" ? value?._searchMatch?.matchedValue || value?.barcode || value?.gtin || "" : String(value || "").trim();
     const expectedQuantity = expectedQuantityForItem(found);
     setItem(found);
@@ -403,7 +416,23 @@ export default function StockCount() {
   };
 
   const saveLine = () => {
-    if (!item || !activeSession || !canAddCountEvidence) return;
+    if (!activeSession) {
+      setOperatorError({ title: "Count session required", helper: "Open or start a count session before saving count evidence." });
+      return;
+    }
+    if (!canAddCountEvidence) {
+      setOperatorError({ title: "Count session is read-only", helper: "This session is locked. Your scanned item was not cleared." });
+      return;
+    }
+    if (!item) {
+      setOperatorError({ title: "Item required", helper: "Scan or search an item before saving count evidence." });
+      return;
+    }
+    if (counted === "" || Number.isNaN(Number(counted)) || Number(counted) < 0) {
+      setOperatorError({ title: "Count missing", helper: "Enter a valid count before saving. Your scanned item stays on screen." });
+      return;
+    }
+    setOperatorError(null);
     const varianceStatus = expected === null ? STOCK_COUNT_VARIANCE_STATUSES.EXPECTED_UNAVAILABLE : variance === 0 ? STOCK_COUNT_VARIANCE_STATUSES.NO_VARIANCE : Math.abs(Number(variance || 0)) <= 1 ? STOCK_COUNT_VARIANCE_STATUSES.WITHIN_TOLERANCE : STOCK_COUNT_VARIANCE_STATUSES.REVIEW_REQUIRED;
     const isVariance = varianceStatus !== STOCK_COUNT_VARIANCE_STATUSES.NO_VARIANCE;
     const attributeSnapshot = buildWorkflowItemAttributeSnapshot({
@@ -493,7 +522,15 @@ export default function StockCount() {
   };
 
   const submitSession = () => {
-    if (!activeSession || !lines.length) return;
+    if (!activeSession) {
+      setOperatorError({ title: "Count session required", helper: "Open a count session before submitting." });
+      return;
+    }
+    if (!lines.length) {
+      setOperatorError({ title: "Nothing to submit", helper: "Add at least one count line before submitting the session." });
+      return;
+    }
+    setOperatorError(null);
     const nextSummary = getSessionVarianceSummary(lines);
     const status = nextSummary.requiresReview ? STOCK_COUNT_STATUSES.REVIEW_REQUIRED : STOCK_COUNT_STATUSES.SUBMITTED;
     setCountSessionStatus(activeSession.id || activeSession.count_session_id, status, { approval_status: nextSummary.requiresReview ? "Review required" : "Submitted" });
@@ -665,6 +702,7 @@ export default function StockCount() {
     const selectedType = STOCK_COUNT_TYPE_OPTIONS.find((option) => option.id === countType) || STOCK_COUNT_TYPE_OPTIONS[0];
     return (
       <>
+        {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} tone="warning" actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}
         <SectionCard className="space-y-3">
           <TextInputField label="Session name" value={sessionName} onChange={setSessionName} placeholder="e.g. Dairy Morning Count" />
           <div>
@@ -692,6 +730,7 @@ export default function StockCount() {
   const renderCounting = () => (
     <>
       <SessionHeaderCard session={activeSession} lines={lines} />
+      {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} tone={operatorError.tone || "warning"} actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}
       {lastSyncMessage && <SectionCard className="border-primary/20 bg-primary/5"><p className="text-sm font-black text-foreground">Saved locally</p><p className="mt-1 text-xs font-semibold text-muted-foreground">{lastSyncMessage}</p></SectionCard>}
       {!canAddCountEvidence && <EmptyState title="Session is read-only." helper="This session is locked for handheld edits." />}
       {!item && canAddCountEvidence && <EmptyState title="No item selected." helper={lines.length ? "Scan another item or review the session." : "Scan/search an item."} />}
@@ -704,7 +743,8 @@ export default function StockCount() {
             </div>
           </ItemSummaryCard>
           <SectionCard className="space-y-3">
-            <QuantityStepper label="Counted" value={counted} onChange={setCounted} unit={unit} min={0} />
+            <QuantityStepper label="Counted" value={counted} onChange={(value) => { setCounted(value); if (operatorError?.title === "Count missing") setOperatorError(null); }} unit={unit} min={0} />
+            {(counted === "" || Number.isNaN(Number(counted)) || Number(counted) < 0) && <FieldError title="Count missing" helper="Enter a valid count before saving." />}
             <div className="rounded-2xl bg-secondary/60 p-3 space-y-2">
               <InfoLine label="System expected" value={expectedLabel(expected, unit)} />
               <InfoLine label="Counted" value={`${counted} ${unit}`} />
@@ -732,7 +772,7 @@ export default function StockCount() {
         </>
       )}
       <div className="space-y-3">
-        {lines.length ? lines.map((line) => <CountLineSummaryCard key={line.id || line.count_line_id} line={line} editable={canAddCountEvidence} onRemove={removeLine} />) : <EmptyState title="Current count is empty." />}
+        {lines.length ? lines.map((line) => <CountLineSummaryCard key={line.id || line.count_line_id} line={line} editable={canAddCountEvidence} onRemove={removeLine} />) : <EmptyState title="Current count is empty." helper="Scan an item and add count evidence before submitting." />}
       </div>
       <StickyActions
         leftLabel={item ? "Cancel Item" : "Back"}

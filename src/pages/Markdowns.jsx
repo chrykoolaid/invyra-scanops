@@ -6,9 +6,11 @@ import TouchSelect from "../components/scanner/TouchSelect";
 import {
   DoneCard,
   EmptyState,
+  FieldError,
   InfoLine,
   ItemSummaryCard,
   MetricPill,
+  OperatorAlert,
   PageShell,
   SectionCard,
   StickyActions,
@@ -147,6 +149,7 @@ export default function Markdowns() {
   const [requests, setRequests] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [done, setDone] = useState(null);
+  const [operatorError, setOperatorError] = useState(null);
 
   const refreshRequests = (nextSelectedId = selectedId) => {
     const next = getMarkdownApprovalRequests();
@@ -183,6 +186,7 @@ export default function Markdowns() {
   const scan = (value) => {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
     if (!found) return;
+    setOperatorError(null);
     const rawScanValue = typeof value === "object" ? value?._searchMatch?.matchedValue || value?.barcode || value?.gtin || "" : String(value || "").trim();
     setItem(found);
     const defaultExpiry = getDefaultExpiryDate(found);
@@ -199,13 +203,31 @@ export default function Markdowns() {
     setNotes("");
     setScanValue(rawScanValue);
     setDone(null);
+    setOperatorError(null);
   };
 
   const createRequest = () => {
-    if (!item || !reason || !Number(quantity || 0)) return;
+    if (!item) {
+      setOperatorError({ title: "Item required", helper: "Scan or search an item before creating a markdown request." });
+      return;
+    }
+    if (!reason) {
+      setOperatorError({ title: "Reason required", helper: "Choose a markdown reason before saving. Your scanned item stays on screen." });
+      return;
+    }
+    if (!Number(quantity || 0)) {
+      setOperatorError({ title: "Quantity missing", helper: "Enter a valid markdown quantity before saving. Your request stays on screen." });
+      return;
+    }
+    if (!selectedPercent) {
+      setOperatorError({ title: "Markdown price missing", helper: "Choose a markdown percent before saving." });
+      return;
+    }
+    setOperatorError(null);
     if (!markdownSubmitPermission.allowed) {
       recordGovernedAction(GOVERNED_ACTIONS.MARKDOWN_SUBMIT, "Markdowns", null, markdownSubmitPermission);
-      setDone({ title: "Shift or permission required", helper: markdownSubmitPermission.reason, request: null });
+      setOperatorError({ title: "Supervisor required", helper: markdownSubmitPermission.reason || "Staff can save permitted requests, but cannot approve restricted markdown actions." });
+      setDone(null);
       return;
     }
     const attributeSnapshot = buildWorkflowItemAttributeSnapshot({
@@ -262,7 +284,8 @@ export default function Markdowns() {
     const actionKey = action === "submit" ? GOVERNED_ACTIONS.MARKDOWN_SUBMIT : action === "approve" ? GOVERNED_ACTIONS.MARKDOWN_APPROVE : GOVERNED_ACTIONS.MARKDOWN_REJECT;
     if (!permission.allowed) {
       recordGovernedAction(actionKey, "Markdowns", selectedRequest.requestId, permission);
-      setDone({ title: "Approval blocked", helper: permission.reason, request: selectedRequest });
+      setOperatorError({ title: action === "approve" ? "Supervisor required" : "Permission required", helper: permission.reason || "This action is blocked until approved." });
+      setDone(null);
       return;
     }
     recordGovernedAction(actionKey, "Markdowns", selectedRequest.requestId, permission, { eventLabel: `Markdown ${action}` });
@@ -276,7 +299,8 @@ export default function Markdowns() {
     if (!selectedRequest) return;
     if (!handoffPermission.allowed) {
       recordGovernedAction(GOVERNED_ACTIONS.SHELF_TICKET_PRINT_HANDOFF, "Markdowns", selectedRequest.requestId, handoffPermission);
-      setDone({ title: "Handoff blocked", helper: handoffPermission.reason, request: selectedRequest });
+      setOperatorError({ title: "Permission required", helper: handoffPermission.reason || "This handoff is blocked until an authorised role is available." });
+      setDone(null);
       return;
     }
     recordGovernedAction(GOVERNED_ACTIONS.SHELF_TICKET_PRINT_HANDOFF, "Markdowns", selectedRequest.requestId, handoffPermission, { eventLabel: "Markdown label handoff" });
@@ -298,7 +322,6 @@ export default function Markdowns() {
   const selectedNeedsSubmit = selectedRequest && [MARKDOWN_STATUSES.DRAFT, MARKDOWN_STATUSES.RETURNED].includes(selectedRequest.status);
   const selectedNeedsApproval = selectedRequest && [MARKDOWN_STATUSES.PENDING_APPROVAL, MARKDOWN_STATUSES.NEEDS_REVIEW].includes(selectedRequest.status);
   const selectedApprovalReason = selectedRequest?.approvalRoleRequired === "Manager" ? "Manager approval required" : restrictedActionReason("Supervisor");
-  const requestReady = Boolean(item && reason && Number(quantity || 0) > 0 && selectedPercent !== "" && markdownSubmitPermission.allowed);
   const canSubmitSelected = selectedNeedsSubmit && markdownSubmitPermission.allowed;
   const canApproveSelected = selectedNeedsApproval && canApprove;
   const canHandoffSelected = selectedRequest && handoffPermission.allowed && selectedRequest.status === MARKDOWN_STATUSES.APPROVED && selectedRequest.labelRequired;
@@ -314,6 +337,7 @@ export default function Markdowns() {
       />
       <WorkflowMain>
         <GovernanceContextStrip />
+        {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} tone={operatorError.tone || "warning"} actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}
         {done && !done.request && (
           <SectionCard className="border-amber-200 bg-amber-50/70">
             <h2 className="text-base font-black text-foreground">{done.title}</h2>
@@ -347,12 +371,14 @@ export default function Markdowns() {
                 <p className="mt-1 text-sm font-bold leading-snug text-muted-foreground">Request only. POS and product master prices stay unchanged.</p>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <TextInputField label="Quantity" value={quantity} onChange={setQuantity} type="number" placeholder="1" />
+                <TextInputField label="Quantity" value={quantity} onChange={(value) => { setQuantity(value); if (operatorError?.title === "Quantity missing") setOperatorError(null); }} type="number" placeholder="1" />
                 <TextInputField label="Expiry date" value={expiryDate} onChange={setExpiryDate} type="date" />
               </div>
               <TextInputField label="Batch / lot" value={batchLot} onChange={setBatchLot} placeholder="Optional" />
-              <TouchSelect label="Reason" value={reason} onChange={setReason} options={MARKDOWN_REASON_OPTIONS} />
-              <TouchSelect label="Selected markdown" value={selectedPercent} onChange={setSelectedPercent} options={MARKDOWN_PERCENT_OPTIONS} />
+              <TouchSelect label="Reason" value={reason} onChange={(value) => { setReason(value); if (operatorError?.title === "Reason required") setOperatorError(null); }} options={MARKDOWN_REASON_OPTIONS} />
+              {!reason && <FieldError title="Reason required" helper="Choose a markdown reason before saving." />}
+              <TouchSelect label="Selected markdown" value={selectedPercent} onChange={(value) => { setSelectedPercent(value); if (operatorError?.title === "Markdown price missing") setOperatorError(null); }} options={MARKDOWN_PERCENT_OPTIONS} />
+              {!selectedPercent && <FieldError title="Markdown price missing" helper="Choose a markdown percent before saving." />}
 
               <div className="rounded-2xl bg-secondary/60 p-3">
                 <div className="grid grid-cols-2 gap-2">
@@ -478,7 +504,7 @@ export default function Markdowns() {
                     </button>
                   </>
                 )}
-                {selectedNeedsApproval && !canApprove && <p className="col-span-2 rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-black text-muted-foreground">{selectedApprovalReason}</p>}
+                {selectedNeedsApproval && !canApprove && <OperatorAlert title={selectedRequest.approvalRoleRequired === "Manager" ? "Manager approval required" : "Supervisor required"} helper="This markdown cannot be approved by the current role. Save/request state is preserved." tone="info" />}
                 {!selectedNeedsSubmit && !selectedNeedsApproval && <p className="col-span-2 rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-black text-muted-foreground">No review action available</p>}
               </div>
               {selectedRequest.blockedReason && <p className="rounded-2xl bg-destructive/10 px-3 py-2 text-xs font-black text-destructive">{selectedRequest.blockedReason}</p>}
@@ -516,7 +542,7 @@ export default function Markdowns() {
               setScanValue("");
             }}
             onRight={createRequest}
-            rightDisabled={!requestReady}
+            rightDisabled={false}
           />
         )}
       </WorkflowMain>

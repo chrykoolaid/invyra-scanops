@@ -4,9 +4,11 @@ import TouchSelect from "../components/scanner/TouchSelect";
 import {
   DoneCard,
   EmptyState,
+  FieldError,
   InfoLine,
   ItemSummaryCard,
   MetricPill,
+  OperatorAlert,
   PageShell,
   QuantityStepper,
   SectionCard,
@@ -113,6 +115,7 @@ export default function Transfers() {
   const [receiveCondition, setReceiveCondition] = useState("normal");
   const [receiveNote, setReceiveNote] = useState("");
   const [submittedBatch, setSubmittedBatch] = useState(null);
+  const [operatorError, setOperatorError] = useState(null);
 
   const visibleBatches = useMemo(() => batches.filter((batch) => canSeeTransfer(batch, session)), [batches, session]);
   const activeBatch = useMemo(() => batches.find((batch) => batch.id === activeBatchId) || null, [batches, activeBatchId]);
@@ -139,6 +142,7 @@ export default function Transfers() {
   };
 
   const setTypeAndRoute = (nextType) => {
+    setOperatorError(null);
     setTransferType(nextType);
     const route = defaultRouteForType(nextType);
     setSourceLocationId(route.source);
@@ -146,6 +150,7 @@ export default function Transfers() {
   };
 
   const openTransfer = (batch) => {
+    setOperatorError(null);
     setActiveBatchId(batch.id);
     setView("batch");
     setPhase((batch.dispatch_lines || []).length ? "receive" : "dispatch");
@@ -161,7 +166,23 @@ export default function Transfers() {
   };
 
   const startTransfer = () => {
-    if (sameLocation) return;
+    if (!sourceLocationId) {
+      setOperatorError({ title: "Source required", helper: "Choose a source location before creating the transfer." });
+      return;
+    }
+    if (!destinationLocationId) {
+      setOperatorError({ title: "Destination required", helper: "Choose a destination before creating the transfer." });
+      return;
+    }
+    if (sameLocation) {
+      setOperatorError({ title: "Destination required", helper: "Source and destination cannot be the same." });
+      return;
+    }
+    if (!reason) {
+      setOperatorError({ title: "Reason required", helper: "Choose a transfer reason before creating the transfer." });
+      return;
+    }
+    setOperatorError(null);
     const batch = createTransferBatch({
       transferType,
       sourceLocationId,
@@ -189,6 +210,7 @@ export default function Transfers() {
   const scan = (value) => {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
     if (!found) return;
+    setOperatorError(null);
     setItem(found);
     const available = getAvailableAtSource(found, activeBatch?.source_location_id || sourceLocationId);
     setDispatchQuantity(Math.min(6, Math.max(1, Number(available || 1))));
@@ -209,7 +231,23 @@ export default function Transfers() {
   };
 
   const saveDispatch = () => {
-    if (!activeBatch || !item || readOnly || dispatchQuantity <= 0) return;
+    if (!activeBatch) {
+      setOperatorError({ title: "Transfer required", helper: "Open or start a transfer before saving dispatch evidence." });
+      return;
+    }
+    if (readOnly) {
+      setOperatorError({ title: "Transfer is read-only", helper: "This transfer is locked. Your current item was not cleared." });
+      return;
+    }
+    if (!item) {
+      setOperatorError({ title: "Item required", helper: "Scan or search an item before saving dispatch evidence." });
+      return;
+    }
+    if (dispatchQuantity <= 0 || Number.isNaN(Number(dispatchQuantity))) {
+      setOperatorError({ title: "Quantity missing", helper: "Enter a valid dispatch quantity before saving. Your item stays on screen." });
+      return;
+    }
+    setOperatorError(null);
     const line = makeTransferDispatchLine({
       transfer: activeBatch,
       item,
@@ -248,7 +286,23 @@ export default function Transfers() {
   };
 
   const saveReceive = () => {
-    if (!activeBatch || !selectedDispatch || readOnly) return;
+    if (!activeBatch) {
+      setOperatorError({ title: "Transfer required", helper: "Open a transfer before saving receive evidence." });
+      return;
+    }
+    if (readOnly) {
+      setOperatorError({ title: "Transfer is read-only", helper: "This transfer is locked. Your receive entry was not cleared." });
+      return;
+    }
+    if (!selectedDispatch) {
+      setOperatorError({ title: "Dispatch line required", helper: "Choose a dispatched line before saving receive evidence." });
+      return;
+    }
+    if (receivedQuantity < 0 || Number.isNaN(Number(receivedQuantity))) {
+      setOperatorError({ title: "Quantity missing", helper: "Enter a valid received quantity before saving. Your receive entry stays on screen." });
+      return;
+    }
+    setOperatorError(null);
     const receiveLine = makeTransferReceiveLine({
       transfer: activeBatch,
       dispatchLine: selectedDispatch,
@@ -323,7 +377,15 @@ export default function Transfers() {
   };
 
   const submitTransfer = () => {
-    if (!activeBatch || !(activeBatch.dispatch_lines || []).length) return;
+    if (!activeBatch) {
+      setOperatorError({ title: "Transfer required", helper: "Open a transfer before submitting." });
+      return;
+    }
+    if (!(activeBatch.dispatch_lines || []).length) {
+      setOperatorError({ title: "Nothing to submit", helper: "Save at least one dispatch line before submitting the transfer." });
+      return;
+    }
+    setOperatorError(null);
     const nextBatch = submitTransferBatch(activeBatch);
     replaceBatch(nextBatch);
     const event = createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_BATCH_SUBMITTED, {
@@ -342,7 +404,11 @@ export default function Transfers() {
   };
 
   const reviewException = (exceptionId, decision) => {
-    if (!activeBatch || !canReview) return;
+    if (!activeBatch) return;
+    if (!canReview) {
+      setOperatorError({ title: "Supervisor required", helper: "Staff can record transfer evidence, but cannot review transfer exceptions." });
+      return;
+    }
     const nextBatch = reviewTransferException(activeBatch, exceptionId, decision, decision);
     replaceBatch(nextBatch);
     createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_EXCEPTION_RECORDED, {
@@ -369,6 +435,7 @@ export default function Transfers() {
         disabled={readOnly}
       />
       <WorkflowMain>
+        {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} tone={operatorError.tone || "warning"} actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}
         {view === "done" && submittedBatch ? (
           <DoneCard
             title="Transfer evidence submitted"
@@ -423,7 +490,7 @@ export default function Transfers() {
                 dispatchNote={dispatchNote}
                 setDispatchNote={setDispatchNote}
                 onSave={saveDispatch}
-                onClear={() => { setItem(null); setScanValue(""); }}
+                onClear={() => { setItem(null); setScanValue(""); setOperatorError(null); }}
               />
             )}
 
@@ -442,7 +509,7 @@ export default function Transfers() {
                 setReceiveNote={setReceiveNote}
                 receiveDiff={receiveDiff}
                 onSave={saveReceive}
-                onClear={() => setSelectedDispatchId(null)}
+                onClear={() => { setSelectedDispatchId(null); setOperatorError(null); }}
               />
             )}
 
@@ -455,9 +522,9 @@ export default function Transfers() {
               <StickyActions
                 leftLabel="Back to Transfers"
                 rightLabel="Submit Transfer"
-                onLeft={() => { setView("landing"); setActiveBatchId(null); setItem(null); setScanValue(""); }}
+                onLeft={() => { setView("landing"); setActiveBatchId(null); setItem(null); setScanValue(""); setOperatorError(null); }}
                 onRight={submitTransfer}
-                rightDisabled={!(activeBatch.dispatch_lines || []).length}
+                rightDisabled={false}
               />
             )}
           </>
@@ -554,6 +621,7 @@ function TransferDispatchWorkspace({ item, unit, availableAtSource, dispatchQuan
           <SectionCard className="space-y-3">
             <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Transfer Dispatch</p>
             <QuantityStepper label="Dispatch quantity" value={dispatchQuantity} onChange={setDispatchQuantity} unit={unit} min={0} />
+            {(dispatchQuantity <= 0 || Number.isNaN(Number(dispatchQuantity))) && <FieldError title="Quantity missing" helper="Enter a valid dispatch quantity before saving." />}
             <TouchSelect label="Condition" value={dispatchCondition} onChange={setDispatchCondition} options={TRANSFER_CONDITION_OPTIONS_STAGEW} />
             <TextInputField label="Evidence note" value={dispatchNote} onChange={setDispatchNote} placeholder="Optional dispatch note" />
           </SectionCard>
@@ -594,7 +662,7 @@ function TransferReceiveWorkspace({ batch, selectedDispatch, chooseDispatchForRe
             })}
           </div>
         ) : (
-          <EmptyState title="No dispatch evidence yet." helper="Save dispatch before receiving." />
+          <EmptyState title="No dispatch evidence yet." helper="Save dispatch before receiving. Nothing has been submitted yet." />
         )}
       </SectionCard>
     );
@@ -613,6 +681,7 @@ function TransferReceiveWorkspace({ batch, selectedDispatch, chooseDispatchForRe
           <MetricPill label="Diff" value={differenceLabel(receiveDiff)} suffix={selectedDispatch.unit_label} />
         </div>
         <QuantityStepper label="Received" value={receivedQuantity} onChange={setReceivedQuantity} unit={selectedDispatch.unit_label} min={0} />
+        {(receivedQuantity < 0 || Number.isNaN(Number(receivedQuantity))) && <FieldError title="Quantity missing" helper="Enter a valid received quantity before saving." />}
         {receiveDiff !== 0 && <p className="rounded-2xl bg-destructive/10 px-3 py-2 text-xs font-bold text-destructive">Difference {differenceLabel(receiveDiff)} {selectedDispatch.unit_label}. Transfer exception evidence will be saved.</p>}
         <TouchSelect label="Exception" value={receiveException} onChange={setReceiveException} options={TRANSFER_EXCEPTION_OPTIONS_STAGEW} />
         <TouchSelect label="Condition" value={receiveCondition} onChange={setReceiveCondition} options={TRANSFER_CONDITION_OPTIONS_STAGEW} />
@@ -658,7 +727,7 @@ function TransferEvidenceList({ batch, chooseDispatchForReceive }) {
           })}
         </div>
       ) : (
-        <EmptyState title="No transfer evidence yet." helper="Scan item, then save dispatch evidence." />
+        <EmptyState title="No transfer evidence yet." helper="Scan an item, enter quantity, then save dispatch evidence." />
       )}
     </SectionCard>
   );
