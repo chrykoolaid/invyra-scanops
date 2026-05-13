@@ -29,7 +29,6 @@ import DesktopSyncContract from './pages/DesktopSyncContract';
 import StoreOpsDashboard from './pages/StoreOpsDashboard';
 import PilotReadiness from './pages/PilotReadiness';
 import RoleGate from './components/scanner/RoleGate';
-import AppEscapeHeader from './components/scanner/AppEscapeHeader';
 
 
 const ScrollToTopOnRouteChange = () => {
@@ -86,7 +85,6 @@ const AuthenticatedApp = () => {
   return (
     <div className="scanops-root-shell">
       <ScrollToTopOnRouteChange />
-      <AppEscapeHeader />
       <div className="scanops-route-host">
         <Routes>
           <Route path="/" element={<Home />} />

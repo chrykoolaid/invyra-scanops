@@ -317,9 +317,10 @@ body {
   bottom: 17.5rem;
 }
 
-/* Stage AS.2 global Home escape navigation fix
- * The pilot build must never rely on browser history or preview URL controls
- * as the operator's only path back to the Home launcher.
+/* Stage AS.3 single Home escape correction
+ * AS.2 exposed duplicate return controls on workflow headers. Navigation is now
+ * owned by the existing workflow/page header: one Home icon, title, and status.
+ * The route host remains to preserve the fixed viewport and inner route scroll.
  */
 .scanops-route-host {
   min-height: 0;
@@ -332,48 +333,4 @@ body {
 .scanops-route-host > * {
   min-height: 0;
   flex: 1 1 auto;
-}
-
-.scanops-app-escape-header {
-  flex: 0 0 auto;
-  z-index: 60;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  border-bottom: 1px solid hsl(var(--border));
-  background: hsl(var(--card));
-  padding: max(0.625rem, env(safe-area-inset-top)) 1rem 0.625rem;
-  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.04);
-}
-
-.scanops-home-escape-button {
-  display: inline-flex;
-  min-height: 2.5rem;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  border-radius: 0.875rem;
-  background: hsl(var(--secondary));
-  padding: 0 0.875rem;
-  color: hsl(var(--secondary-foreground));
-  font-size: 0.875rem;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.scanops-home-escape-button:active {
-  background: hsl(var(--border));
-  transform: scale(0.98);
-}
-
-.scanops-current-route-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: hsl(var(--foreground));
-  font-size: 0.9375rem;
-  font-weight: 900;
-  line-height: 1.15;
 }
