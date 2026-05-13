@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
+import PageHeader from "../components/scanner/PageHeader";
 import { EmptyState, PageShell, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { getItemEntryPrimaryValue } from "../lib/scanOpsItemEntry";
 
@@ -16,9 +17,11 @@ export default function Scan() {
 
   return (
     <PageShell>
+      <PageHeader title="Product Lookup" subtitle="Scan, PLU, SKU, shelf label, or name" />
       <WorkflowHeader
         title="Product Lookup"
         subtitle="Scan, PLU, SKU, shelf label, or name"
+        showHeaderChrome={false}
         scanValue={scanValue}
         onScanValueChange={setScanValue}
         onScan={handleScan}
