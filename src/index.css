@@ -330,32 +330,46 @@ body {
   overflow: hidden;
 }
 
-.scanops-route-host > * {
+.scanops-route-content {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.scanops-route-content > * {
   min-height: 0;
   flex: 1 1 auto;
 }
 
-/* Stage AS.7 route-host Home escape guard
- * Home-launched apps must never trap the operator. The escape header is owned by
- * the route host, appears on every non-Home route, and is suppressed on /.
- * Existing page/workflow header Home controls are hidden under the route host so
- * the operator sees exactly one app-owned Home escape.
+/* Stage AS.8 visible safe-area Home escape fix
+ * The app-owned Home escape now renders inside the route host and above the
+ * actual route content. This keeps the escape in the visible mobile app
+ * viewport instead of relying on an outer/global header that can be clipped by
+ * preview chrome or a parent viewport. Duplicate suppression targets only
+ * nested page/workflow controls and never the app-owned escape.
  */
+.app-escape-header,
 .scanops-app-escape-header {
+  box-sizing: border-box;
   flex: 0 0 auto;
-  display: flex;
+  display: flex !important;
   align-items: center;
   gap: 0.75rem;
+  width: 100%;
   min-height: 4.25rem;
+  max-width: 100%;
   border-bottom: 1px solid hsl(var(--border));
   background: hsl(var(--card));
-  padding: max(0.75rem, env(safe-area-inset-top)) 1rem 0.75rem;
+  padding: max(0.75rem, env(safe-area-inset-top, 0px)) 1rem 0.75rem;
   position: relative;
-  z-index: 60;
+  z-index: 80;
+  overflow: visible;
 }
 
 .scanops-app-escape-button {
-  display: flex;
+  display: flex !important;
   width: 2.5rem;
   height: 2.5rem;
   flex: 0 0 auto;
@@ -372,15 +386,16 @@ body {
   transform: scale(0.98);
 }
 
-[data-scanops-app-escape-active="true"] .scanops-route-host [data-scanops-page-header],
-[data-scanops-app-escape-active="true"] .scanops-route-host [data-scanops-workflow-chrome] {
+[data-scanops-app-escape-active="true"] .scanops-route-content [data-scanops-page-header],
+[data-scanops-app-escape-active="true"] .scanops-route-content [data-scanops-workflow-chrome] {
   display: none !important;
 }
 
-[data-scanops-app-escape-active="true"] .scanops-route-host [data-scanops-workflow-search] {
+[data-scanops-app-escape-active="true"] .scanops-route-content [data-scanops-workflow-search] {
   margin-top: 0 !important;
 }
 
-[data-scanops-app-escape-active="true"] .scanops-route-host button[aria-label="Return to Home"] {
+[data-scanops-app-escape-active="true"] .scanops-route-content [data-scanops-page-header] button[aria-label="Return to Home"],
+[data-scanops-app-escape-active="true"] .scanops-route-content [data-scanops-workflow-chrome] button[aria-label="Return to Home"] {
   display: none !important;
 }

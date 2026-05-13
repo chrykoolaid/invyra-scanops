@@ -122,34 +122,36 @@ const AuthenticatedApp = () => {
   return (
     <div className="scanops-root-shell" data-scanops-app-escape-active={appEscapeMeta ? "true" : "false"}>
       <ScrollToTopOnRouteChange />
-      {appEscapeMeta && <AppEscapeHeader {...appEscapeMeta} />}
       <div className="scanops-route-host">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/scan" element={<Scan />} />
-          <Route path="/product/:id" element={<ProductLookup />} />
-          <Route path="/stock-count" element={<StockCount />} />
-          <Route path="/receiving" element={<Receiving />} />
-          <Route path="/replenish" element={<Replenish />} />
-          <Route path="/price-check" element={<PriceCheck />} />
-          <Route path="/gap-scan" element={<GapScan />} />
-          <Route path="/markdowns" element={<Markdowns />} />
-          <Route path="/waste" element={<Waste />} />
-          <Route path="/expiry-check" element={<ExpiryCheck />} />
-          <Route path="/tasks" element={<Tasks />} />
-          <Route path="/inventory-sync" element={<InventorySync />} />
-          <Route path="/sync-queue" element={<SyncQueue />} />
-          <Route path="/shelf-tickets" element={<ShelfTickets />} />
-          <Route path="/transfers" element={<Transfers />} />
-          <Route path="/product-identity-review" element={roleGated(<ProductIdentityReview />, "Supervisor", "Product Review")} />
-          <Route path="/scanops-reporting" element={roleGated(<ScanOpsReporting />, "Supervisor", "ScanOps Reporting")} />
-          <Route path="/device-governance" element={roleGated(<DeviceGovernance />, "Manager", "Device & Shift Governance")} />
-          <Route path="/session-collaboration" element={<SessionCollaboration />} />
-          <Route path="/desktop-sync-contract" element={roleGated(<DesktopSyncContract />, "Manager", "Desktop Sync Contract")} />
-          <Route path="/store-ops-dashboard" element={roleGated(<StoreOpsDashboard />, "Manager", "Store Ops Dashboard")} />
-          <Route path="/pilot-readiness" element={<PilotReadiness />} />
-          <Route path="*" element={<PageNotFound />} />
-        </Routes>
+        {appEscapeMeta && <AppEscapeHeader {...appEscapeMeta} />}
+        <div className="scanops-route-content">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/scan" element={<Scan />} />
+            <Route path="/product/:id" element={<ProductLookup />} />
+            <Route path="/stock-count" element={<StockCount />} />
+            <Route path="/receiving" element={<Receiving />} />
+            <Route path="/replenish" element={<Replenish />} />
+            <Route path="/price-check" element={<PriceCheck />} />
+            <Route path="/gap-scan" element={<GapScan />} />
+            <Route path="/markdowns" element={<Markdowns />} />
+            <Route path="/waste" element={<Waste />} />
+            <Route path="/expiry-check" element={<ExpiryCheck />} />
+            <Route path="/tasks" element={<Tasks />} />
+            <Route path="/inventory-sync" element={<InventorySync />} />
+            <Route path="/sync-queue" element={<SyncQueue />} />
+            <Route path="/shelf-tickets" element={<ShelfTickets />} />
+            <Route path="/transfers" element={<Transfers />} />
+            <Route path="/product-identity-review" element={roleGated(<ProductIdentityReview />, "Supervisor", "Product Review")} />
+            <Route path="/scanops-reporting" element={roleGated(<ScanOpsReporting />, "Supervisor", "ScanOps Reporting")} />
+            <Route path="/device-governance" element={roleGated(<DeviceGovernance />, "Manager", "Device & Shift Governance")} />
+            <Route path="/session-collaboration" element={<SessionCollaboration />} />
+            <Route path="/desktop-sync-contract" element={roleGated(<DesktopSyncContract />, "Manager", "Desktop Sync Contract")} />
+            <Route path="/store-ops-dashboard" element={roleGated(<StoreOpsDashboard />, "Manager", "Store Ops Dashboard")} />
+            <Route path="/pilot-readiness" element={<PilotReadiness />} />
+            <Route path="*" element={<PageNotFound />} />
+          </Routes>
+        </div>
       </div>
     </div>
   );

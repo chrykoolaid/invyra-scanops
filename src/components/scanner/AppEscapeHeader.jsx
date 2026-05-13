@@ -6,7 +6,7 @@ export default function AppEscapeHeader({ title = "ScanOps", subtitle = "Return 
   const navigate = useNavigate();
 
   return (
-    <header className="scanops-app-escape-header" data-scanops-app-escape-header>
+    <header className="app-escape-header scanops-app-escape-header" data-scanops-app-escape-header>
       <button
         type="button"
         onClick={() => navigate("/")}
