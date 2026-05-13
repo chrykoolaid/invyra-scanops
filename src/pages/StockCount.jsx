@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import AttributeEvidenceFields from "../components/scanner/AttributeEvidenceFields";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import PageHeader from "../components/scanner/PageHeader";
@@ -265,7 +265,6 @@ function ReviewLine({ line, canReview, canRecount, onRequestRecount, onAccept, o
 }
 
 export default function StockCount() {
-  const navigate = useNavigate();
   const location = useLocation();
   const actorSession = useScanOpsSession();
   const taskParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
@@ -695,7 +694,15 @@ export default function StockCount() {
       ) : (
         <EmptyState title="No active count sessions." helper="Start a count session." />
       )}
-      <StickyActions leftLabel="Back" rightLabel="Start New Count Session" onLeft={() => navigate(-1)} onRight={() => setView("new")} />
+      <div className="scanops-sticky-actions">
+        <button
+          type="button"
+          onClick={() => setView("new")}
+          className="min-h-12 w-full rounded-2xl bg-primary px-3 text-sm font-black text-primary-foreground active:scale-[0.98]"
+        >
+          Start New Count Session
+        </button>
+      </div>
     </>
   );
 
