@@ -229,7 +229,7 @@ export default function WorkflowHeader({
   return (
     <header className="scanops-workflow-header bg-card border-b border-border px-4 py-3">
       {showHeaderChrome && (
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3" data-scanops-workflow-chrome>
         <div className="flex min-w-0 items-start gap-3">
           <button
             type="button"
@@ -261,6 +261,7 @@ export default function WorkflowHeader({
               if (event.target.closest("button")) return;
               requestAnimationFrame(requestNativeKeyboard);
             }}
+            data-scanops-workflow-search
             className={`${showHeaderChrome ? "mt-3" : ""} flex min-w-0 items-center gap-2 rounded-2xl border border-input bg-background px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-primary/20`}
           >
             <Search className="h-4 w-4 shrink-0 text-muted-foreground" />

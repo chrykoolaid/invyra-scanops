@@ -334,3 +334,53 @@ body {
   min-height: 0;
   flex: 1 1 auto;
 }
+
+/* Stage AS.7 route-host Home escape guard
+ * Home-launched apps must never trap the operator. The escape header is owned by
+ * the route host, appears on every non-Home route, and is suppressed on /.
+ * Existing page/workflow header Home controls are hidden under the route host so
+ * the operator sees exactly one app-owned Home escape.
+ */
+.scanops-app-escape-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 4.25rem;
+  border-bottom: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  padding: max(0.75rem, env(safe-area-inset-top)) 1rem 0.75rem;
+  position: relative;
+  z-index: 60;
+}
+
+.scanops-app-escape-button {
+  display: flex;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.9rem;
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.scanops-app-escape-button:active {
+  background: hsl(var(--border));
+  transform: scale(0.98);
+}
+
+[data-scanops-app-escape-active="true"] .scanops-route-host [data-scanops-page-header],
+[data-scanops-app-escape-active="true"] .scanops-route-host [data-scanops-workflow-chrome] {
+  display: none !important;
+}
+
+[data-scanops-app-escape-active="true"] .scanops-route-host [data-scanops-workflow-search] {
+  margin-top: 0 !important;
+}
+
+[data-scanops-app-escape-active="true"] .scanops-route-host button[aria-label="Return to Home"] {
+  display: none !important;
+}

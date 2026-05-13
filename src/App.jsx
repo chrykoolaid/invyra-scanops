@@ -29,6 +29,7 @@ import DesktopSyncContract from './pages/DesktopSyncContract';
 import StoreOpsDashboard from './pages/StoreOpsDashboard';
 import PilotReadiness from './pages/PilotReadiness';
 import RoleGate from './components/scanner/RoleGate';
+import AppEscapeHeader from './components/scanner/AppEscapeHeader';
 
 
 const ScrollToTopOnRouteChange = () => {
@@ -52,6 +53,40 @@ const ScrollToTopOnRouteChange = () => {
   return null;
 };
 
+
+const getAppEscapeMeta = (pathname) => {
+  if (!pathname || pathname === "/") return null;
+
+  const exactRoutes = {
+    "/scan": { title: "Product Lookup", subtitle: "Scan or search item details" },
+    "/stock-count": { title: "Stock Count", subtitle: "Count stock with a direct Home escape" },
+    "/receiving": { title: "Receiving", subtitle: "Receive stock with a direct Home escape" },
+    "/replenish": { title: "Replenish", subtitle: "Move stock to shelf with a direct Home escape" },
+    "/price-check": { title: "Price Check", subtitle: "Check price and promotion labels" },
+    "/gap-scan": { title: "Gap Scan", subtitle: "Scan shelf gaps with a direct Home escape" },
+    "/tasks": { title: "Tasks", subtitle: "Review assigned store work" },
+    "/markdowns": { title: "Markdowns", subtitle: "Review markdown work safely" },
+    "/waste": { title: "Waste", subtitle: "Capture waste with a direct Home escape" },
+    "/expiry-check": { title: "Expiry Check", subtitle: "Review freshness and expiry" },
+    "/inventory-sync": { title: "Inventory Sync", subtitle: "Review sync state and issues" },
+    "/sync-queue": { title: "Sync Queue", subtitle: "Review pending sync work" },
+    "/shelf-tickets": { title: "Shelf Tickets", subtitle: "Prepare shelf ticket work" },
+    "/transfers": { title: "Transfers", subtitle: "Move stock between locations" },
+    "/product-identity-review": { title: "Product Review", subtitle: "Resolve scanned item identity" },
+    "/scanops-reporting": { title: "ScanOps Reporting", subtitle: "Review scanner operations" },
+    "/device-governance": { title: "Device & Shift Governance", subtitle: "Review device readiness" },
+    "/session-collaboration": { title: "Session Collaboration", subtitle: "Review multi-user work" },
+    "/desktop-sync-contract": { title: "Desktop Sync Contract", subtitle: "Review integration contracts" },
+    "/store-ops-dashboard": { title: "Store Ops Dashboard", subtitle: "Review store exceptions" },
+    "/pilot-readiness": { title: "Pilot Readiness", subtitle: "Review UAT and release evidence" },
+  };
+
+  if (exactRoutes[pathname]) return exactRoutes[pathname];
+  if (pathname.startsWith("/product/")) return { title: "Product Lookup", subtitle: "Item details" };
+
+  return { title: "ScanOps", subtitle: "Return to Home available" };
+};
+
 const roleGated = (element, requiredRole, title) => (
   <RoleGate requiredRole={requiredRole} title={title}>
     {element}
@@ -60,6 +95,8 @@ const roleGated = (element, requiredRole, title) => (
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const location = useLocation();
+  const appEscapeMeta = getAppEscapeMeta(location.pathname);
 
   // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth) {
@@ -83,8 +120,9 @@ const AuthenticatedApp = () => {
 
   // Render the main app
   return (
-    <div className="scanops-root-shell">
+    <div className="scanops-root-shell" data-scanops-app-escape-active={appEscapeMeta ? "true" : "false"}>
       <ScrollToTopOnRouteChange />
+      {appEscapeMeta && <AppEscapeHeader {...appEscapeMeta} />}
       <div className="scanops-route-host">
         <Routes>
           <Route path="/" element={<Home />} />
