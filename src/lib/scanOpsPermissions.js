@@ -1,8 +1,24 @@
-const LEVELS = { Staff: 1, Supervisor: 2, Manager: 3, Admin: 4 };
-const level = (role) => LEVELS[role] || LEVELS.Staff;
+export const SCANOPS_ROLE_LEVELS = { Staff: 1, Supervisor: 2, Manager: 3, Admin: 4 };
+const level = (role) => SCANOPS_ROLE_LEVELS[role] || SCANOPS_ROLE_LEVELS.Staff;
 
 export function hasRoleAtLeast(role, required) {
   return level(role) >= level(required);
+}
+
+export function restrictedActionReason(requiredRole) {
+  if (requiredRole === "Admin") return "Admin only";
+  if (requiredRole === "Manager") return "Manager required";
+  if (requiredRole === "Supervisor") return "Supervisor required";
+  return "Not available";
+}
+
+export function roleGuardResult(role, requiredRole) {
+  const allowed = hasRoleAtLeast(role, requiredRole);
+  return {
+    allowed,
+    requiredRole,
+    reason: allowed ? "Allowed" : restrictedActionReason(requiredRole),
+  };
 }
 
 export function canApproveOverride(session) {

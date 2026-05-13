@@ -92,10 +92,10 @@ export default function DeviceGovernance() {
         eventLabel: "Reset local/demo governance blocked",
         sourceWorkflow: "Device Governance",
         actionAllowed: false,
-        blockedReason: "Admin role required. Current role: " + context.currentUserRole + ".",
+        blockedReason: "Admin only",
         requiredRole: "Admin",
       });
-      createScanOpsEvent(SCANOPS_EVENT_TYPES.GOVERNANCE_ACTION_BLOCKED, { source_module: "Device Governance", status: "blocked", blocked_reason: "Admin role required" });
+      createScanOpsEvent(SCANOPS_EVENT_TYPES.GOVERNANCE_ACTION_BLOCKED, { source_module: "Device Governance", status: "blocked", blocked_reason: "Admin only" });
       refresh();
       return;
     }
@@ -198,8 +198,7 @@ export default function DeviceGovernance() {
           ) : (
             <p className="rounded-2xl bg-secondary/50 px-3 py-3 text-sm font-bold text-muted-foreground">No governance events recorded yet.</p>
           )}
-          <MiniButton onClick={resetDemo} disabled={!isAdmin} variant="danger"><RotateCcw className="mr-1 inline h-3.5 w-3.5" /> Reset Demo Governance</MiniButton>
-          {!isAdmin && <p className="text-xs font-semibold text-muted-foreground">Admin role required for demo reset.</p>}
+          {isAdmin ? <MiniButton onClick={resetDemo} variant="danger"><RotateCcw className="mr-1 inline h-3.5 w-3.5" /> Reset Demo Governance</MiniButton> : <p className="rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-black text-muted-foreground">Admin only</p>}
         </SectionCard>
       </WorkflowMain>
     </PageShell>

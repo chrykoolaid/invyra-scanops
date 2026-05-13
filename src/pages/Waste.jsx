@@ -16,6 +16,7 @@ import {
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { getDefaultExpiryDate, getDefaultLotBatch } from "../lib/scanOpsItemAttributes";
 import { useScanOpsSession } from "../lib/scanOpsSession";
+import { restrictedActionReason } from "../lib/scanOpsPermissions";
 import {
   GOVERNED_ACTIONS,
   canPerformScanOpsAction,
@@ -103,6 +104,15 @@ function ReviewDetails({ review, session, onSubmit, onApprove, onReturn, onRejec
   const approveAllowed = canApproveWasteReview(review, session);
   const contractAllowed = canCreateAdjustmentContract(review, session);
   const role = session?.actorRole || "Staff";
+  const needsSubmit = [WASTE_REVIEW_STATUSES.DRAFT, WASTE_REVIEW_STATUSES.RETURNED, WASTE_REVIEW_STATUSES.PENDING_REVIEW].includes(review.status);
+  const needsApproval = [
+    WASTE_REVIEW_STATUSES.PENDING_SUPERVISOR_APPROVAL,
+    WASTE_REVIEW_STATUSES.PENDING_MANAGER_APPROVAL,
+    WASTE_REVIEW_STATUSES.SHRINK_REVIEW_REQUIRED,
+  ].includes(review.status);
+  const needsContract = [WASTE_REVIEW_STATUSES.APPROVED, WASTE_REVIEW_STATUSES.ADJUSTMENT_CONTRACT_READY].includes(review.status) && !review.linkedAdjustmentContractId && review.adjustmentContractStatus !== "Created";
+  const approvalReason = review.approvalRoleRequired === "Manager" ? "Manager approval required" : restrictedActionReason("Supervisor");
+  const contractReason = restrictedActionReason("Manager");
   const contractLabel = review?.linkedAdjustmentContractId ? "Contract Created" : "Create Adjustment Contract";
 
   return (
@@ -147,12 +157,20 @@ function ReviewDetails({ review, session, onSubmit, onApprove, onReturn, onRejec
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <MiniButton onClick={onSubmit} disabled={!submitAllowed}>Submit Review</MiniButton>
-        <MiniButton onClick={onApprove} disabled={!approveAllowed} variant="primary">Approve</MiniButton>
-        <MiniButton onClick={onReturn} disabled={!approveAllowed}>Return</MiniButton>
-        <MiniButton onClick={onReject} disabled={!approveAllowed} variant="danger">Reject</MiniButton>
+        {needsSubmit && <MiniButton onClick={onSubmit} disabled={!submitAllowed}>Submit Review</MiniButton>}
+        {needsSubmit && !submitAllowed && <p className="col-span-2 rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-black text-muted-foreground">Review required</p>}
+        {needsApproval && approveAllowed && (
+          <>
+            <MiniButton onClick={onApprove} variant="primary">Approve</MiniButton>
+            <MiniButton onClick={onReturn}>Return</MiniButton>
+            <MiniButton onClick={onReject} variant="danger">Reject</MiniButton>
+          </>
+        )}
+        {needsApproval && !approveAllowed && <p className="col-span-2 rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-black text-muted-foreground">{approvalReason}</p>}
+        {!needsSubmit && !needsApproval && !needsContract && <p className="col-span-2 rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-black text-muted-foreground">No review action available</p>}
       </div>
-      <MiniButton onClick={onContract} disabled={!contractAllowed} variant="primary">{contractLabel}</MiniButton>
+      {needsContract && contractAllowed && <MiniButton onClick={onContract} variant="primary">{contractLabel}</MiniButton>}
+      {needsContract && !contractAllowed && <p className="rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-black text-muted-foreground">{contractReason}</p>}
       <p className="rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-bold leading-snug text-muted-foreground">
         Review evidence only. Live inventory, prices, promos, and accounting stay unchanged.
       </p>

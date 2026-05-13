@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { createScanOpsAuditEvent, getVisibleAuditEvents } from "../../lib/scanOpsAudit";
 import { SCANOPS_EVENT_TYPES } from "../../lib/scanOpsEvents";
-import { auditScopeLabel, canApproveOverride, canChangeContext, canManageOffline, hasRoleAtLeast } from "../../lib/scanOpsPermissions";
+import { auditScopeLabel, canApproveOverride, canChangeContext, canManageOffline, hasRoleAtLeast, restrictedActionReason } from "../../lib/scanOpsPermissions";
 import { SCANOPS_ROLES, setScanOpsRolePreview, updateScanOpsSession, useScanOpsSession } from "../../lib/scanOpsSession";
 import { resolveInventoryIdentity } from "../../lib/inventorySystemAdapter";
 import { getNetworkMode, getSyncQueue, getSyncSummary, retryAllSyncEvents, setNetworkMode, SYNC_STATUSES } from "../../lib/scanOpsSync";
@@ -98,6 +98,14 @@ function canSeeMenuNode(node, session) {
   return !node.minRole || hasRoleAtLeast(session.actorRole, node.minRole);
 }
 
+function findMenuItemByPanel(panelId) {
+  return MENU_SECTIONS.flatMap((section) => section.items).find((item) => item.panel === panelId || item.id === panelId) || null;
+}
+
+function blockedMessage(requiredRole) {
+  return restrictedActionReason(requiredRole || "Supervisor");
+}
+
 function Section({ title, helper, children }) {
   return (
     <section className="rounded-2xl border border-border bg-background p-3 shadow-sm">
@@ -115,8 +123,13 @@ function SmallStat({ label, value }) {
 }
 
 function DevicePanel({ session, onMessage }) {
-  const canPreviewRoles = hasRoleAtLeast(session.actorRole, "Manager");
+  const canPreviewRoles = hasRoleAtLeast(session.actorRole, "Admin");
   const roleChange = (role) => {
+    if (!canPreviewRoles) {
+      const event = createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.PERMISSION_ATTEMPT_BLOCKED, { status: "blocked", attempted_action: "role_preview", blocked_reason: "Admin only" });
+      onMessage(`Admin only · ${event.traceId || event.trace_id}`);
+      return;
+    }
     setScanOpsRolePreview(role);
     const event = createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.SESSION_ROLE_PREVIEW_CHANGED, { status: "role_preview_changed", preview_role: role });
     onMessage(`Role preview changed · ${event.traceId || event.trace_id}`);
@@ -137,11 +150,11 @@ function DevicePanel({ session, onMessage }) {
       {canPreviewRoles ? (
         <div className="mt-3 rounded-xl border border-border bg-card p-3">
           <p className="text-xs font-bold text-foreground mb-1">UAT role preview</p>
-          <p className="text-xs text-muted-foreground mb-2">Manager/Admin diagnostic helper only.</p>
+          <p className="text-xs text-muted-foreground mb-2">Admin diagnostic helper only.</p>
           <div className="grid grid-cols-2 gap-2">{SCANOPS_ROLES.map((role) => <button key={role} type="button" onClick={() => roleChange(role)} className={`rounded-xl border px-3 py-2 text-xs font-bold active:scale-[0.98] ${session.actorRole === role ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-secondary-foreground border-border"}`}>{role}</button>)}</div>
         </div>
       ) : (
-        <p className="mt-3 rounded-xl border border-border bg-card p-3 text-xs font-bold text-muted-foreground">Advanced diagnostic controls are hidden for Staff.</p>
+        <p className="mt-3 rounded-xl border border-border bg-card p-3 text-xs font-bold text-muted-foreground">Admin only</p>
       )}
     </Section>
   );
@@ -179,15 +192,15 @@ function OverridePanel({ session, onMessage }) {
   };
   const approve = (requestEvent) => {
     if (!canApprove) {
-      const event = createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.PERMISSION_ATTEMPT_BLOCKED, { status: "blocked", attempted_action: "approve_supervisor_override", parent_event_id: requestEvent.event_id, blocked_reason: "Staff cannot approve supervisor overrides." });
-      createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.SUPERVISOR_OVERRIDE_BLOCKED, { status: "blocked", parent_event_id: requestEvent.event_id, blocked_reason: "Staff role attempted to approve a supervisor override." });
+      const event = createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.PERMISSION_ATTEMPT_BLOCKED, { status: "blocked", attempted_action: "approve_supervisor_override", parent_event_id: requestEvent.event_id, blocked_reason: "Supervisor required" });
+      createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.SUPERVISOR_OVERRIDE_BLOCKED, { status: "blocked", parent_event_id: requestEvent.event_id, blocked_reason: "Supervisor required" });
       onMessage(`Blocked attempt recorded · ${event.traceId || event.trace_id}`);
       return;
     }
     const event = createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.SUPERVISOR_OVERRIDE_APPROVED, { status: "approved", parent_event_id: requestEvent.event_id, parent_trace_id: requestEvent.traceId || requestEvent.trace_id });
     onMessage(`Approved by ${session.actorRole} · ${event.traceId || event.trace_id}`);
   };
-  return <Section title="Supervisor Override" helper="Staff can request. Supervisor, Manager, and Admin can approve safe overrides."><textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} className="w-full rounded-xl border border-input bg-card p-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none" /><button type="button" onClick={request} className="mt-2 w-full rounded-xl bg-primary text-primary-foreground py-3 text-sm font-bold">Request Supervisor Override</button><div className="mt-3 space-y-2"><p className="text-xs font-bold text-foreground">Review controls · {session.actorRole}</p>{pending.length === 0 ? <p className="rounded-xl border border-dashed border-border p-3 text-sm text-muted-foreground text-center">No pending override requests.</p> : pending.map((event) => <article key={event.event_id} className="rounded-xl border border-border bg-card p-3"><p className="text-sm font-semibold text-foreground">{event.override_reason}</p><p className="text-xs text-muted-foreground truncate">Trace {event.traceId || event.trace_id}</p><button type="button" onClick={() => approve(event)} className={`mt-2 w-full rounded-xl py-2.5 text-xs font-bold ${canApprove ? "bg-accent text-accent-foreground" : "bg-destructive/10 text-destructive border border-destructive/20"}`}>{canApprove ? `Approve as ${session.actorRole}` : "Try approve as Staff (logs blocked attempt)"}</button></article>)}</div></Section>;
+  return <Section title="Supervisor Override" helper="Staff can request. Supervisor, Manager, and Admin can approve safe overrides."><textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} className="w-full rounded-xl border border-input bg-card p-3 text-sm outline-none focus:ring-2 focus:ring-ring resize-none" /><button type="button" onClick={request} className="mt-2 w-full rounded-xl bg-primary text-primary-foreground py-3 text-sm font-bold">Request Supervisor Override</button><div className="mt-3 space-y-2">{canApprove && <p className="text-xs font-bold text-foreground">Review controls · {session.actorRole}</p>}{!canApprove && <p className="rounded-xl border border-border bg-card p-3 text-xs font-bold text-muted-foreground">Supervisor required</p>}{pending.length === 0 ? <p className="rounded-xl border border-dashed border-border p-3 text-sm text-muted-foreground text-center">No pending override requests.</p> : pending.map((event) => <article key={event.event_id} className="rounded-xl border border-border bg-card p-3"><p className="text-sm font-semibold text-foreground">{event.override_reason}</p><p className="text-xs text-muted-foreground truncate">Trace {event.traceId || event.trace_id}</p>{canApprove ? <button type="button" onClick={() => approve(event)} className="mt-2 w-full rounded-xl bg-accent py-2.5 text-xs font-bold text-accent-foreground">Approve as {session.actorRole}</button> : <p className="mt-2 rounded-xl bg-secondary/60 px-3 py-2 text-xs font-bold text-muted-foreground">Supervisor required</p>}</article>)}</div></Section>;
 }
 
 function SettingsPanel({ session, onMessage }) {
@@ -197,14 +210,14 @@ function SettingsPanel({ session, onMessage }) {
     onMessage(`Blocked attempt recorded · ${event.traceId || event.trace_id}`);
   };
   const changeNetwork = (mode) => {
-    if (!canManageOffline(session)) return block("change_offline_mode", "Only Manager/Admin can manage offline/sync controls.");
+    if (!canManageOffline(session)) return block("change_offline_mode", "Manager required");
     setNetworkMode(mode);
     setNetwork(mode);
     const event = createScanOpsAuditEvent(mode === "offline" ? SCANOPS_EVENT_TYPES.OFFLINE_MODE_ENTERED : SCANOPS_EVENT_TYPES.ONLINE_MODE_RESTORED, { status: "saved", network_mode: mode });
     onMessage(`Network mode changed · ${event.traceId || event.trace_id}`);
   };
   const changeContext = () => {
-    if (!canChangeContext(session)) return block("change_store_department_context", "Staff cannot change store/device context.");
+    if (!canChangeContext(session)) return block("change_store_department_context", "Manager required");
     const next = session.departmentId === "grocery" ? { departmentId: "fresh", departmentName: "Fresh Foods" } : { departmentId: "grocery", departmentName: "Grocery" };
     updateScanOpsSession(next);
     const event = createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.SCANOPS_SETTING_CHANGED, { status: "saved", setting_patch: next });
@@ -213,7 +226,7 @@ function SettingsPanel({ session, onMessage }) {
   return (
     <Section title="Scanner Settings" helper="Comfort settings first; manager-only controls stay secondary.">
       <div className="grid grid-cols-2 gap-2"><button className="rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-bold">Beep On</button><button className="rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-bold">Vibration On</button><button className="rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-bold">Large Targets</button><button className="rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-bold">Comfortable</button></div>
-      {hasRoleAtLeast(session.actorRole, "Manager") ? <><div className="mt-3 rounded-xl border border-border bg-card p-3"><p className="text-xs font-bold text-foreground">Offline Mode · {network}</p><div className="grid grid-cols-2 gap-2 mt-2"><button onClick={() => changeNetwork("online")} className="rounded-xl bg-secondary py-2 text-xs font-bold">Online</button><button onClick={() => changeNetwork("offline")} className="rounded-xl bg-secondary py-2 text-xs font-bold">Offline</button></div></div><div className="mt-3 rounded-xl border border-border bg-card p-3"><p className="text-xs font-bold text-foreground">Store / Department Context</p><p className="text-xs text-muted-foreground">{session.storeName} · {session.departmentName}</p><button type="button" onClick={changeContext} className="mt-2 w-full rounded-xl bg-secondary py-3 text-sm font-bold">Change Department Context</button></div></> : <p className="mt-3 rounded-xl border border-border bg-card p-3 text-xs font-bold text-muted-foreground">Offline and store context controls are Manager/Admin only.</p>}
+      {hasRoleAtLeast(session.actorRole, "Manager") ? <><div className="mt-3 rounded-xl border border-border bg-card p-3"><p className="text-xs font-bold text-foreground">Offline Mode · {network}</p><div className="grid grid-cols-2 gap-2 mt-2"><button onClick={() => changeNetwork("online")} className="rounded-xl bg-secondary py-2 text-xs font-bold">Online</button><button onClick={() => changeNetwork("offline")} className="rounded-xl bg-secondary py-2 text-xs font-bold">Offline</button></div></div><div className="mt-3 rounded-xl border border-border bg-card p-3"><p className="text-xs font-bold text-foreground">Store / Department Context</p><p className="text-xs text-muted-foreground">{session.storeName} · {session.departmentName}</p><button type="button" onClick={changeContext} className="mt-2 w-full rounded-xl bg-secondary py-3 text-sm font-bold">Change Department Context</button></div></> : <p className="mt-3 rounded-xl border border-border bg-card p-3 text-xs font-bold text-muted-foreground">Manager required</p>}
     </Section>
   );
 }
@@ -236,6 +249,13 @@ export default function OperationalMenuPanel({ onClose }) {
     .filter((section) => section.items.length > 0), [session]);
 
   const openPanel = (id) => {
+    const node = findMenuItemByPanel(id);
+    if (node && !canSeeMenuNode(node, session)) {
+      const reason = blockedMessage(node.minRole);
+      createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.PERMISSION_ATTEMPT_BLOCKED, { status: "blocked", attempted_action: `open_${id}`, blocked_reason: reason });
+      setLastAction(reason);
+      return;
+    }
     createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.OPERATIONAL_PANEL_OPENED, { status: "viewed", panel_id: id });
     if (id === "scanner") createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.SCANNER_TEST_STARTED, { status: "started" });
     if (id === "device") createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.DEVICE_STATUS_VIEWED, { status: "viewed" });
@@ -246,6 +266,12 @@ export default function OperationalMenuPanel({ onClose }) {
   };
 
   const action = (item) => {
+    if (!canSeeMenuNode(item, session)) {
+      const reason = blockedMessage(item.minRole);
+      createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.PERMISSION_ATTEMPT_BLOCKED, { status: "blocked", attempted_action: item.route || item.panel || item.action || item.label, blocked_reason: reason });
+      setLastAction(reason);
+      return;
+    }
     if (item.route) {
       navigate(item.route);
       onClose();
@@ -276,7 +302,7 @@ export default function OperationalMenuPanel({ onClose }) {
     if (panel === "override") return <OverridePanel session={session} onMessage={setLastAction} />;
     if (panel === "settings") return <SettingsPanel session={session} onMessage={setLastAction} />;
     if (panel === "help") return <Section title="Help / Workflow Guide" helper="Keep the handheld flow simple."><p className="text-sm text-muted-foreground">Scan item → act → confirm. Review screens use status sections instead of desktop filters. Invyra Inventory remains the source of truth.</p></Section>;
-    if (panel === "about") return <Section title="About ScanOps"><p className="text-sm font-semibold text-foreground">Invyra ScanOps</p><p className="text-xs text-muted-foreground">Stage AL — Workflow Friction Reduction.</p></Section>;
+    if (panel === "about") return <Section title="About ScanOps"><p className="text-sm font-semibold text-foreground">Invyra ScanOps</p><p className="text-xs text-muted-foreground">Stage AM — Role & Permission Final Hardening.</p></Section>;
     return null;
   };
 

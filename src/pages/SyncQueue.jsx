@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, Eye, FileWarning, GitCompareArrows, Refres
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { getInventoryConnection } from "../lib/inventorySystemAdapter";
 import { useScanOpsSession } from "../lib/scanOpsSession";
+import { hasRoleAtLeast, restrictedActionReason } from "../lib/scanOpsPermissions";
 import {
   discardLocalDraft,
   escalateSyncItem,
@@ -110,7 +111,13 @@ function canDiscard(record, session) {
 }
 
 function canKeepDuplicateSeparate(session) {
-  return ["Supervisor", "Manager", "Admin"].includes(session?.actorRole);
+  return hasRoleAtLeast(session?.actorRole, "Supervisor");
+}
+
+function canResolveSyncAction(action, record, session) {
+  if (["keep_local", "refresh_server", "keep_duplicate"].includes(action)) return hasRoleAtLeast(session?.actorRole, "Supervisor");
+  if (action === "discard" && (FAILED_STATUSES.has(record.status) || CONFLICT_STATUSES.has(record.status))) return hasRoleAtLeast(session?.actorRole, "Supervisor");
+  return true;
 }
 
 export default function SyncQueue() {
@@ -161,6 +168,17 @@ export default function SyncQueue() {
   };
 
   const handleResolve = (action, record, reason) => {
+    if (!canResolveSyncAction(action, record, session)) {
+      createScanOpsEvent(SCANOPS_EVENT_TYPES.PERMISSION_ATTEMPT_BLOCKED, {
+        source_module: "Sync Queue",
+        status: "blocked",
+        sync_record_id: record.id,
+        attempted_action: action,
+        blocked_reason: restrictedActionReason("Supervisor"),
+        sync_exempt: true,
+      });
+      return;
+    }
     let result = null;
     if (action === "keep_local") result = keepLocalAsEvidence(record.id, reason || "Preserved local evidence for review.");
     if (action === "refresh_server") result = refreshServerValue(record.id, reason || "Refreshed server/source display snapshot.");
@@ -287,8 +305,10 @@ function SyncDetail({ record, session, onBack, onRetry, onResolve }) {
   const isDiscarded = record.status === SYNC_STATUSES.DISCARDED;
   const isEscalated = record.status === SYNC_STATUSES.ESCALATED;
   const needsReason = (action) => ["escalate", "discard"].includes(action);
-  const allowDiscard = canDiscard(record, session);
+  const canResolveReview = hasRoleAtLeast(session?.actorRole, "Supervisor");
+  const allowDiscard = canDiscard(record, session) && canResolveSyncAction("discard", record, session);
   const allowSeparate = canKeepDuplicateSeparate(session);
+  const reviewReason = restrictedActionReason("Supervisor");
 
   const rows = [
     ["Status", statusLabel(record)],
@@ -359,9 +379,10 @@ function SyncDetail({ record, session, onBack, onRetry, onResolve }) {
               placeholder="Required for Escalate and Discard. Optional for keep/refresh actions."
             />
             <div className="space-y-2">
-              {(isConflict || record.status === SYNC_STATUSES.NEEDS_REVIEW) && <button onClick={() => handleAction("keep_local")} className={BUTTON_SECONDARY}><ShieldAlert className="w-4 h-4" />Keep Local as Evidence</button>}
-              {(isConflict || isFailed || record.status === SYNC_STATUSES.NEEDS_REVIEW) && <button onClick={() => handleAction("refresh_server")} className={BUTTON_SECONDARY}><GitCompareArrows className="w-4 h-4" />Refresh Server Value</button>}
-              {isDuplicate && <button onClick={() => handleAction("keep_duplicate")} disabled={!allowSeparate} className={BUTTON_SECONDARY}><FileWarning className="w-4 h-4" />Keep as Separate Evidence</button>}
+              {(isConflict || record.status === SYNC_STATUSES.NEEDS_REVIEW) && canResolveReview && <button onClick={() => handleAction("keep_local")} className={BUTTON_SECONDARY}><ShieldAlert className="w-4 h-4" />Keep Local as Evidence</button>}
+              {(isConflict || isFailed || record.status === SYNC_STATUSES.NEEDS_REVIEW) && canResolveReview && <button onClick={() => handleAction("refresh_server")} className={BUTTON_SECONDARY}><GitCompareArrows className="w-4 h-4" />Refresh Server Value</button>}
+              {isDuplicate && canResolveReview && <button onClick={() => handleAction("keep_duplicate")} disabled={!allowSeparate} className={BUTTON_SECONDARY}><FileWarning className="w-4 h-4" />Keep as Separate Evidence</button>}
+              {!canResolveReview && (isConflict || isDuplicate || isFailed || record.status === SYNC_STATUSES.NEEDS_REVIEW) && <p className="rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-black text-muted-foreground">{reviewReason}</p>}
               <button onClick={() => handleAction("escalate")} disabled={!reason.trim()} className={BUTTON_PRIMARY}><AlertTriangle className="w-4 h-4" />Escalate</button>
               <button onClick={() => handleAction("discard")} disabled={!allowDiscard || !reason.trim()} className={BUTTON_DANGER}><Trash2 className="w-4 h-4" />Discard Local Draft</button>
             </div>

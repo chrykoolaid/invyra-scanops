@@ -28,6 +28,7 @@ import SessionCollaboration from './pages/SessionCollaboration';
 import DesktopSyncContract from './pages/DesktopSyncContract';
 import StoreOpsDashboard from './pages/StoreOpsDashboard';
 import PilotReadiness from './pages/PilotReadiness';
+import RoleGate from './components/scanner/RoleGate';
 
 
 const ScrollToTopOnRouteChange = () => {
@@ -50,6 +51,12 @@ const ScrollToTopOnRouteChange = () => {
 
   return null;
 };
+
+const roleGated = (element, requiredRole, title) => (
+  <RoleGate requiredRole={requiredRole} title={title}>
+    {element}
+  </RoleGate>
+);
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -95,12 +102,12 @@ const AuthenticatedApp = () => {
         <Route path="/sync-queue" element={<SyncQueue />} />
         <Route path="/shelf-tickets" element={<ShelfTickets />} />
         <Route path="/transfers" element={<Transfers />} />
-        <Route path="/product-identity-review" element={<ProductIdentityReview />} />
-        <Route path="/scanops-reporting" element={<ScanOpsReporting />} />
-        <Route path="/device-governance" element={<DeviceGovernance />} />
+        <Route path="/product-identity-review" element={roleGated(<ProductIdentityReview />, "Supervisor", "Product Review")} />
+        <Route path="/scanops-reporting" element={roleGated(<ScanOpsReporting />, "Supervisor", "ScanOps Reporting")} />
+        <Route path="/device-governance" element={roleGated(<DeviceGovernance />, "Manager", "Device & Shift Governance")} />
         <Route path="/session-collaboration" element={<SessionCollaboration />} />
-        <Route path="/desktop-sync-contract" element={<DesktopSyncContract />} />
-        <Route path="/store-ops-dashboard" element={<StoreOpsDashboard />} />
+        <Route path="/desktop-sync-contract" element={roleGated(<DesktopSyncContract />, "Manager", "Desktop Sync Contract")} />
+        <Route path="/store-ops-dashboard" element={roleGated(<StoreOpsDashboard />, "Manager", "Store Ops Dashboard")} />
         <Route path="/pilot-readiness" element={<PilotReadiness />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>

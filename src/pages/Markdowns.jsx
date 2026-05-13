@@ -25,6 +25,7 @@ import {
   saveWorkflowItemAttributeSnapshot,
 } from "../lib/scanOpsItemAttributes";
 import { useScanOpsSession } from "../lib/scanOpsSession";
+import { restrictedActionReason } from "../lib/scanOpsPermissions";
 import {
   GOVERNED_ACTIONS,
   canPerformScanOpsAction,
@@ -294,9 +295,12 @@ export default function Markdowns() {
     refreshRequests(result.request.requestId);
   };
 
+  const selectedNeedsSubmit = selectedRequest && [MARKDOWN_STATUSES.DRAFT, MARKDOWN_STATUSES.RETURNED].includes(selectedRequest.status);
+  const selectedNeedsApproval = selectedRequest && [MARKDOWN_STATUSES.PENDING_APPROVAL, MARKDOWN_STATUSES.NEEDS_REVIEW].includes(selectedRequest.status);
+  const selectedApprovalReason = selectedRequest?.approvalRoleRequired === "Manager" ? "Manager approval required" : restrictedActionReason("Supervisor");
   const requestReady = Boolean(item && reason && Number(quantity || 0) > 0 && selectedPercent !== "" && markdownSubmitPermission.allowed);
-  const canSubmitSelected = selectedRequest && markdownSubmitPermission.allowed && [MARKDOWN_STATUSES.DRAFT, MARKDOWN_STATUSES.RETURNED].includes(selectedRequest.status);
-  const canApproveSelected = selectedRequest && canApprove && [MARKDOWN_STATUSES.PENDING_APPROVAL, MARKDOWN_STATUSES.NEEDS_REVIEW].includes(selectedRequest.status);
+  const canSubmitSelected = selectedNeedsSubmit && markdownSubmitPermission.allowed;
+  const canApproveSelected = selectedNeedsApproval && canApprove;
   const canHandoffSelected = selectedRequest && handoffPermission.allowed && selectedRequest.status === MARKDOWN_STATUSES.APPROVED && selectedRequest.labelRequired;
 
   return (
@@ -451,25 +455,33 @@ export default function Markdowns() {
                 <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Approval</p>
                 <p className="mt-1 text-sm font-black text-foreground">{selectedRequest.approvalRequired ? `${selectedRequest.approvalRoleRequired} approval required` : "Approval blocked"}</p>
                 <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">
-                  Current role: {session.actorRole}. {canApprove ? "This context can approve eligible markdowns." : markdownApprovePermission.reason}
+                  Current role: {session.actorRole}. {selectedNeedsApproval && !canApprove ? selectedApprovalReason : "Review state only."}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <button type="button" disabled={!canSubmitSelected} onClick={() => updateSelected("submit")} className="min-h-12 rounded-2xl bg-primary px-3 text-sm font-black text-primary-foreground active:scale-[0.98] disabled:opacity-40">
-                  Submit Approval
-                </button>
-                <button type="button" disabled={!canApproveSelected} onClick={() => updateSelected("approve")} className="min-h-12 rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border disabled:opacity-40">
-                  Approve
-                </button>
-                <button type="button" disabled={!canApproveSelected} onClick={() => updateSelected("return")} className="min-h-12 rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border disabled:opacity-40">
-                  Return
-                </button>
-                <button type="button" disabled={!canApproveSelected} onClick={() => updateSelected("reject")} className="min-h-12 rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border disabled:opacity-40">
-                  Reject
-                </button>
+                {selectedNeedsSubmit && (
+                  <button type="button" disabled={!canSubmitSelected} onClick={() => updateSelected("submit")} className="min-h-12 rounded-2xl bg-primary px-3 text-sm font-black text-primary-foreground active:scale-[0.98] disabled:opacity-40">
+                    Submit Approval
+                  </button>
+                )}
+                {selectedNeedsSubmit && !canSubmitSelected && <p className="col-span-2 rounded-2xl bg-amber-50 px-3 py-2 text-xs font-black text-amber-700">{markdownSubmitPermission.reason}</p>}
+                {canApproveSelected && (
+                  <>
+                    <button type="button" onClick={() => updateSelected("approve")} className="min-h-12 rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border">
+                      Approve
+                    </button>
+                    <button type="button" onClick={() => updateSelected("return")} className="min-h-12 rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border">
+                      Return
+                    </button>
+                    <button type="button" onClick={() => updateSelected("reject")} className="min-h-12 rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border">
+                      Reject
+                    </button>
+                  </>
+                )}
+                {selectedNeedsApproval && !canApprove && <p className="col-span-2 rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-black text-muted-foreground">{selectedApprovalReason}</p>}
+                {!selectedNeedsSubmit && !selectedNeedsApproval && <p className="col-span-2 rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-black text-muted-foreground">No review action available</p>}
               </div>
               {selectedRequest.blockedReason && <p className="rounded-2xl bg-destructive/10 px-3 py-2 text-xs font-black text-destructive">{selectedRequest.blockedReason}</p>}
-              {!markdownSubmitPermission.allowed && <p className="rounded-2xl bg-amber-50 px-3 py-2 text-xs font-black text-amber-700">{markdownSubmitPermission.reason}</p>}
             </SectionCard>
 
             <SectionCard className="space-y-3">
