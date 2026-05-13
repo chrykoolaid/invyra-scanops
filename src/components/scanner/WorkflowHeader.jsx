@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ScanLine, Search, Wifi, WifiOff, X } from "lucide-react";
+import { ChevronLeft, Home, ScanLine, Search, Wifi, WifiOff, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { getNetworkMode, getSyncSummary } from "../../lib/scanOpsSync";
 import { useScanOpsSession } from "../../lib/scanOpsSession";
@@ -225,17 +225,39 @@ export default function WorkflowHeader({
     document.documentElement.classList.remove("scanops-keyboard-open");
   }, []);
 
+  const goBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate("/");
+  };
+
+  const goHome = () => {
+    setShowKeyboardFallback(false);
+    setManualFocused(false);
+    navigate("/");
+  };
+
   return (
     <header className="scanops-workflow-header bg-card border-b border-border px-4 py-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={goBack}
             className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-foreground active:bg-border"
             aria-label="Go back"
           >
             <ChevronLeft className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={goHome}
+            className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-foreground active:bg-border"
+            aria-label="Return to Home"
+          >
+            <Home className="h-5 w-5" />
           </button>
           <div className="min-w-0">
             <h1 className="truncate text-base font-black leading-tight text-foreground">{title}</h1>

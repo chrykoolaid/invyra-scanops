@@ -255,10 +255,12 @@ body {
 }
 
 /* Stage M scanner-first workflow UI rebuild */
-.scanops-workflow-header {
+.scanops-workflow-header,
+.scanops-page-header {
   flex: 0 0 auto;
-  position: relative;
-  z-index: 30;
+  position: sticky;
+  top: 0;
+  z-index: 40;
 }
 
 .scanops-work-card {
