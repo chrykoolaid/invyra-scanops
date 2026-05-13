@@ -87,7 +87,7 @@ function ShelfNeedCard({ item, quantity, setQuantity }) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-black text-foreground">Shelf / backroom need</p>
-          <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Stage AA records execution evidence only. It does not directly mutate inventory quantities.</p>
+          <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Evidence only. Live inventory is not changed here.</p>
         </div>
       </div>
 
@@ -190,8 +190,8 @@ export default function Replenish() {
         <SectionCard className="space-y-2">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-black text-foreground">Stage AA execution workspace</p>
-              <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Scan an item, confirm shelf need, then record the physical replenishment outcome.</p>
+              <p className="text-sm font-black text-foreground">Replenishment action</p>
+              <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Scan item, confirm quantity, save outcome.</p>
             </div>
             <div className="shrink-0 rounded-2xl bg-secondary px-3 py-2 text-center">
               <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Open</p>
@@ -203,7 +203,7 @@ export default function Replenish() {
         {savedResult && (
           <DoneCard
             title={`${savedResult.outcomeLabel} saved`}
-            helper="The event is stored locally with user/device proof and queued through the existing ScanOps event pipeline."
+            helper="Saved locally with user/device proof."
             rows={[
               { label: "Item", value: savedResult.itemName },
               { label: "Status", value: savedResult.status },
@@ -257,7 +257,7 @@ export default function Replenish() {
             </SectionCard>
           </>
         ) : (
-          <EmptyState title="Scan or search an item to start replenishment." helper="The header search handles manual lookup and scanner input. No stock movement is applied until an outcome is submitted." />
+          <EmptyState title="Scan or search an item to start replenishment." helper="Scan/search, then save one replenishment outcome." />
         )}
 
         <RecentReplenishmentList records={records} />

@@ -142,7 +142,7 @@ function ReviewDetails({ review, session, onSubmit, onApprove, onReturn, onRejec
         <InfoLine label="Risk" value={review.riskLevel || "Normal"} />
         <InfoLine label="Estimated total" value={currencyAmount(review.currency, review.estimatedTotalCost)} />
         <InfoLine label="Adjustment contract" value={review.adjustmentContractStatus || "Pending"} />
-        <InfoLine label="Inventory sync" value="Deferred to Stage AH" />
+        <InfoLine label="Inventory sync" value="Deferred" />
         <InfoLine label="Current role" value={role} />
       </div>
 
@@ -154,7 +154,7 @@ function ReviewDetails({ review, session, onSubmit, onApprove, onReturn, onRejec
       </div>
       <MiniButton onClick={onContract} disabled={!contractAllowed} variant="primary">{contractLabel}</MiniButton>
       <p className="rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-bold leading-snug text-muted-foreground">
-        Handheld review creates governance evidence and adjustment contracts only. It does not reduce live inventory, change prices, update promotions, or post accounting write-offs.
+        Review evidence only. Live inventory, prices, promos, and accounting stay unchanged.
       </p>
     </SectionCard>
   );
@@ -372,7 +372,7 @@ export default function Waste() {
               <TextInputField label="Shelf location" value={shelfLocation} onChange={setShelfLocation} placeholder="Aisle / bay / shelf..." />
               <TextInputField label="Evidence note" value={evidenceNote} onChange={setEvidenceNote} placeholder="Example: expired on shelf, seal broken, missing from bay..." />
               <p className="rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-bold leading-snug text-muted-foreground">
-                Photo/file evidence is deferred in Stage AE. Note evidence is captured now and included in audit/sync-ready events.
+                Photo/file evidence deferred. Note evidence is saved now.
               </p>
             </SectionCard>
           </>
@@ -393,7 +393,7 @@ export default function Waste() {
         <ContractCard contract={latestContract} />
 
         {!item && !selectedReview ? (
-          <EmptyState title="Waste Review is ready." helper="Use the header search/scan field to add a waste, shrink, supplier fault, operational use, or markdown-block review." />
+          <EmptyState title="Waste Review is ready." helper="Scan/search to create a waste or shrink review." />
         ) : null}
       </WorkflowMain>
       <StickyActions

@@ -76,7 +76,7 @@ function PriceStateCard({ item }) {
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-black text-foreground">System price</p>
-          <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Verification only. This screen never edits product prices or creates print contracts.</p>
+          <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Verification only. Prices are not edited here.</p>
         </div>
       </div>
 
@@ -185,8 +185,8 @@ export default function PriceCheck() {
         <SectionCard className="space-y-2">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-black text-foreground">Stage AB verification workspace</p>
-              <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Scan an item, compare shelf label against system price, then save review evidence.</p>
+              <p className="text-sm font-black text-foreground">Price check action</p>
+              <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Scan item, compare shelf label, save result.</p>
             </div>
             <div className="shrink-0 rounded-2xl bg-secondary px-3 py-2 text-center">
               <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Events</p>
@@ -198,7 +198,7 @@ export default function PriceCheck() {
         {savedResult && (
           <DoneCard
             title={`${savedResult.resultLabel} saved`}
-            helper="Saved locally with user/device/session proof. No product price, promotion, stock, or printer record was mutated."
+            helper="Saved locally. Prices, promos, stock, and printer records were not changed."
             rows={[
               { label: "Item", value: savedResult.itemName },
               { label: "Expected shelf", value: formatScanOpsMoney(savedResult.expectedShelfPrice, savedResult.item_snapshot?.currency || "₱", savedResult.item_snapshot?.pricePerKg ? "/kg" : "") },
@@ -260,13 +260,13 @@ export default function PriceCheck() {
               <div className="rounded-2xl border border-border bg-secondary/50 p-3">
                 <div className="flex items-start gap-2">
                   <Printer className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                  <p className="text-xs font-semibold leading-snug text-muted-foreground">Ticket Needed records a future shelf-ticket request only. Stage AC will define print-ready contracts later.</p>
+                  <p className="text-xs font-semibold leading-snug text-muted-foreground">Ticket Needed creates a shelf-ticket request only.</p>
                 </div>
               </div>
             </SectionCard>
           </>
         ) : (
-          <EmptyState title="No item selected." helper="Use the header search or scanner input. Price Check records verification evidence only." />
+          <EmptyState title="No item selected." helper="Scan/search an item to record price-check evidence." />
         )}
 
         <RecentPriceChecks records={records} />

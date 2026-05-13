@@ -7,7 +7,6 @@ import {
   MetricPill,
   PageShell,
   SectionCard,
-  StickyActions,
   WorkflowMain,
 } from "../components/scanner/WorkflowPrimitives";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
@@ -216,7 +215,7 @@ export default function ShelfTickets() {
     <PageShell>
       <WorkflowHeader
         title="Shelf Tickets"
-        subtitle="Queue v2 · print-ready contracts"
+        subtitle="Shelf ticket requests"
         scanValue={scanValue}
         onScanValueChange={setScanValue}
         onScan={handleScan}
@@ -238,7 +237,7 @@ export default function ShelfTickets() {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm font-black text-foreground">Shelf Ticket Queue</p>
-              <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Scan/search to add a manual ticket. AB Ticket Needed events import once.</p>
+              <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Scan/search to add a manual ticket request.</p>
             </div>
             <div className="shrink-0 rounded-2xl bg-secondary px-3 py-2 text-center">
               <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Pending</p>
@@ -325,20 +324,14 @@ export default function ShelfTickets() {
                   Cancel Ticket
                 </button>
               </div>
-              <p className="text-xs font-semibold leading-snug text-muted-foreground">Completed is manual only. It does not claim a printer integration or print job result.</p>
+              <p className="text-xs font-semibold leading-snug text-muted-foreground">Completed is manual only. No printer result is claimed.</p>
             </SectionCard>
           </>
         ) : (
           <EmptyState title="No ticket selected." helper="Use Price Check → Ticket Needed, or scan/search here to create a manual shelf-ticket request." />
         )}
 
-        <StickyActions
-          leftLabel="Refresh Queue"
-          rightLabel="Save Contract"
-          onLeft={() => refreshQueue(selectedId)}
-          onRight={saveContract}
-          rightDisabled={!selectedRequest}
-        />
+
       </WorkflowMain>
     </PageShell>
   );

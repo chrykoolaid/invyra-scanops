@@ -340,7 +340,7 @@ export default function Markdowns() {
             <SectionCard className="space-y-3">
               <div>
                 <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">New Markdown Request</p>
-                <p className="mt-1 text-sm font-bold leading-snug text-muted-foreground">Create a request only. Approval and label handoff do not mutate POS or product master prices.</p>
+                <p className="mt-1 text-sm font-bold leading-snug text-muted-foreground">Request only. POS and product master prices stay unchanged.</p>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <TextInputField label="Quantity" value={quantity} onChange={setQuantity} type="number" placeholder="1" />
@@ -476,7 +476,7 @@ export default function Markdowns() {
               <div>
                 <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Label / Printer Handoff</p>
                 <p className="mt-1 text-sm font-black text-foreground">{selectedRequest.labelHandoffStatus}</p>
-                <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Printer connection deferred. No Bluetooth, Wi-Fi, printer driver, browser print, status polling, or retry queue is implemented in Stage AD.</p>
+                <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Printer connection deferred. This records handoff readiness only.</p>
               </div>
               <div className="space-y-2 rounded-2xl bg-secondary/50 p-3">
                 <InfoLine label="Label needed" value={selectedRequest.labelRequired ? "Yes" : "No"} />
@@ -495,24 +495,18 @@ export default function Markdowns() {
           <EmptyState title="No markdown selected." helper="Scan/search an item to create a markdown request, or select an existing queue item." />
         )}
 
-        <StickyActions
-          leftLabel={item ? "Cancel Request" : "Refresh Queue"}
-          rightLabel={item ? "Create Request" : canSubmitSelected ? "Submit Approval" : "Ready Handoff"}
-          onLeft={() => {
-            if (item) {
+        {item && (
+          <StickyActions
+            leftLabel="Cancel Request"
+            rightLabel="Create Request"
+            onLeft={() => {
               setItem(null);
               setScanValue("");
-            } else {
-              refreshRequests(selectedId);
-            }
-          }}
-          onRight={() => {
-            if (item) createRequest();
-            else if (canSubmitSelected) updateSelected("submit");
-            else createHandoff();
-          }}
-          rightDisabled={item ? !requestReady : !(canSubmitSelected || canHandoffSelected)}
-        />
+            }}
+            onRight={createRequest}
+            rightDisabled={!requestReady}
+          />
+        )}
       </WorkflowMain>
     </PageShell>
   );

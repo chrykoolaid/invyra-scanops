@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import { EmptyState, ItemSummaryCard, MetricPill, PageShell, SectionCard, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
@@ -11,7 +11,6 @@ import { getSyncSummary } from "../lib/scanOpsSync";
 import { useScanOpsSession } from "../lib/scanOpsSession";
 
 export default function ProductLookup() {
-  const navigate = useNavigate();
   const { id } = useParams();
   const session = useScanOpsSession();
   const initialQuery = id && id !== "demo" ? decodeURIComponent(id) : "";
@@ -77,15 +76,12 @@ export default function ProductLookup() {
             </SectionCard>
             <SectionCard>
               <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">My work</p>
-              <p className="mt-2 text-sm font-bold leading-snug text-foreground">Use the main work menu when you need to count, replenish, mark down, waste, or request shelf tickets.</p>
+              <p className="mt-2 text-sm font-bold leading-snug text-foreground">Current local work status for this device.</p>
               <div className="mt-3 grid grid-cols-3 gap-2">
                 <MetricPill label="Open tasks" value={workSummary.openTasks} />
                 <MetricPill label="Waiting sync" value={workSummary.waitingSync} />
                 <MetricPill label="Blocked" value={workSummary.blocked} />
               </div>
-              <button type="button" onClick={() => navigate("/tasks")} className="mt-3 flex min-h-12 w-full items-center justify-center rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border">
-                View My Work
-              </button>
             </SectionCard>
           </>
         ) : (

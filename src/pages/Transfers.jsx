@@ -372,7 +372,7 @@ export default function Transfers() {
         {view === "done" && submittedBatch ? (
           <DoneCard
             title="Transfer evidence submitted"
-            helper="Dispatch and receive evidence is saved separately. No handheld stock posting occurred."
+            helper="Dispatch/receive evidence saved. No stock posted here."
             rows={[
               { label: "Transfer", value: submittedBatch.transfer_ref },
               { label: "Status", value: submittedBatch.status },
@@ -445,7 +445,7 @@ export default function Transfers() {
               />
             )}
 
-            {readOnly && <EmptyState title="Transfer is read-only." helper="Accepted, closed, submitted, or cancelled transfers cannot be edited from the handheld." />}
+            {readOnly && <EmptyState title="Transfer is read-only." helper="This transfer is locked for handheld edits." />}
 
             <TransferEvidenceList batch={activeBatch} chooseDispatchForReceive={readOnly ? null : chooseDispatchForReceive} />
             <TransferExceptionList batch={activeBatch} canReview={canReview} onReview={reviewException} />
@@ -496,7 +496,7 @@ function TransferLanding({ visibleBatches, transferType, setTypeAndRoute, source
             ))}
           </div>
         ) : (
-          <EmptyState title="No active transfers." helper="Start a transfer when stock needs dispatch and receive evidence." />
+          <EmptyState title="No active transfers." helper="Start when stock needs dispatch/receive evidence." />
         )}
       </SectionCard>
 
@@ -559,7 +559,7 @@ function TransferDispatchWorkspace({ item, unit, availableAtSource, dispatchQuan
           <StickyActions leftLabel="Clear Item" rightLabel="Save Dispatch" onLeft={onClear} onRight={onSave} rightDisabled={dispatchQuantity <= 0} />
         </>
       ) : (
-        <EmptyState title="Scan or search item to dispatch." helper="Dispatch evidence records what left the source. It does not post stock." />
+        <EmptyState title="Scan or search item to dispatch." helper="Records source dispatch only. No stock posted here." />
       )}
     </>
   );
@@ -593,7 +593,7 @@ function TransferReceiveWorkspace({ batch, selectedDispatch, chooseDispatchForRe
             })}
           </div>
         ) : (
-          <EmptyState title="No dispatch evidence yet." helper="Save dispatch evidence before destination receiving." />
+          <EmptyState title="No dispatch evidence yet." helper="Save dispatch before receiving." />
         )}
       </SectionCard>
     );
@@ -657,7 +657,7 @@ function TransferEvidenceList({ batch, chooseDispatchForReceive }) {
           })}
         </div>
       ) : (
-        <EmptyState title="No transfer evidence yet." helper="Scan an item and save dispatch evidence first." />
+        <EmptyState title="No transfer evidence yet." helper="Scan item, then save dispatch evidence." />
       )}
     </SectionCard>
   );

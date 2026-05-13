@@ -634,7 +634,7 @@ export default function StockCount() {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-base font-black text-foreground">Active Sessions</p>
-            <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Open assigned counts, submit evidence, or review variances.</p>
+            <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Open counts, add evidence, review variances.</p>
           </div>
           <StatusBadge value={actorSession.actorRole} />
         </div>
@@ -651,7 +651,7 @@ export default function StockCount() {
           ))}
         </div>
       ) : (
-        <EmptyState title="No active count sessions." helper="Start a session to capture count evidence." />
+        <EmptyState title="No active count sessions." helper="Start a count session." />
       )}
       <StickyActions leftLabel="Back" rightLabel="Start New Count Session" onLeft={() => navigate(-1)} onRight={() => setView("new")} />
     </>
@@ -688,8 +688,8 @@ export default function StockCount() {
   const renderCounting = () => (
     <>
       <SessionHeaderCard session={activeSession} lines={lines} />
-      {!canAddCountEvidence && <EmptyState title="Session is read-only." helper="Submitted, approved, closed, and cancelled sessions cannot be edited from the handheld." />}
-      {!item && canAddCountEvidence && <EmptyState title="No item selected." helper={lines.length ? "Scan another item or review the session." : "Use the header search to scan or enter an item."} />}
+      {!canAddCountEvidence && <EmptyState title="Session is read-only." helper="This session is locked for handheld edits." />}
+      {!item && canAddCountEvidence && <EmptyState title="No item selected." helper={lines.length ? "Scan another item or review the session." : "Scan/search an item."} />}
       {item && canAddCountEvidence && (
         <>
           <ItemSummaryCard item={item}>
@@ -780,7 +780,7 @@ export default function StockCount() {
     <>
       <DoneCard
         title="Session closed"
-        helper="Count evidence is locked. No stock was adjusted by the handheld."
+        helper="Count evidence locked. No stock adjusted here."
         rows={[
           { label: "Items counted", value: summary.countedItems },
           { label: "Variance lines", value: summary.varianceItems },

@@ -276,7 +276,7 @@ export default function OperationalMenuPanel({ onClose }) {
     if (panel === "override") return <OverridePanel session={session} onMessage={setLastAction} />;
     if (panel === "settings") return <SettingsPanel session={session} onMessage={setLastAction} />;
     if (panel === "help") return <Section title="Help / Workflow Guide" helper="Keep the handheld flow simple."><p className="text-sm text-muted-foreground">Scan item → act → confirm. Review screens use status sections instead of desktop filters. Invyra Inventory remains the source of truth.</p></Section>;
-    if (panel === "about") return <Section title="About ScanOps"><p className="text-sm font-semibold text-foreground">Invyra ScanOps</p><p className="text-xs text-muted-foreground">Stage AK — Handheld Simplification / Anti-Overengineering Gate.</p></Section>;
+    if (panel === "about") return <Section title="About ScanOps"><p className="text-sm font-semibold text-foreground">Invyra ScanOps</p><p className="text-xs text-muted-foreground">Stage AL — Workflow Friction Reduction.</p></Section>;
     return null;
   };
 

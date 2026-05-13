@@ -344,7 +344,7 @@ export default function Receiving() {
         {view === "done" && submittedBatch ? (
           <DoneCard
             title="Receiving batch submitted"
-            helper="Evidence is saved for Inventory review. No handheld stock posting occurred."
+            helper="Saved for Inventory review. No stock posted here."
             rows={[
               { label: "Batch", value: submittedBatch.batch_ref },
               { label: "Status", value: submittedBatch.status },
@@ -406,9 +406,9 @@ export default function Receiving() {
                 <StickyActions leftLabel="Clear Item" rightLabel="Save Evidence" onLeft={() => { setItem(null); setScanValue(""); }} onRight={saveEvidence} rightDisabled={quantity < 0} />
               </>
             ) : !readOnly ? (
-              <EmptyState title="Scan or search receiving item." helper="The header search supports item name, PLU, SKU, barcode, and alias barcode." />
+              <EmptyState title="Scan or search receiving item." helper="Scan/search item name, PLU, SKU, or barcode." />
             ) : (
-              <EmptyState title="Batch is read-only." helper="Submitted, accepted, closed, or cancelled receiving batches cannot be edited by handheld staff." />
+              <EmptyState title="Batch is read-only." helper="This batch is locked for handheld edits." />
             )}
 
             <ReceivingLineList batch={activeBatch} />
@@ -532,7 +532,7 @@ function ReceivingLineList({ batch }) {
           ))}
         </div>
       ) : (
-        <EmptyState title="No receiving evidence yet." helper="Scan an item and save normal or exception evidence." />
+        <EmptyState title="No receiving evidence yet." helper="Scan item, then save evidence." />
       )}
     </SectionCard>
   );
