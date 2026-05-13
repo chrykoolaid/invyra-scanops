@@ -248,7 +248,7 @@ export default function Markdowns() {
     });
     setDone({
       title: request.wasteReviewRequired ? "Markdown blocked for Waste Review" : "Markdown request created",
-      helper: request.wasteReviewRequired ? "Expired stock is not eligible for markdown approval in this stage." : "Request is local and approval-led. No price has changed.",
+      helper: request.wasteReviewRequired ? "Expired stock is not eligible for markdown approval in this stage." : "Saved locally. Pending sync. Approval-led; no price has changed.",
       request,
     });
     setItem(null);

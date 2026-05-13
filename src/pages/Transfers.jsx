@@ -326,9 +326,7 @@ export default function Transfers() {
     if (!activeBatch || !(activeBatch.dispatch_lines || []).length) return;
     const nextBatch = submitTransferBatch(activeBatch);
     replaceBatch(nextBatch);
-    setSubmittedBatch(nextBatch);
-    setView("done");
-    createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_BATCH_SUBMITTED, {
+    const event = createScanOpsEvent(SCANOPS_EVENT_TYPES.TRANSFER_BATCH_SUBMITTED, {
       source_module: "Transfers",
       transfer_id: nextBatch.id,
       transfer_ref: nextBatch.transfer_ref,
@@ -339,6 +337,8 @@ export default function Transfers() {
       applies_stock_directly: false,
       official_inventory_applies_after_sync: true,
     });
+    setSubmittedBatch({ ...nextBatch, syncStatusLabel: event?.syncRecord?.statusLabel || "Pending sync" });
+    setView("done");
   };
 
   const reviewException = (exceptionId, decision) => {
@@ -372,12 +372,13 @@ export default function Transfers() {
         {view === "done" && submittedBatch ? (
           <DoneCard
             title="Transfer evidence submitted"
-            helper="Dispatch/receive evidence saved. No stock posted here."
+            helper="Saved locally. Pending sync. No stock posted here."
             rows={[
               { label: "Transfer", value: submittedBatch.transfer_ref },
               { label: "Status", value: submittedBatch.status },
               { label: "Dispatch lines", value: String(submittedBatch.dispatch_lines.length) },
               { label: "Receive lines", value: String(submittedBatch.receive_lines.length) },
+              { label: "Sync", value: submittedBatch.syncStatusLabel || "Pending sync" },
               { label: "Stock mutation", value: "No direct stock mutation" },
             ]}
           />

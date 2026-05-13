@@ -35,7 +35,7 @@ function safeWrite(key, rows) {
 }
 
 function networkReviewStatus(normalStatus = "Submitted") {
-  return getNetworkMode() === "offline" ? "Sync Pending" : normalStatus;
+  return getNetworkMode() === "offline" ? "Pending sync" : normalStatus;
 }
 
 export function actorSnapshot() {
@@ -511,5 +511,5 @@ export function getTransferBatches() {
 }
 
 export function batchReadOnly(status) {
-  return ["Submitted", "Sync Pending", "Accepted", "Closed", "Cancelled"].includes(status);
+  return ["Submitted", "Pending sync", "Sync Pending", "Accepted", "Closed", "Cancelled"].includes(status);
 }

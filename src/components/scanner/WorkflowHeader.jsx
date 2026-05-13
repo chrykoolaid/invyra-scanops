@@ -20,7 +20,15 @@ export default function WorkflowHeader({
   const session = useScanOpsSession();
   const { mode, summary } = useMemo(() => ({ mode: getNetworkMode(), summary: getSyncSummary() }), [session]);
   const online = mode !== "offline";
-  const waiting = Number(summary?.queued || 0) + Number(summary?.failed || 0) + Number(summary?.conflict || 0);
+  const pendingCount = Number(summary?.pending || 0);
+  const issueCount = Number(summary?.failed || 0) + Number(summary?.conflict || 0) + Number(summary?.needsReview || 0);
+  const syncLabel = !online
+    ? `Offline${pendingCount ? ` · ${pendingCount} pending` : ""}`
+    : issueCount
+      ? `Sync failed · ${issueCount}`
+      : pendingCount
+        ? `Pending sync · ${pendingCount}`
+        : "Online";
   const [manualFocused, setManualFocused] = useState(false);
   const [matches, setMatches] = useState([]);
   const [lookupState, setLookupState] = useState("idle");
@@ -244,8 +252,8 @@ export default function WorkflowHeader({
         </div>
         <div className="mt-2 flex shrink-0 items-center gap-1.5">
           {online ? <Wifi className="h-4 w-4 text-accent" /> : <WifiOff className="h-4 w-4 text-destructive" />}
-          <span className={`text-[11px] font-bold ${online ? "text-accent" : "text-destructive"}`}>
-            {online ? (waiting ? `${waiting} queued` : "Synced") : "Offline"}
+          <span className={`text-[11px] font-bold ${online && !issueCount ? "text-accent" : "text-destructive"}`}>
+            {syncLabel}
           </span>
         </div>
       </div>
@@ -354,8 +362,8 @@ export default function WorkflowHeader({
                 </div>
               ) : (
                 <div className="px-2 py-2">
-                  <p className="text-sm font-black text-foreground">No item found</p>
-                  <p className="mt-0.5 text-xs leading-snug text-muted-foreground">Check barcode, PLU, SKU, shelf label, or try item name / department.</p>
+                  <p className="text-sm font-black text-foreground">{online ? "No item found" : "Offline — item lookup unavailable"}</p>
+                  <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{online ? "Check barcode, PLU, SKU, shelf label, or try item name / department." : "Use a locally available item or retry when connection returns."}</p>
                   <div className="mt-3 grid grid-cols-2 gap-2">
                     <button
                       type="button"

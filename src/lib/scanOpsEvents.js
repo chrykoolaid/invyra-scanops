@@ -267,8 +267,8 @@ export function createScanOpsEvent(eventType, payload = {}) {
   };
   const events = safeReadEvents();
   safeWriteEvents([event, ...events].slice(0, 120));
-  recordEventForInventorySync(event);
-  return event;
+  const syncRecord = recordEventForInventorySync(event);
+  return syncRecord ? { ...event, syncRecord } : event;
 }
 
 export function getScanOpsEvents() {

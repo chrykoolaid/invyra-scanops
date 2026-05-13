@@ -264,7 +264,7 @@ export default function Waste() {
     setScanValue("");
     setQuantity(1);
     setEvidenceNote("");
-    setInlineMessage("Waste review draft saved. No stock, price, promotion, accounting, or sync mutation was posted.");
+    setInlineMessage("Waste review draft saved locally. Pending sync. No stock, price, promotion, or accounting mutation was posted.");
   };
 
   const submitSelected = () => {
@@ -277,7 +277,7 @@ export default function Waste() {
     }
     const updated = submitWasteReview(selectedReview.reviewId);
     refreshReviews(updated?.reviewId);
-    setInlineMessage(updated ? `${updated.status}. Review is role-gated and inventory sync remains deferred.` : "Review was not submitted.");
+    setInlineMessage(updated ? `${updated.status}. Saved locally. Pending sync. Review is role-gated.` : "Review was not submitted.");
   };
 
   const decideSelected = (action) => {
@@ -305,7 +305,7 @@ export default function Waste() {
     const result = createAdjustmentContract(selectedReview.reviewId);
     refreshReviews(result.review?.reviewId);
     setLatestContract(result.contract || null);
-    setInlineMessage(result.duplicateBlocked ? "Duplicate adjustment contract blocked for this approved review." : "Adjustment contract created. Inventory sync deferred.");
+    setInlineMessage(result.duplicateBlocked ? "Duplicate adjustment contract blocked for this approved review." : "Adjustment contract created. Pending sync.");
   };
 
   const queueCounts = useMemo(() => ({

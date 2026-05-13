@@ -224,7 +224,7 @@ export default function ShelfTickets() {
         {savedContract && (
           <DoneCard
             title="Shelf ticket contract saved"
-            helper="Saved locally for desktop/print handoff. No real printer job was created."
+            helper="Saved locally. Pending sync for desktop/print handoff. No real printer job was created."
             rows={[
               { label: "Contract", value: savedContract.contractId },
               { label: "Template", value: savedContract.templateKey },

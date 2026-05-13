@@ -169,7 +169,7 @@ export default function PriceCheck() {
     const result = savePricePromoVerificationEvent({ item, resultId, reasonId, shelfLabelPrice, promoLabelVisible, notes });
     if (!result) return;
     setRecords(result.events);
-    setSavedResult(result.verification);
+    setSavedResult({ ...result.verification, syncStatusLabel: result.event?.syncRecord?.statusLabel || "Pending sync" });
     setItem(null);
     setScanValue("");
     setShelfLabelPrice("");
@@ -198,11 +198,12 @@ export default function PriceCheck() {
         {savedResult && (
           <DoneCard
             title={`${savedResult.resultLabel} saved`}
-            helper="Saved locally. Prices, promos, stock, and printer records were not changed."
+            helper="Saved locally. Pending sync. Prices, promos, stock, and printer records were not changed."
             rows={[
               { label: "Item", value: savedResult.itemName },
               { label: "Expected shelf", value: formatScanOpsMoney(savedResult.expectedShelfPrice, savedResult.item_snapshot?.currency || "₱", savedResult.item_snapshot?.pricePerKg ? "/kg" : "") },
               { label: "Shelf label", value: formatScanOpsMoney(savedResult.shelfLabelPrice, savedResult.item_snapshot?.currency || "₱", savedResult.item_snapshot?.pricePerKg ? "/kg" : "") },
+              { label: "Sync", value: savedResult.syncStatusLabel || "Pending sync" },
             ]}
           />
         )}

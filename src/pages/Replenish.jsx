@@ -176,7 +176,7 @@ export default function Replenish() {
     const result = saveReplenishmentAction({ item, actionId, quantity, issueReason: issueLabel, notes, evidenceNote });
     if (!result) return;
     setRecords(result.tasks);
-    setSavedResult(result.task);
+    setSavedResult({ ...result.task, syncStatusLabel: result.event?.syncRecord?.statusLabel || "Pending sync" });
     setItem(null);
     setScanValue("");
     setNotes("");
@@ -203,10 +203,11 @@ export default function Replenish() {
         {savedResult && (
           <DoneCard
             title={`${savedResult.outcomeLabel} saved`}
-            helper="Saved locally with user/device proof."
+            helper="Saved locally. Pending sync."
             rows={[
               { label: "Item", value: savedResult.itemName },
               { label: "Status", value: savedResult.status },
+              { label: "Sync", value: savedResult.syncStatusLabel || "Pending sync" },
               { label: "Qty", value: `${savedResult.quantityMoved} ${savedResult.unit}` },
             ]}
           />

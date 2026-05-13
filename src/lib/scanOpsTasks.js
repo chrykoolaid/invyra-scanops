@@ -104,8 +104,8 @@ const STATUS_LABELS = {
   [TASK_STATUSES.DONE]: "Done",
   [TASK_STATUSES.ESCALATED]: "Escalated",
   [TASK_STATUSES.CANCELLED]: "Cancelled",
-  [TASK_STATUSES.SYNC_PENDING]: "Sync Pending",
-  [TASK_STATUSES.SYNC_FAILED]: "Sync Failed",
+  [TASK_STATUSES.SYNC_PENDING]: "Pending sync",
+  [TASK_STATUSES.SYNC_FAILED]: "Sync failed",
 };
 
 const TYPE_LABELS = {

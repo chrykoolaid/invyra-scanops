@@ -23,7 +23,7 @@ export default function SyncStatusChip({ compact = false }) {
   const session = useScanOpsSession();
   const state = useMemo(() => getSyncHeaderState(), [session]);
   const Icon = iconMap[state.state] || CheckCircle2;
-  const count = state.state === "issue" ? state.summary.issue : state.state === "pending" ? state.summary.pending : 0;
+  const count = state.state === "issue" ? state.summary.issue : ["pending", "offline"].includes(state.state) ? state.summary.pending : 0;
   const label = count > 0 && !compact ? `${state.label} · ${count}` : state.label;
 
   return (

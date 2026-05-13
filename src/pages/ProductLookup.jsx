@@ -79,7 +79,7 @@ export default function ProductLookup() {
               <p className="mt-2 text-sm font-bold leading-snug text-foreground">Current local work status for this device.</p>
               <div className="mt-3 grid grid-cols-3 gap-2">
                 <MetricPill label="Open tasks" value={workSummary.openTasks} />
-                <MetricPill label="Waiting sync" value={workSummary.waitingSync} />
+                <MetricPill label="Pending sync" value={workSummary.waitingSync} />
                 <MetricPill label="Blocked" value={workSummary.blocked} />
               </div>
             </SectionCard>

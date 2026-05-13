@@ -298,9 +298,7 @@ export default function Receiving() {
     if (!activeBatch || !(activeBatch.lines || []).length) return;
     const nextBatch = submitReceivingBatch(activeBatch);
     replaceBatch(nextBatch);
-    setSubmittedBatch(nextBatch);
-    setView("done");
-    createScanOpsEvent(SCANOPS_EVENT_TYPES.RECEIVING_EVIDENCE_SUBMITTED, {
+    const event = createScanOpsEvent(SCANOPS_EVENT_TYPES.RECEIVING_EVIDENCE_SUBMITTED, {
       source_module: "Receiving",
       batch_id: nextBatch.id,
       batch_ref: nextBatch.batch_ref,
@@ -311,6 +309,8 @@ export default function Receiving() {
       applies_stock_directly: false,
       official_inventory_applies_after_sync: true,
     });
+    setSubmittedBatch({ ...nextBatch, syncStatusLabel: event?.syncRecord?.statusLabel || "Pending sync" });
+    setView("done");
   };
 
   const reviewException = (exceptionId, decision) => {
@@ -344,12 +344,13 @@ export default function Receiving() {
         {view === "done" && submittedBatch ? (
           <DoneCard
             title="Receiving batch submitted"
-            helper="Saved for Inventory review. No stock posted here."
+            helper="Saved locally. Pending sync. No stock posted here."
             rows={[
               { label: "Batch", value: submittedBatch.batch_ref },
               { label: "Status", value: submittedBatch.status },
               { label: "Lines", value: String(submittedBatch.lines.length) },
               { label: "Exceptions", value: String(submittedBatch.exceptions.length) },
+              { label: "Sync", value: submittedBatch.syncStatusLabel || "Pending sync" },
               { label: "Stock mutation", value: "No direct stock mutation" },
             ]}
           />

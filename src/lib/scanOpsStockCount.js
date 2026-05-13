@@ -30,7 +30,7 @@ export const STOCK_COUNT_STATUSES = {
   CANCELLED: "Cancelled",
   // Legacy statuses kept for older imports / stored data safety.
   REVIEW: "Review",
-  SYNC_PENDING: "Sync Pending",
+  SYNC_PENDING: "Pending sync",
   SYNCED: "Synced",
   VARIANCE_REVIEW: "Variance Review",
   REJECTED: "Rejected",

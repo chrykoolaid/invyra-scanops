@@ -287,6 +287,7 @@ export default function StockCount() {
   const [enteredWeight, setEnteredWeight] = useState("");
   const [weightSource, setWeightSource] = useState("label_weight");
   const [note, setNote] = useState("");
+  const [lastSyncMessage, setLastSyncMessage] = useState("");
 
   const activeSession = useMemo(() => sessions.find((entry) => (entry.id || entry.count_session_id) === activeSessionId) || null, [activeSessionId, sessions]);
   const visibleSessions = useMemo(() => sessions.filter((session) => isSessionVisibleToRole(session, actorSession)), [actorSession, sessions]);
@@ -324,6 +325,7 @@ export default function StockCount() {
     setActiveSessionId(null);
     setLines([]);
     refreshSessions();
+    setLastSyncMessage("");
     setView("landing");
   };
 
@@ -456,7 +458,7 @@ export default function StockCount() {
       applies_price_directly: false,
       status: "attribute_evidence_saved",
     });
-    createScanOpsEvent(isVariance ? SCANOPS_EVENT_TYPES.STOCK_COUNT_VARIANCE_REVIEW_REQUIRED : SCANOPS_EVENT_TYPES.STOCK_COUNT_LINE_SAVED, {
+    const lineEvent = createScanOpsEvent(isVariance ? SCANOPS_EVENT_TYPES.STOCK_COUNT_VARIANCE_REVIEW_REQUIRED : SCANOPS_EVENT_TYPES.STOCK_COUNT_LINE_SAVED, {
       source_module: "Stock Count",
       count_session_id: activeSession.id || activeSession.count_session_id,
       session_item_id: savedLine.id,
@@ -479,6 +481,7 @@ export default function StockCount() {
       applies_stock_directly: false,
       status: isVariance ? "variance_review_required" : "line_saved",
     });
+    setLastSyncMessage(`${item.name || "Count entry"} · ${lineEvent?.syncRecord?.statusLabel || "Pending sync"}`);
     refreshLines(activeSession.id || activeSession.count_session_id);
     refreshSessions();
     resetItem();
@@ -494,7 +497,7 @@ export default function StockCount() {
     const nextSummary = getSessionVarianceSummary(lines);
     const status = nextSummary.requiresReview ? STOCK_COUNT_STATUSES.REVIEW_REQUIRED : STOCK_COUNT_STATUSES.SUBMITTED;
     setCountSessionStatus(activeSession.id || activeSession.count_session_id, status, { approval_status: nextSummary.requiresReview ? "Review required" : "Submitted" });
-    createScanOpsEvent(SCANOPS_EVENT_TYPES.STOCK_COUNT_SUBMITTED, {
+    const submitEvent = createScanOpsEvent(SCANOPS_EVENT_TYPES.STOCK_COUNT_SUBMITTED, {
       source_module: "Stock Count",
       count_session_id: activeSession.id || activeSession.count_session_id,
       counted_items: nextSummary.countedItems,
@@ -505,6 +508,7 @@ export default function StockCount() {
       status: "submitted_for_review",
       submission_type: "count_evidence_only",
     });
+    setLastSyncMessage(`Session submitted · ${submitEvent?.syncRecord?.statusLabel || "Pending sync"}`);
     refreshSessions();
     setView("review");
   };
@@ -688,6 +692,7 @@ export default function StockCount() {
   const renderCounting = () => (
     <>
       <SessionHeaderCard session={activeSession} lines={lines} />
+      {lastSyncMessage && <SectionCard className="border-primary/20 bg-primary/5"><p className="text-sm font-black text-foreground">Saved locally</p><p className="mt-1 text-xs font-semibold text-muted-foreground">{lastSyncMessage}</p></SectionCard>}
       {!canAddCountEvidence && <EmptyState title="Session is read-only." helper="This session is locked for handheld edits." />}
       {!item && canAddCountEvidence && <EmptyState title="No item selected." helper={lines.length ? "Scan another item or review the session." : "Scan/search an item."} />}
       {item && canAddCountEvidence && (

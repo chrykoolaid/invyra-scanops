@@ -28,18 +28,18 @@ export const SYNC_STATUSES = {
 };
 
 export const SYNC_STATUS_LABELS = {
-  [SYNC_STATUSES.QUEUED]: "Queued",
-  [SYNC_STATUSES.SYNC_PENDING]: "Pending",
+  [SYNC_STATUSES.QUEUED]: "Pending sync",
+  [SYNC_STATUSES.SYNC_PENDING]: "Pending sync",
   [SYNC_STATUSES.SYNCING]: "Syncing",
   [SYNC_STATUSES.SYNCED]: "Synced",
-  [SYNC_STATUSES.SYNC_FAILED]: "Failed",
-  [SYNC_STATUSES.NEEDS_REVIEW]: "Needs Review",
+  [SYNC_STATUSES.SYNC_FAILED]: "Sync failed",
+  [SYNC_STATUSES.NEEDS_REVIEW]: "Needs review",
   [SYNC_STATUSES.CONFLICT]: "Conflict",
-  [SYNC_STATUSES.DUPLICATE]: "Duplicate",
+  [SYNC_STATUSES.DUPLICATE]: "Needs review",
   [SYNC_STATUSES.DISCARDED]: "Discarded",
-  [SYNC_STATUSES.ESCALATED]: "Escalated",
-  [SYNC_STATUSES.LOCAL_SAVED]: "Saved on Device",
-  [SYNC_STATUSES.FAILED]: "Failed",
+  [SYNC_STATUSES.ESCALATED]: "Needs review",
+  [SYNC_STATUSES.LOCAL_SAVED]: "Saved locally",
+  [SYNC_STATUSES.FAILED]: "Sync failed",
 };
 
 export const SYNC_FAILURE_REASONS = {
@@ -81,12 +81,39 @@ const NON_SYNC_PREFIXES = [
 
 const SUBMISSION_EVENT_HINTS = [
   "STOCK_COUNT_SUBMITTED",
+  "STOCK_COUNT_LINE_SAVED",
+  "STOCK_COUNT_RECOUNT_SUBMITTED",
   "RECEIVING_EVIDENCE_SUBMITTED",
+  "TRANSFER_BATCH_SUBMITTED",
   "TRANSFER_REQUEST_SUBMITTED",
   "WASTE_RECORDED",
   "WASTE_APPROVAL_REQUIRED",
+  "WASTE_REVIEW_DRAFT_SAVED",
+  "WASTE_REVIEW_SUBMITTED",
   "MARKDOWN_APPLIED",
+  "MARKDOWN_REQUEST_CREATED",
+  "MARKDOWN_APPROVAL_SUBMITTED",
+  "SHELF_TICKET_REQUEST_CREATED",
+  "SHELF_TICKET_REQUEST_IMPORTED_FROM_PRICE_CHECK",
+  "SHELF_TICKET_CONTRACT_CREATED",
+  "SHELF_TICKET_CONTRACT_UPDATED",
+  "SHELF_TICKET_READY_FOR_PRINT_HANDOFF",
   "SHELF_TICKET_BATCH_SENT_TO_DESKTOP",
+  "REPLENISHMENT_TASK_CREATED",
+  "REPLENISHMENT_SHELF_FILLED",
+  "REPLENISHMENT_SHORT_FILL",
+  "REPLENISHMENT_NO_BACKROOM_STOCK",
+  "REPLENISHMENT_DAMAGED_STOCK",
+  "REPLENISHMENT_WRONG_LOCATION",
+  "REPLENISHMENT_MANAGER_REVIEW_REQUESTED",
+  "PRICE_LABEL_VERIFIED",
+  "PRICE_MISMATCH_RECORDED",
+  "PROMO_LABEL_VERIFIED",
+  "PROMO_LABEL_MISSING",
+  "PROMO_LABEL_EXPIRED",
+  "WRONG_PRODUCT_LABEL_RECORDED",
+  "SHELF_TICKET_REQUESTED_FROM_PRICE_CHECK",
+  "PRICE_CHECK_MANAGER_REVIEW_REQUESTED",
   "TASK_COMPLETED",
   "UNKNOWN_ITEM_EVIDENCE_CREATED",
 ];
@@ -197,7 +224,7 @@ function normalizeStatus(status) {
 
 function labelFor(status) {
   const normalized = normalizeStatus(status);
-  return SYNC_STATUS_LABELS[normalized] || SYNC_STATUS_LABELS[status] || "Pending";
+  return SYNC_STATUS_LABELS[normalized] || SYNC_STATUS_LABELS[status] || "Pending sync";
 }
 
 function hist(status, message, extra = {}) {
@@ -232,6 +259,8 @@ function titleFromEvent(event) {
   if (String(event?.event_type || "").startsWith("WASTE")) return "Waste evidence";
   if (String(event?.event_type || "").startsWith("MARKDOWN")) return "Markdown request";
   if (String(event?.event_type || "").startsWith("SHELF_TICKET")) return "Shelf ticket request";
+  if (String(event?.event_type || "").startsWith("REPLENISHMENT")) return "Replenishment update";
+  if (String(event?.event_type || "").startsWith("PRICE") || String(event?.event_type || "").startsWith("PROMO") || String(event?.event_type || "").startsWith("WRONG_PRODUCT_LABEL")) return "Price / promo check";
   if (String(event?.event_type || "").startsWith("TASK")) return "Task update";
   if (String(event?.event_type || "") === "UNKNOWN_ITEM_EVIDENCE_CREATED") return "Unknown item evidence";
   return `${source} ${type}`.trim();
@@ -244,6 +273,8 @@ function sourceRequestIdFromEvent(event) {
     || event?.waste_request_id
     || event?.markdown_request_id
     || event?.shelf_ticket_request_id
+    || event?.replenishment_task_id
+    || event?.price_verification_id
     || event?.receiving_request_id
     || event?.transfer_request_id
     || event?.count_session_id
@@ -262,6 +293,8 @@ function sourceWorkflowFromEvent(event) {
   if (source.includes("waste") || type.startsWith("WASTE")) return "waste";
   if (source.includes("markdown") || type.startsWith("MARKDOWN")) return "markdown";
   if (source.includes("shelf") || type.startsWith("SHELF_TICKET")) return "shelf_tickets";
+  if (source.includes("replenishment") || type.startsWith("REPLENISHMENT")) return "replenishment";
+  if (source.includes("price") || source.includes("promo") || type.startsWith("PRICE") || type.startsWith("PROMO") || type.startsWith("WRONG_PRODUCT_LABEL")) return "price_check";
   if (source.includes("task") || type.startsWith("TASK")) return "task";
   if (type === "UNKNOWN_ITEM_EVIDENCE_CREATED") return "unknown_item_evidence";
   return "scanops";
@@ -509,7 +542,7 @@ function buildQueueItem(event, initialStatus, extra = {}) {
     failureReason: extra.failureReason || (status === SYNC_STATUSES.NEEDS_REVIEW ? "Review required before Inventory applies the record." : null),
     payloadSnapshot: event,
     payload: event,
-    syncHistory: [hist(status, status === SYNC_STATUSES.NEEDS_REVIEW ? "Saved on this scanner for review." : "Local evidence snapshot saved for sync recovery.")],
+    syncHistory: [hist(status, status === SYNC_STATUSES.NEEDS_REVIEW ? "Saved locally. Needs review before sync." : "Saved locally. Pending sync.")],
     ...extra,
   });
   recordSnapshotRows(record);
@@ -619,10 +652,10 @@ export function getSyncHeaderState() {
   const mode = getNetworkMode();
   const summary = getSyncSummary();
   if (mode === "offline") return { state: "offline", label: "Offline", summary };
-  if (summary.conflict + summary.duplicate + summary.escalated > 0) return { state: "issue", label: "Review", summary };
-  if (summary.failed + summary.needsReview > 0) return { state: "issue", label: "Sync Issue", summary };
-  if (summary.pending > 0) return { state: "pending", label: "Pending", summary };
-  return { state: "synced", label: "Synced", summary };
+  if (summary.failed > 0) return { state: "issue", label: "Sync failed", summary };
+  if (summary.conflict + summary.duplicate + summary.needsReview + summary.escalated > 0) return { state: "issue", label: "Needs review", summary };
+  if (summary.pending > 0) return { state: "pending", label: "Pending sync", summary };
+  return { state: "synced", label: "Online", summary };
 }
 
 export function recordEventForInventorySync(event) {
@@ -633,37 +666,33 @@ export function recordEventForInventorySync(event) {
   if (exactExisting) return exactExisting;
 
   const duplicateMatch = queue.find((entry) => entry.duplicateKey === duplicateKey && ACTIVE_DUPLICATE_STATUSES.has(entry.status));
-  const initialStatus = duplicateMatch
-    ? SYNC_STATUSES.DUPLICATE
-    : requiresSyncReview(event)
-      ? SYNC_STATUSES.NEEDS_REVIEW
-      : SYNC_STATUSES.SYNC_PENDING;
+  if (duplicateMatch) {
+    const refreshed = updateRecord(duplicateMatch.id, (entry) => ({
+      ...entry,
+      lastUpdatedAt: nowIso(),
+      syncHistory: [hist(entry.status, "Repeat tap ignored. Existing pending sync item kept."), ...(entry.syncHistory || [])],
+    }));
+    return refreshed || duplicateMatch;
+  }
 
-  const record = buildQueueItem(event, initialStatus, duplicateMatch ? {
-    failureReason: SYNC_FAILURE_REASONS.DUPLICATE_DETECTED,
-    duplicateOfSyncId: duplicateMatch.id,
-    matchingEvidence: {
-      sync_item_id: duplicateMatch.id,
-      submitted_by: duplicateMatch.createdBy,
-      source: duplicateMatch.sourceModule,
-      status: duplicateMatch.status,
-      created_at: duplicateMatch.createdAt,
-    },
-    syncHistory: [hist(SYNC_STATUSES.DUPLICATE, "Similar local/server evidence already exists for this source and item.")],
-  } : {});
+  const initialStatus = requiresSyncReview(event)
+    ? SYNC_STATUSES.NEEDS_REVIEW
+    : SYNC_STATUSES.SYNC_PENDING;
+
+  const record = buildQueueItem(event, initialStatus);
 
   write([record, ...queue].slice(0, 180));
   return record;
 }
 
-export function queueSyncEvent(syncId, reason = "Waiting to sync with Invyra Inventory.") {
+export function queueSyncEvent(syncId, reason = "Pending sync with Invyra Inventory.") {
   return updateRecord(syncId, (entry) => ({
     ...entry,
     status: SYNC_STATUSES.QUEUED,
     statusLabel: labelFor(SYNC_STATUSES.QUEUED),
     failureReason: null,
     lastUpdatedAt: nowIso(),
-    syncHistory: [hist(SYNC_STATUSES.QUEUED, reason), ...(entry.syncHistory || [])],
+    syncHistory: [hist(SYNC_STATUSES.QUEUED, reason || "Pending sync."), ...(entry.syncHistory || [])],
   }));
 }
 
@@ -681,7 +710,7 @@ export function attemptSync(syncId) {
     lastAttemptAt: startedAt,
     retryCount: Number(existing.retryCount || 0) + 1,
     attemptCount: Number(existing.attemptCount || 0) + 1,
-    syncHistory: [hist(SYNC_STATUSES.SYNCING, "Sync retry started."), ...(existing.syncHistory || [])],
+    syncHistory: [hist(SYNC_STATUSES.SYNCING, "Retry started for existing pending item."), ...(existing.syncHistory || [])],
   });
   write(queue.map((entry) => (entry.id === existing.id ? syncing : entry)));
 
