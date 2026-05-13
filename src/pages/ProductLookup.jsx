@@ -1,20 +1,33 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ClipboardList, RefreshCcw, Tags, Trash2, BadgePercent } from "lucide-react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import { EmptyState, ItemSummaryCard, MetricPill, PageShell, SectionCard, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { getItemEntryPrimaryValue } from "../lib/scanOpsItemEntry";
 import { getDefaultExpiryDate, getDefaultLotBatch, isWeightedItem, needsWeightedEvidence } from "../lib/scanOpsItemAttributes";
 import { getIdentityDisplay, getMatchReasonDisplay } from "../lib/productIdentityResolver";
+import { getInitialTaskQueue, getTaskStats } from "../lib/scanOpsTasks";
+import { getSyncSummary } from "../lib/scanOpsSync";
+import { useScanOpsSession } from "../lib/scanOpsSession";
 
 export default function ProductLookup() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const session = useScanOpsSession();
   const initialQuery = id && id !== "demo" ? decodeURIComponent(id) : "";
   const [scanValue, setScanValue] = useState(initialQuery);
   const [product, setProduct] = useState(() => initialQuery ? resolveInventoryIdentity(initialQuery) : null);
   const unit = product?.unitType || product?.unit_type || "each";
+  const workSummary = useMemo(() => {
+    const taskStats = getTaskStats(getInitialTaskQueue(), session);
+    const syncSummary = getSyncSummary();
+    return {
+      openTasks: taskStats.mine,
+      waitingSync: syncSummary.pending,
+      blocked: taskStats.escalated + syncSummary.issue,
+    };
+  }, [session]);
+
   const price = useMemo(() => {
     if (!product) return "—";
     return product.pricePerKg ? `${product.currency || "₱"}${product.pricePerKg}/kg` : `${product.currency || "₱"}${product.currentPrice ?? product.current_price ?? "—"}`;
@@ -63,14 +76,16 @@ export default function ProductLookup() {
               <p className="mt-2 text-xs font-semibold leading-snug text-muted-foreground">Capture happens inside Waste, Markdown, Receiving, or Stock Count.</p>
             </SectionCard>
             <SectionCard>
-              <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Quick actions</p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <ActionButton icon={ClipboardList} label="Count" onClick={() => navigate("/stock-count")} />
-                <ActionButton icon={RefreshCcw} label="Replenish" onClick={() => navigate("/replenish")} />
-                <ActionButton icon={BadgePercent} label="Markdown" onClick={() => navigate("/markdowns")} />
-                <ActionButton icon={Trash2} label="Waste" onClick={() => navigate("/waste")} />
-                <ActionButton icon={Tags} label="Shelf Ticket" onClick={() => navigate("/shelf-tickets")} />
+              <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">My work</p>
+              <p className="mt-2 text-sm font-bold leading-snug text-foreground">Use the main work menu when you need to count, replenish, mark down, waste, or request shelf tickets.</p>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <MetricPill label="Open tasks" value={workSummary.openTasks} />
+                <MetricPill label="Waiting sync" value={workSummary.waitingSync} />
+                <MetricPill label="Blocked" value={workSummary.blocked} />
               </div>
+              <button type="button" onClick={() => navigate("/tasks")} className="mt-3 flex min-h-12 w-full items-center justify-center rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border">
+                View My Work
+              </button>
             </SectionCard>
           </>
         ) : (
@@ -81,11 +96,3 @@ export default function ProductLookup() {
   );
 }
 
-function ActionButton({ icon: Icon, label, onClick }) {
-  return (
-    <button type="button" onClick={onClick} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border">
-      <Icon className="h-4 w-4" />
-      {label}
-    </button>
-  );
-}

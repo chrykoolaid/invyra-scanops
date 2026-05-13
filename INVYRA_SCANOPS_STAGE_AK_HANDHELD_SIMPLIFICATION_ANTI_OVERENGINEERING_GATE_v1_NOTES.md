@@ -48,6 +48,13 @@ Stage AK is a product-diet pass for the handheld app. It prevents desktop/admin 
 - Staff-facing language now emphasizes Saved locally, Waiting to sync, Needs review, and no live mutation.
 - Desktop Sync Contract direct access now shows Staff a simplified Sync Status view only; contract preview, validation events, payload inspection, and desktop response preview are Manager/Admin diagnostics.
 
+
+### AK.1 add-on — Quick Action Duplication Removal
+
+- Removed Product Lookup's duplicated `Quick actions` workflow grid.
+- Replaced the duplicate launcher buttons with a compact `My work` summary and a single `View My Work` route.
+- Product Lookup remains scan/search first and no longer relaunches Count, Replenish, Markdown, Waste, or Shelf Tickets from a secondary card.
+
 ### Task queue simplification
 
 - Removed handheld task filter controls for Assigned to, Priority, Due, Source, and Status.
@@ -58,7 +65,7 @@ Stage AK is a product-diet pass for the handheld app. It prevents desktop/admin 
 
 - Home launcher untouched.
 - Keyboard behavior untouched.
-- Product Lookup untouched.
+- Product Lookup scan/search behavior preserved; duplicated Quick Actions card removed in AK.1.
 - Receiving untouched.
 - Transfers untouched.
 - Stock Count untouched.
@@ -82,5 +89,7 @@ Stage AK is a product-diet pass for the handheld app. It prevents desktop/admin 
 - `src/pages/SyncQueue.jsx`
 - `src/pages/DesktopSyncContract.jsx`
 - `src/pages/Tasks.jsx`
+- `src/pages/ProductLookup.jsx`
+- `INVYRA_SCANOPS_STAGE_AK_1_QUICK_ACTION_DUPLICATION_REMOVAL_v1_NOTES.md`
 - `src/lib/scanOpsStoreOpsDashboard.js`
 - `INVYRA_SCANOPS_STAGE_AK_HANDHELD_SIMPLIFICATION_ANTI_OVERENGINEERING_GATE_v1_NOTES.md`
