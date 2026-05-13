@@ -59,14 +59,14 @@ const getAppEscapeMeta = (pathname) => {
 
   const exactRoutes = {
     "/scan": { title: "Product Lookup", subtitle: "Scan or search item details" },
-    "/stock-count": { title: "Stock Count", subtitle: "Count stock with a direct Home escape" },
-    "/receiving": { title: "Receiving", subtitle: "Receive stock with a direct Home escape" },
-    "/replenish": { title: "Replenish", subtitle: "Move stock to shelf with a direct Home escape" },
+    "/stock-count": { title: "Stock Count", subtitle: "Count stock and review variances" },
+    "/receiving": { title: "Receiving", subtitle: "Receive stock and confirm delivery evidence" },
+    "/replenish": { title: "Replenish", subtitle: "Move stock from backroom to shelf" },
     "/price-check": { title: "Price Check", subtitle: "Check price and promotion labels" },
-    "/gap-scan": { title: "Gap Scan", subtitle: "Scan shelf gaps with a direct Home escape" },
+    "/gap-scan": { title: "Gap Scan", subtitle: "Record shelf gaps and follow-up actions" },
     "/tasks": { title: "Tasks", subtitle: "Review assigned store work" },
     "/markdowns": { title: "Markdowns", subtitle: "Review markdown work safely" },
-    "/waste": { title: "Waste", subtitle: "Capture waste with a direct Home escape" },
+    "/waste": { title: "Waste", subtitle: "Capture waste and review shrink evidence" },
     "/expiry-check": { title: "Expiry Check", subtitle: "Review freshness and expiry" },
     "/inventory-sync": { title: "Inventory Sync", subtitle: "Review sync state and issues" },
     "/sync-queue": { title: "Sync Queue", subtitle: "Review pending sync work" },
@@ -84,7 +84,7 @@ const getAppEscapeMeta = (pathname) => {
   if (exactRoutes[pathname]) return exactRoutes[pathname];
   if (pathname.startsWith("/product/")) return { title: "Product Lookup", subtitle: "Item details" };
 
-  return { title: "ScanOps", subtitle: "Return to Home available" };
+  return { title: "ScanOps", subtitle: "ScanOps workflow" };
 };
 
 const roleGated = (element, requiredRole, title) => (
