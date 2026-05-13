@@ -89,7 +89,7 @@ export default function DeviceGovernance() {
   const resetDemo = () => {
     if (!isAdmin) {
       createGovernanceEvent("ACTION_BLOCKED", {
-        eventLabel: "Reset local/demo governance blocked",
+        eventLabel: "Reset pilot governance blocked",
         sourceWorkflow: "Device Governance",
         actionAllowed: false,
         blockedReason: "Admin only",
@@ -100,7 +100,7 @@ export default function DeviceGovernance() {
       return;
     }
     resetScanOpsGovernanceDemoState();
-    createScanOpsEvent(SCANOPS_EVENT_TYPES.GOVERNANCE_DEMO_RESET, { source_module: "Device Governance", status: "demo_reset" });
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.GOVERNANCE_DEMO_RESET, { source_module: "Device Governance", status: "pilot_reset" });
     refresh();
   };
 
@@ -118,7 +118,7 @@ export default function DeviceGovernance() {
       <PageHeader title="Device & Shift Governance" subtitle="Local device, user, role, and shift context" />
       <WorkflowMain>
         <SectionCard className="space-y-3">
-          <PanelHeader icon={UserRoundCheck} title="Current Session" helper="Local/demo-safe identity used by governed ScanOps workflows." />
+          <PanelHeader icon={UserRoundCheck} title="Current Session" helper="Pilot-safe identity used by governed ScanOps workflows." />
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-2xl bg-secondary/60 p-3">
               <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">User</p>
@@ -166,7 +166,7 @@ export default function DeviceGovernance() {
             <div className="rounded-2xl bg-secondary/60 p-3"><MonitorSmartphone className="h-4 w-4 text-primary" /><p className="mt-2 text-xs font-bold text-muted-foreground">Device ID</p><p className="break-words text-sm font-black text-foreground">{context.deviceId}</p></div>
             <div className="rounded-2xl bg-secondary/60 p-3"><Wifi className="h-4 w-4 text-primary" /><p className="mt-2 text-xs font-bold text-muted-foreground">Network</p><p className="text-sm font-black text-foreground">{context.networkStatus}</p></div>
             <div className="rounded-2xl bg-secondary/60 p-3"><Database className="h-4 w-4 text-primary" /><p className="mt-2 text-xs font-bold text-muted-foreground">Sync</p><p className="text-sm font-black text-foreground">Sync deferred</p></div>
-            <div className="rounded-2xl bg-secondary/60 p-3"><BatteryMedium className="h-4 w-4 text-primary" /><p className="mt-2 text-xs font-bold text-muted-foreground">Battery</p><p className="text-sm font-black text-foreground">Demo placeholder</p></div>
+            <div className="rounded-2xl bg-secondary/60 p-3"><BatteryMedium className="h-4 w-4 text-primary" /><p className="mt-2 text-xs font-bold text-muted-foreground">Battery</p><p className="text-sm font-black text-foreground">Pilot placeholder</p></div>
           </div>
           <p className="rounded-2xl bg-secondary/50 px-3 py-2 text-xs font-bold leading-snug text-muted-foreground">Printer pairing remains deferred to the shelf-ticket / markdown handoff contract flow. Stage AF only records governance context.</p>
         </SectionCard>
@@ -198,7 +198,7 @@ export default function DeviceGovernance() {
           ) : (
             <p className="rounded-2xl bg-secondary/50 px-3 py-3 text-sm font-bold text-muted-foreground">No governance events recorded yet.</p>
           )}
-          {isAdmin ? <MiniButton onClick={resetDemo} variant="danger"><RotateCcw className="mr-1 inline h-3.5 w-3.5" /> Reset Demo Governance</MiniButton> : <p className="rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-black text-muted-foreground">Admin only</p>}
+          {isAdmin ? <MiniButton onClick={resetDemo} variant="danger"><RotateCcw className="mr-1 inline h-3.5 w-3.5" /> Reset Pilot Governance</MiniButton> : <p className="rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-black text-muted-foreground">Admin only</p>}
         </SectionCard>
       </WorkflowMain>
     </PageShell>

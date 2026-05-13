@@ -408,7 +408,7 @@ export default function Tasks() {
             <div className="rounded-2xl border border-border bg-card p-5 text-center">
               <Clock3 className="mx-auto h-8 w-8 text-muted-foreground" />
               <p className="mt-3 font-black text-foreground">No tasks here</p>
-              <p className="mt-1 text-sm font-semibold text-muted-foreground">Try another task section.</p>
+              <p className="mt-1 text-sm font-semibold text-muted-foreground">Tasks will appear here after a workflow creates real local evidence.</p>
             </div>
           ) : (
             visibleTasks.map((task) => <TaskCard key={task.taskId} task={task} onOpen={() => setSelectedTaskId(task.taskId)} />)
@@ -423,11 +423,11 @@ export default function Tasks() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="font-black text-foreground">UAT helper</p>
-                <p className="mt-1 break-words text-sm font-semibold text-muted-foreground">Manager/Admin only. Resets local task fixtures; existing workflow evidence remains untouched.</p>
+                <p className="mt-1 break-words text-sm font-semibold text-muted-foreground">Manager/Admin only. Clears the local task queue; workflow-created evidence remains untouched.</p>
               </div>
             </div>
             <button type="button" onClick={resetForTesting} className={BUTTON_SECONDARY}>
-              <RotateCcw className="h-4 w-4" />Reset Tasks
+              <RotateCcw className="h-4 w-4" />Clear Task Queue
             </button>
           </SectionCard>
         )}

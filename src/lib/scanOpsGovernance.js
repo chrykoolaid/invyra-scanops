@@ -70,7 +70,7 @@ const ACTION_POLICIES = {
   [GOVERNED_ACTIONS.SHIFT_START]: { requiredRole: "Staff", shiftRequired: false, label: "Start shift" },
   [GOVERNED_ACTIONS.SHIFT_END]: { requiredRole: "Staff", shiftRequired: false, label: "End shift" },
   [GOVERNED_ACTIONS.DEVICE_CONTEXT_VIEW]: { requiredRole: "Staff", shiftRequired: false, label: "View device context" },
-  [GOVERNED_ACTIONS.DEMO_ROLE_SWITCH]: { requiredRole: "Admin", shiftRequired: false, label: "Switch local/demo preview role" },
+  [GOVERNED_ACTIONS.DEMO_ROLE_SWITCH]: { requiredRole: "Admin", shiftRequired: false, label: "Switch local pilot preview role" },
   [GOVERNED_ACTIONS.COLLAB_TASK_CLAIM]: { requiredRole: "Staff", shiftRequired: true, label: "Claim shared task" },
   [GOVERNED_ACTIONS.COLLAB_TASK_RELEASE_OWN]: { requiredRole: "Staff", shiftRequired: true, label: "Release own shared task" },
   [GOVERNED_ACTIONS.COLLAB_TASK_RELEASE_OTHER]: { requiredRole: "Manager", shiftRequired: true, label: "Release another device task" },
@@ -126,7 +126,7 @@ export function getDefaultGovernanceContext(session = getScanOpsSession()) {
     deviceStatus: GOVERNANCE_STATES.DEVICE_REGISTERED_LOCAL,
 
     storeId: session.storeId || "store_001",
-    storeName: session.storeName || "Invyra Demo Store",
+    storeName: session.storeName || "Pilot Test Store",
     locationId: session.locationId || session.departmentId || "grocery",
     locationName: session.locationName || session.departmentName || "Grocery",
 
@@ -134,11 +134,11 @@ export function getDefaultGovernanceContext(session = getScanOpsSession()) {
     currentUserName: session.actorName || "Staff 1 Preview",
     currentUserRole: session.actorRole || "Staff",
 
-    sessionId: session.sessionId || "session_scanops_demo_001",
+    sessionId: session.sessionId || "session_scanops_pilot_001",
     sessionStatus: session.sessionStatus || GOVERNANCE_STATES.USER_SESSION_ACTIVE,
     sessionStartedAt: session.sessionStartedAt || now,
 
-    shiftId: session.shiftId || "shift_demo_morning_001",
+    shiftId: session.shiftId || "shift_pilot_morning_001",
     shiftLabel: session.shiftLabel || "Morning Shift",
     shiftStatus: session.shiftStatus || GOVERNANCE_STATES.SHIFT_ACTIVE,
     shiftStartedAt: session.shiftStartedAt || now,
@@ -149,7 +149,7 @@ export function getDefaultGovernanceContext(session = getScanOpsSession()) {
     networkStatus: session.networkStatus || getNetworkMode?.() || "LOCAL",
     syncStatus: session.syncStatus || GOVERNANCE_STATES.SYNC_DEFERRED,
     printerStatus: "Deferred to AC/AD handoff",
-    batteryStatus: "Demo placeholder",
+    batteryStatus: "Pilot placeholder",
 
     createdAt: now,
     updatedAt: now,
@@ -288,7 +288,7 @@ export function resetScanOpsGovernanceDemoState() {
     shiftEndedBy: null,
     syncStatus: next.syncStatus,
   });
-  createGovernanceEvent("GOVERNANCE_DEMO_RESET", { eventLabel: "Local/demo governance reset", sourceWorkflow: "Device Governance" });
+  createGovernanceEvent("GOVERNANCE_DEMO_RESET", { eventLabel: "Local pilot governance reset", sourceWorkflow: "Device Governance" });
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(CONTEXT_EVENT, { detail: next }));
   }

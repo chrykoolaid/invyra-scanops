@@ -162,7 +162,7 @@ export default function Markdowns() {
 
   useEffect(() => {
     refreshRequests(null);
-    // Stage AD queue is local/demo-safe and explicit.
+    // Stage AD queue is pilot-safe and explicit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

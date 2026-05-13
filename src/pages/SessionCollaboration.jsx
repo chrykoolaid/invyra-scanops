@@ -148,7 +148,7 @@ function SelectedTaskPanel({ task, context, onAction }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="break-words text-base font-black text-foreground">{task.taskLabel}</p>
-            <p className="mt-1 break-words text-xs font-bold text-muted-foreground">{task.sourceWorkflow} · {task.sourceRecordId || "local/demo record"}</p>
+            <p className="mt-1 break-words text-xs font-bold text-muted-foreground">{task.sourceWorkflow} · {task.sourceRecordId || "local pilot record"}</p>
           </div>
           <StatusBadge status={isConflict ? COLLABORATION_STATES.TASK_CONFLICT_REVIEW_REQUIRED : task.ownershipStatus} label={isConflict ? "Review" : task.ownershipStatus === COLLABORATION_STATES.TASK_AVAILABLE ? "Available" : "Claimed"} />
         </div>
@@ -255,9 +255,9 @@ export default function SessionCollaboration() {
 
   const resetDemo = () => {
     resetScanOpsCollaborationDemoState();
-    createScanOpsEvent(SCANOPS_EVENT_TYPES.COLLAB_SESSION_VIEWED, { source_module: "Session Collaboration", status: "demo_reset", sync_status: "SYNC_DEFERRED" });
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.COLLAB_SESSION_VIEWED, { source_module: "Session Collaboration", status: "pilot_reset", sync_status: "SYNC_DEFERRED" });
     setSelectedTaskId("task_markdown_batch_004");
-    setMessage("Local/demo collaboration state reset.");
+    setMessage("Local pilot collaboration state cleared.");
   };
 
   return (
@@ -291,7 +291,7 @@ export default function SessionCollaboration() {
 
         <SectionCard className="space-y-3">
           <div className="flex items-start justify-between gap-3">
-            <PanelHeader icon={MonitorSmartphone} title="Active Devices" helper="Demo devices are labelled as local preview participants." />
+            <PanelHeader icon={MonitorSmartphone} title="Active Devices" helper="Only the current pilot device appears until real collaboration is connected." />
             <StatusBadge status={COLLABORATION_STATES.COLLAB_SESSION_ACTIVE} label="Local" />
           </div>
           <div className="space-y-2">
@@ -312,7 +312,7 @@ export default function SessionCollaboration() {
         <SelectedTaskPanel task={selectedTask} context={context} onAction={handleAction} />
 
         <SectionCard className="space-y-3">
-          <PanelHeader icon={AlertTriangle} title="Conflict Rules" helper="Conflicts remain local/demo-safe and never silently overwrite inventory, price, or accounting records." />
+          <PanelHeader icon={AlertTriangle} title="Conflict Rules" helper="Conflicts remain pilot-safe and never silently overwrite inventory, price, or accounting records." />
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-2xl bg-secondary/60 p-3">
               <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">Low Risk</p>

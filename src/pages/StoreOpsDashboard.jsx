@@ -331,7 +331,7 @@ function SelectedExceptionPanel({ event, onRefresh }) {
           </div>
         </div>
         <div className="mt-3 space-y-2">
-          <InfoLine label="Source" value={`${event.sourceWorkflowLabel} · ${event.sourceRecordId || "local/demo record"}`} />
+          <InfoLine label="Source" value={`${event.sourceWorkflowLabel} · ${event.sourceRecordId || "local pilot record"}`} />
           <InfoLine label="Risk" value={event.riskLevel} />
           <InfoLine label="Sync" value={titleCase(event.syncStatus)} />
           <InfoLine label="Desktop" value={titleCase(event.desktopResponseStatus)} />

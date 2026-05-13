@@ -366,7 +366,7 @@ function defaultServerSnapshot(entry = {}) {
   const qty = payload.current_count ?? payload.counted_quantity ?? payload.quantity ?? payload.requested_qty ?? payload.item_count ?? null;
   return {
     source_ref: entry.sourceRef || entry.sourceRequestId || "source record",
-    current_evidence: qty != null ? qty : "Current source value not fetched in demo adapter",
+    current_evidence: qty != null ? qty : "Current source value not fetched from desktop inventory",
     updated_by: payload.server_updated_by || payload.updated_by || "Inventory source",
     updated_at: payload.server_updated_at || payload.updated_at || nowIso(),
     snapshot_note: "Server/source snapshot placeholder; official source truth is not overwritten by ScanOps.",

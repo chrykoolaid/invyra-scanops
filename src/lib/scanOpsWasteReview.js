@@ -141,7 +141,7 @@ function identitySnapshot() {
     storeId: identity.storeId || identity.location_id || null,
     departmentId: identity.departmentId || null,
     sessionId: identity.sessionId || null,
-    shiftId: governance.shiftId || getScanOpsSession()?.shiftId || "shift_demo_001",
+    shiftId: governance.shiftId || getScanOpsSession()?.shiftId || "shift_pilot_001",
     shiftLabel: governance.shiftLabel || null,
     shiftStatus: governance.shiftStatus || null,
     deviceLabel: governance.deviceLabel || null,

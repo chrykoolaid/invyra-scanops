@@ -8,11 +8,11 @@ export const SELL_TYPES = {
 };
 
 export const INVENTORY_SNAPSHOT_META = {
-  snapshotId: "inventory_snapshot_stage_g_demo",
+  snapshotId: "inventory_snapshot_pilot_test_catalogue_v1",
   sourceSystem: "Invyra Inventory",
   pulledAt: "2026-05-05T20:41:00+08:00",
   locationId: "store_001",
-  locationName: "Demo Supermarket Store 001",
+  locationName: "Pilot Test Store 001",
 };
 
 export const INVENTORY_SNAPSHOT_ITEMS = [
