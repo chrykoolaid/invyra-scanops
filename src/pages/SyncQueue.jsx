@@ -6,6 +6,10 @@ import { getInventoryConnection } from "../lib/inventorySystemAdapter";
 import { useScanOpsSession } from "../lib/scanOpsSession";
 import { hasRoleAtLeast, restrictedActionReason } from "../lib/scanOpsPermissions";
 import {
+  deriveHandoffStateFromSyncStatus,
+  formatHandoffStateLabel,
+} from "../lib/scanOpsInventoryDesktopHandoffContract";
+import {
   discardLocalDraft,
   escalateSyncItem,
   getNetworkMode,
@@ -65,7 +69,7 @@ function statusTone(status) {
 }
 
 function statusLabel(record) {
-  return record.statusLabel || String(record.status || "sync_pending").replaceAll("_", " ");
+  return formatHandoffStateLabel(record.handoffState || deriveHandoffStateFromSyncStatus(record.status));
 }
 
 function workflowTitle(record) {
@@ -150,7 +154,7 @@ export default function SyncQueue() {
     if (!record?.id || retryingIds.has(record.id) || !isSyncRetryAllowed(record)) return;
     setRetryingIds((current) => new Set([...current, record.id]));
     createScanOpsEvent(SCANOPS_EVENT_TYPES.SYNC_RETRY_REQUESTED, {
-      source_module: "Sync Queue",
+      source_module: "Inventory Handoff",
       status: "requested",
       sync_record_id: record.id,
       source_request_id: record.sourceRequestId,
@@ -158,9 +162,9 @@ export default function SyncQueue() {
     });
     const result = retrySyncEvent(record.id);
     if (result && FAILED_STATUSES.has(result.status)) {
-      setSyncMessage({ title: "Sync failed", helper: "Try again when the connection is stable. Your local work is still saved." });
+      setSyncMessage({ title: "Handoff failed", helper: "Try again when the connection is stable. Your local work is still saved." });
     } else {
-      setSyncMessage({ title: "Retry checked", helper: "If the item cannot sync yet, it will stay in the queue for review." });
+      setSyncMessage({ title: "Retry checked", helper: "If the item cannot be handed off yet, it will stay saved locally for review." });
     }
     setSelected(result || record);
     setRetryingIds((current) => {
@@ -174,14 +178,14 @@ export default function SyncQueue() {
   const handleRetryAll = () => {
     if (retryingAll || retryableCount === 0) return;
     setRetryingAll(true);
-    createScanOpsEvent(SCANOPS_EVENT_TYPES.INVENTORY_PUSH_STARTED, { source_module: "Sync Queue", status: "retry_started", sync_exempt: true });
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.INVENTORY_PUSH_STARTED, { source_module: "Inventory Handoff", status: "retry_started", sync_exempt: true });
     setSyncMessage(null);
     const results = retryAllSyncEvents();
     createScanOpsEvent(SCANOPS_EVENT_TYPES.INVENTORY_PUSH_SUCCEEDED, {
-      source_module: "Sync Queue",
+      source_module: "Inventory Handoff",
       status: "retry_attempted",
       attempted_count: results.length,
-      synced_count: results.filter((item) => item?.status === SYNC_STATUSES.SYNCED).length,
+      ready_count: results.filter((item) => item?.status === SYNC_STATUSES.SYNCED).length,
       sync_exempt: true,
     });
     setRetryingAll(false);
@@ -192,7 +196,7 @@ export default function SyncQueue() {
   const handleResolve = (action, record, reason) => {
     if (!canResolveSyncAction(action, record, session)) {
       createScanOpsEvent(SCANOPS_EVENT_TYPES.PERMISSION_ATTEMPT_BLOCKED, {
-        source_module: "Sync Queue",
+        source_module: "Inventory Handoff",
         status: "blocked",
         sync_record_id: record.id,
         attempted_action: action,
@@ -208,7 +212,7 @@ export default function SyncQueue() {
     if (action === "discard") result = discardLocalDraft(record.id, reason);
     if (action === "keep_duplicate") result = keepDuplicateAsSeparateEvidence(record.id, reason || "Kept duplicate as separate evidence.");
     createScanOpsEvent(SCANOPS_EVENT_TYPES.SYNC_STATUS_VIEWED, {
-      source_module: "Sync Queue",
+      source_module: "Inventory Handoff",
       status: action,
       sync_record_id: record.id,
       resolution_reason: reason,
@@ -238,7 +242,7 @@ export default function SyncQueue() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
-      <PageHeader title="Sync Queue" subtitle="Pending sync and review items" />
+      <PageHeader title="Inventory Handoff" subtitle="Local records for future desktop review" />
       <main className="flex-1 px-4 py-5 pb-8 space-y-4 overflow-y-auto overflow-x-hidden" data-scanops-scroll>
         {syncMessage && (
           <section className="rounded-2xl border border-border bg-card px-4 py-3 min-w-0">
@@ -253,20 +257,20 @@ export default function SyncQueue() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Current Status</p>
-              <h2 className="text-lg font-black text-foreground mt-1 break-words">{summary.pending} pending sync · {reviewCount + summary.failed} needs review · {summary.synced} synced</h2>
-              <p className="text-sm text-muted-foreground mt-1 break-words">Saved locally. Retry existing items only; this screen never creates products, posts stock, approves counts, or prints tickets.</p>
+              <h2 className="text-lg font-black text-foreground mt-1 break-words">{summary.pending} pending handoff · {reviewCount + summary.failed} review/blocked · {summary.synced} ready</h2>
+              <p className="text-sm text-muted-foreground mt-1 break-words">Saved locally for future Inventory Desktop handoff. Retry only checks readiness; this screen never creates products, posts stock, approves counts, sends audit uploads, or prints tickets.</p>
             </div>
           </div>
           <button onClick={handleRetryAll} disabled={retryableCount === 0 || retryingAll} className={`${BUTTON_SECONDARY} mt-4`}>
             <RefreshCw className="w-4 h-4" />{retryingAll ? "Retrying..." : "Retry failed / pending"}
           </button>
-          <p className="text-xs text-muted-foreground mt-3">Connection: {connection.statusLabel || "Online"} · Scope: {session?.actorRole === "Staff" ? "own device/user" : session?.actorRole === "Admin" ? "all sync records" : "store/team sync records"}</p>
+          <p className="text-xs text-muted-foreground mt-3">Desktop transport: {offline ? "Offline" : "Not connected / local pilot"} · Scope: {session?.actorRole === "Staff" ? "own device/user" : session?.actorRole === "Admin" ? "all handoff records" : "store/team handoff records"}</p>
         </section>
 
         <section className="grid grid-cols-3 gap-2 min-w-0">
-          <TabButton id="pending" label="Pending sync" count={summary.pending} active={activeTab === "pending"} onClick={setActiveTab} />
-          <TabButton id="review" label="Needs Review" count={reviewCount + summary.failed} active={activeTab === "review"} onClick={setActiveTab} />
-          <TabButton id="synced" label="Synced" count={summary.synced} active={activeTab === "synced"} onClick={setActiveTab} />
+          <TabButton id="pending" label="Pending handoff" count={summary.pending} active={activeTab === "pending"} onClick={setActiveTab} />
+          <TabButton id="review" label="Review / blocked" count={reviewCount + summary.failed} active={activeTab === "review"} onClick={setActiveTab} />
+          <TabButton id="synced" label="Ready" count={summary.synced} active={activeTab === "synced"} onClick={setActiveTab} />
           {session?.actorRole !== "Staff" && <TabButton id="discarded" label="Discarded" count={summary.discarded} active={activeTab === "discarded"} onClick={setActiveTab} />}
         </section>
 
@@ -274,8 +278,8 @@ export default function SyncQueue() {
           {filtered.length === 0 ? (
             <div className="bg-card rounded-2xl border border-border p-6 text-center min-w-0">
               <CheckCircle2 className="w-10 h-10 text-muted-foreground mx-auto" />
-              <p className="text-sm font-bold text-foreground mt-3">{activeTab === "pending" ? "No pending sync items" : activeTab === "review" ? "No failed or review items" : activeTab === "synced" ? "No synced items yet" : "No discarded items"}</p>
-              <p className="text-xs text-muted-foreground mt-1">{activeTab === "pending" ? "New offline work will appear here." : "Scanner work stays saved locally until it syncs or is reviewed."}</p>
+              <p className="text-sm font-bold text-foreground mt-3">{activeTab === "pending" ? "No pending handoff items" : activeTab === "review" ? "No blocked or review items" : activeTab === "synced" ? "No ready handoff items yet" : "No discarded items"}</p>
+              <p className="text-xs text-muted-foreground mt-1">{activeTab === "pending" ? "New offline work will appear here." : "Scanner work stays saved locally until it is ready for future desktop handoff or reviewed."}</p>
             </div>
           ) : (
             filtered.map((record) => <SyncCard key={record.id} record={record} onView={() => setSelected(record)} onRetry={() => handleRetry(record)} retrying={retryingIds.has(record.id)} />)
@@ -298,7 +302,7 @@ function TabButton({ id, label, count, active, onClick }) {
 function SyncCard({ record, onView, onRetry, retrying = false }) {
   const rows = itemRowsFor(record);
   const itemName = rows.length ? itemNameFromSnapshot(rows[0]) : itemNameFromSnapshot(record.localSnapshot || record.payloadSnapshot || {});
-  const actionLabel = record.status === SYNC_STATUSES.CONFLICT ? "Open Conflict" : record.status === SYNC_STATUSES.DUPLICATE ? "Open Review" : record.status === SYNC_STATUSES.SYNC_FAILED ? "View Failed" : "View";
+  const actionLabel = record.status === SYNC_STATUSES.CONFLICT ? "Open Conflict" : record.status === SYNC_STATUSES.DUPLICATE ? "Open Review" : record.status === SYNC_STATUSES.SYNC_FAILED ? "View Failed Handoff" : "View";
   return (
     <article className="bg-card rounded-2xl border border-border p-4 min-w-0 space-y-3">
       <div className="flex items-start justify-between gap-3 min-w-0">
@@ -316,8 +320,8 @@ function SyncCard({ record, onView, onRetry, retrying = false }) {
         <SmallFact label="User / device" value={`${record.createdBy || "Operator"} · ${record.deviceId || "device"}`} />
         <SmallFact label="Source" value={record.sourceRef || record.sourceRequestId || workflowTitle(record)} />
       </div>
-      {record.failureReason && <p className="rounded-xl bg-destructive/10 text-destructive text-xs font-semibold p-3 break-words">Sync failed. Try again when the connection is stable.</p>}
-      {record.matchingEvidence && <p className="rounded-xl bg-violet-500/10 text-violet-700 text-xs font-semibold p-3 break-words">Matching evidence: {record.matchingEvidence.submitted_by || "Operator"} · {record.matchingEvidence.source || "Sync Queue"} · {record.matchingEvidence.status || "open"}</p>}
+      {record.failureReason && <p className="rounded-xl bg-destructive/10 text-destructive text-xs font-semibold p-3 break-words">Handoff failed. Try again when the connection is stable; no desktop commit was created.</p>}
+      {record.matchingEvidence && <p className="rounded-xl bg-violet-500/10 text-violet-700 text-xs font-semibold p-3 break-words">Matching evidence: {record.matchingEvidence.submitted_by || "Operator"} · {record.matchingEvidence.source || "Inventory Handoff"} · {record.matchingEvidence.status || "open"}</p>}
       <div className="grid grid-cols-2 gap-2">
         <button onClick={onView} className={MINI_BUTTON}><Eye className="w-3.5 h-3.5" />{actionLabel}</button>
         <button onClick={onRetry} disabled={retrying || !isSyncRetryAllowed(record)} className={MINI_BUTTON}><RotateCcw className="w-3.5 h-3.5" />{retrying ? "Retrying..." : "Retry"}</button>
@@ -348,7 +352,7 @@ function SyncDetail({ record, session, onBack, onRetry, onResolve, retrying = fa
     ["Device", record.deviceId || "—"],
     ["Last attempt", formatTime(record.lastAttemptAt)],
     ["Attempts", String(record.attemptCount || record.retryCount || 0)],
-    ["Synced at", formatTime(record.syncedAt)],
+    ["Desktop receipt", record.syncedAt ? "Legacy marker only" : "Not received in pilot"],
   ];
 
   const handleAction = (action) => {
@@ -375,7 +379,7 @@ function SyncDetail({ record, session, onBack, onRetry, onResolve, retrying = fa
               <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${statusTone(record.status)}`}>{statusLabel(record)}</span>
               <h2 className="text-lg font-black text-foreground mt-3 break-words">{record.title || workflowTitle(record)}</h2>
               <p className="text-sm text-muted-foreground mt-1 break-words">{record.summary || record.payloadSummary}</p>
-              {record.failureReason && <p className="mt-3 rounded-xl bg-destructive/10 text-destructive text-xs font-semibold p-3 break-words">Sync failed. Your work is still saved locally. Try again when the connection is stable.</p>}
+              {record.failureReason && <p className="mt-3 rounded-xl bg-destructive/10 text-destructive text-xs font-semibold p-3 break-words">Handoff failed. Your work is still saved locally; no desktop record was committed.</p>}
             </div>
           </div>
         </section>
@@ -421,14 +425,14 @@ function SyncDetail({ record, session, onBack, onRetry, onResolve, retrying = fa
               <button onClick={() => handleAction("escalate")} disabled={!reason.trim()} className={BUTTON_PRIMARY}><AlertTriangle className="w-4 h-4" />Escalate</button>
               <button onClick={() => handleAction("discard")} disabled={!allowDiscard || !reason.trim()} className={BUTTON_DANGER}><Trash2 className="w-4 h-4" />Discard Local Draft</button>
             </div>
-            <p className="text-[11px] text-muted-foreground">These actions preserve audit evidence only. They do not mutate live stock, approve counts, close exceptions, create products, create aliases, or print shelf tickets.</p>
+            <p className="text-[11px] text-muted-foreground">These actions preserve local evidence only. They do not mutate live stock, approve counts, close exceptions, create products, create aliases, send audit uploads, or print shelf tickets.</p>
           </section>
         )}
 
         <section className="bg-card rounded-2xl border border-border p-5 min-w-0">
-          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Sync history</p>
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Handoff history</p>
           <div className="space-y-3 mt-3">
-            {(record.syncHistory || []).length === 0 ? <p className="text-sm text-muted-foreground">No sync history yet.</p> : (record.syncHistory || []).map((entry, index) => (
+            {(record.syncHistory || []).length === 0 ? <p className="text-sm text-muted-foreground">No handoff history yet.</p> : (record.syncHistory || []).map((entry, index) => (
               <div key={`${entry.at}-${index}`} className="rounded-2xl bg-secondary/60 px-3 py-3 min-w-0">
                 <p className="text-xs font-bold text-foreground break-words">{entry.label || entry.status}</p>
                 <p className="text-xs text-muted-foreground mt-1 break-words">{entry.message}</p>
@@ -441,7 +445,7 @@ function SyncDetail({ record, session, onBack, onRetry, onResolve, retrying = fa
 
         <div className="space-y-3">
           <button onClick={onRetry} disabled={retrying || !isSyncRetryAllowed(record)} className={BUTTON_PRIMARY}><RotateCcw className="w-4 h-4" />{retrying ? "Retrying..." : "Retry"}</button>
-          <button onClick={onBack} className={BUTTON_SECONDARY}>Back to Sync Queue</button>
+          <button onClick={onBack} className={BUTTON_SECONDARY}>Back to Handoff Queue</button>
         </div>
       </main>
     </div>
@@ -451,10 +455,10 @@ function SyncDetail({ record, session, onBack, onRetry, onResolve, retrying = fa
 function detailTitle(record) {
   if (record.status === SYNC_STATUSES.CONFLICT) return "Needs review";
   if (record.status === SYNC_STATUSES.DUPLICATE) return "Needs review";
-  if (FAILED_STATUSES.has(record.status)) return "Sync failed";
+  if (FAILED_STATUSES.has(record.status)) return "Handoff failed";
   if (record.status === SYNC_STATUSES.DISCARDED) return "Discarded local record";
-  if (record.status === SYNC_STATUSES.ESCALATED) return "Escalated Sync Review";
-  return "Sync item";
+  if (record.status === SYNC_STATUSES.ESCALATED) return "Escalated Handoff Review";
+  return "Handoff item";
 }
 
 function DetailIcon({ status }) {

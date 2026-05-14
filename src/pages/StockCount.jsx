@@ -510,7 +510,7 @@ export default function StockCount() {
       applies_stock_directly: false,
       status: isVariance ? "variance_review_required" : "line_saved",
     });
-    setLastSyncMessage(`${item.name || "Count entry"} · ${lineEvent?.syncRecord?.statusLabel || "Pending sync"}`);
+    setLastSyncMessage(`${item.name || "Count entry"} · ${lineEvent?.syncRecord?.statusLabel || "Pending future handoff"}`);
     refreshLines(activeSession.id || activeSession.count_session_id);
     refreshSessions();
     resetItem();
@@ -545,7 +545,7 @@ export default function StockCount() {
       status: "submitted_for_review",
       submission_type: "count_evidence_only",
     });
-    setLastSyncMessage(`Session submitted · ${submitEvent?.syncRecord?.statusLabel || "Pending sync"}`);
+    setLastSyncMessage(`Session submitted · ${submitEvent?.syncRecord?.statusLabel || "Pending future handoff"}`);
     refreshSessions();
     setView("review");
   };

@@ -193,7 +193,7 @@ export default function Replenish() {
     const result = saveReplenishmentAction({ item, actionId, quantity, issueReason: issueLabel, notes, evidenceNote });
     if (!result) return;
     setRecords(result.tasks);
-    setSavedResult({ ...result.task, syncStatusLabel: result.event?.syncRecord?.statusLabel || "Pending sync" });
+    setSavedResult({ ...result.task, syncStatusLabel: result.event?.syncRecord?.statusLabel || "Pending future handoff" });
     setItem(null);
     setScanValue("");
     setNotes("");
@@ -222,11 +222,11 @@ export default function Replenish() {
         {savedResult && (
           <DoneCard
             title={`${savedResult.outcomeLabel} saved`}
-            helper="Saved locally. Pending sync; no live stock was changed by handheld."
+            helper="Saved locally. Pending future desktop handoff; no live stock was changed by handheld."
             rows={[
               { label: "Item", value: savedResult.itemName },
               { label: "Status", value: savedResult.status },
-              { label: "Sync", value: savedResult.syncStatusLabel || "Pending sync" },
+              { label: "Handoff", value: savedResult.syncStatusLabel || "Pending future handoff" },
               { label: "Qty evidence", value: `${savedResult.quantityMoved} ${savedResult.unit}` },
             ]}
           />

@@ -234,7 +234,7 @@ function SettingsPanel({ session, onMessage }) {
 function TicketsPanel() {
   const tickets = getSyncQueue().filter((e) => String(e.eventType || "").startsWith("SHELF_TICKET_"));
   const count = (status) => tickets.filter((e) => e.status === status).length;
-  return <Section title="Shelf Ticket Queue Status" helper="Scanner-created ticket batches pending desktop preview/print handoff."><div className="grid grid-cols-4 gap-2"><SmallStat label="Total" value={tickets.length} /><SmallStat label="Pending sync" value={count(SYNC_STATUSES.QUEUED) + count(SYNC_STATUSES.SYNC_PENDING)} /><SmallStat label="Synced" value={count(SYNC_STATUSES.SYNCED)} /><SmallStat label="Issue" value={count(SYNC_STATUSES.SYNC_FAILED) + count(SYNC_STATUSES.CONFLICT) + count(SYNC_STATUSES.NEEDS_REVIEW)} /></div>{tickets.length === 0 ? <p className="mt-3 rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground text-center">No shelf ticket batches pending.</p> : <div className="mt-3 space-y-2">{tickets.slice(0, 8).map((entry) => <article key={entry.id} className="rounded-xl border border-border bg-card p-3"><p className="text-sm font-bold truncate">{entry.payloadSummary}</p><p className="text-xs text-muted-foreground truncate">{entry.statusLabel} · {entry.id}</p></article>)}</div>}</Section>;
+  return <Section title="Shelf Ticket Queue Status" helper="Scanner-created ticket batches pending desktop preview/print handoff."><div className="grid grid-cols-4 gap-2"><SmallStat label="Total" value={tickets.length} /><SmallStat label="Pending handoff" value={count(SYNC_STATUSES.QUEUED) + count(SYNC_STATUSES.SYNC_PENDING)} /><SmallStat label="Ready" value={count(SYNC_STATUSES.SYNCED)} /><SmallStat label="Issue" value={count(SYNC_STATUSES.SYNC_FAILED) + count(SYNC_STATUSES.CONFLICT) + count(SYNC_STATUSES.NEEDS_REVIEW)} /></div>{tickets.length === 0 ? <p className="mt-3 rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground text-center">No shelf ticket batches pending.</p> : <div className="mt-3 space-y-2">{tickets.slice(0, 8).map((entry) => <article key={entry.id} className="rounded-xl border border-border bg-card p-3"><p className="text-sm font-bold truncate">{entry.payloadSummary}</p><p className="text-xs text-muted-foreground truncate">{entry.statusLabel} · {entry.id}</p></article>)}</div>}</Section>;
 }
 
 export default function OperationalMenuPanel({ onClose }) {
@@ -281,7 +281,7 @@ export default function OperationalMenuPanel({ onClose }) {
       const before = getSyncSummary();
       const attempts = retryAllSyncEvents().filter(Boolean).length;
       const event = createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.SYNC_NOW_REQUESTED, { status: "sync_requested", queued_before: before.queued, pending_before: before.pending, failed_before: before.failed, conflict_before: before.conflict, needs_review_before: before.needsReview, retry_attempts: attempts });
-      setLastAction(`Sync Now recorded · ${event.traceId || event.trace_id}`);
+      setLastAction(`Handoff check recorded · ${event.traceId || event.trace_id}`);
       setPanel("audit");
       return;
     }
@@ -318,7 +318,7 @@ export default function OperationalMenuPanel({ onClose }) {
           </div>
           <button type="button" onClick={onClose} className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center active:bg-border" aria-label="Close menu"><X className="w-5 h-5" /></button>
         </header>
-        <div className="px-4 py-3 border-b border-border bg-background/70 shrink-0"><div className="grid grid-cols-4 gap-2"><SmallStat label="Pending" value={summary.pending} /><SmallStat label="Review" value={summary.needsReview} /><SmallStat label="Blocked" value={summary.failed + summary.conflict} /><SmallStat label="Synced" value={summary.synced} /></div></div>
+        <div className="px-4 py-3 border-b border-border bg-background/70 shrink-0"><div className="grid grid-cols-4 gap-2"><SmallStat label="Pending" value={summary.pending} /><SmallStat label="Review" value={summary.needsReview} /><SmallStat label="Blocked" value={summary.failed + summary.conflict} /><SmallStat label="Ready" value={summary.synced} /></div></div>
         <main className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4">
           {panel !== "menu" && <button type="button" onClick={() => setPanel("menu")} className="text-sm font-semibold text-primary active:opacity-70">← Back to menu</button>}
           {panel === "menu" ? (

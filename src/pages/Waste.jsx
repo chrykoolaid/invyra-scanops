@@ -365,7 +365,7 @@ export default function Waste() {
               <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Queue</p>
               <h2 className="mt-1 text-xl font-black text-foreground">{reviews.length} review{reviews.length === 1 ? "" : "s"}</h2>
             </div>
-            <StatusPill status="Synced">Synced</StatusPill>
+            <StatusPill status="Local review">Local review</StatusPill>
           </div>
           <div className="grid grid-cols-3 gap-2">
             {WASTE_REVIEW_FILTERS.map((option) => (

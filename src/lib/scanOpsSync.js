@@ -28,18 +28,18 @@ export const SYNC_STATUSES = {
 };
 
 export const SYNC_STATUS_LABELS = {
-  [SYNC_STATUSES.QUEUED]: "Pending sync",
-  [SYNC_STATUSES.SYNC_PENDING]: "Pending sync",
-  [SYNC_STATUSES.SYNCING]: "Syncing",
-  [SYNC_STATUSES.SYNCED]: "Synced",
-  [SYNC_STATUSES.SYNC_FAILED]: "Sync failed",
+  [SYNC_STATUSES.QUEUED]: "Pending future handoff",
+  [SYNC_STATUSES.SYNC_PENDING]: "Pending future handoff",
+  [SYNC_STATUSES.SYNCING]: "Checking handoff",
+  [SYNC_STATUSES.SYNCED]: "Ready for handoff",
+  [SYNC_STATUSES.SYNC_FAILED]: "Handoff failed",
   [SYNC_STATUSES.NEEDS_REVIEW]: "Needs review",
   [SYNC_STATUSES.CONFLICT]: "Conflict",
   [SYNC_STATUSES.DUPLICATE]: "Needs review",
   [SYNC_STATUSES.DISCARDED]: "Discarded",
   [SYNC_STATUSES.ESCALATED]: "Needs review",
   [SYNC_STATUSES.LOCAL_SAVED]: "Saved locally",
-  [SYNC_STATUSES.FAILED]: "Sync failed",
+  [SYNC_STATUSES.FAILED]: "Handoff failed",
 };
 
 export const SYNC_FAILURE_REASONS = {
@@ -60,7 +60,7 @@ const TECHNICAL_RETRY_REASONS = new Set([
   SYNC_FAILURE_REASONS.SERVER_UNAVAILABLE,
   "Inventory system unavailable while scanner is offline.",
   "Network unavailable. Event remains saved on device.",
-  "Sync failed.",
+  "Handoff failed.",
 ]);
 
 const NON_SYNC_PREFIXES = [
@@ -224,7 +224,7 @@ function normalizeStatus(status) {
 
 function labelFor(status) {
   const normalized = normalizeStatus(status);
-  return SYNC_STATUS_LABELS[normalized] || SYNC_STATUS_LABELS[status] || "Pending sync";
+  return SYNC_STATUS_LABELS[normalized] || SYNC_STATUS_LABELS[status] || "Pending future handoff";
 }
 
 function hist(status, message, extra = {}) {
@@ -542,7 +542,7 @@ function buildQueueItem(event, initialStatus, extra = {}) {
     failureReason: extra.failureReason || (status === SYNC_STATUSES.NEEDS_REVIEW ? "Review required before Inventory applies the record." : null),
     payloadSnapshot: event,
     payload: event,
-    syncHistory: [hist(status, status === SYNC_STATUSES.NEEDS_REVIEW ? "Saved locally. Needs review before sync." : "Saved locally. Pending sync.")],
+    syncHistory: [hist(status, status === SYNC_STATUSES.NEEDS_REVIEW ? "Saved locally. Needs review before future desktop handoff." : "Saved locally. Pending future desktop handoff.")],
     ...extra,
   });
   recordSnapshotRows(record);
@@ -652,10 +652,10 @@ export function getSyncHeaderState() {
   const mode = getNetworkMode();
   const summary = getSyncSummary();
   if (mode === "offline") return { state: "offline", label: "Offline", summary };
-  if (summary.failed > 0) return { state: "issue", label: "Sync failed", summary };
+  if (summary.failed > 0) return { state: "issue", label: "Handoff failed", summary };
   if (summary.conflict + summary.duplicate + summary.needsReview + summary.escalated > 0) return { state: "issue", label: "Needs review", summary };
-  if (summary.pending > 0) return { state: "pending", label: "Pending sync", summary };
-  return { state: "synced", label: "Online", summary };
+  if (summary.pending > 0) return { state: "pending", label: "Pending handoff", summary };
+  return { state: "synced", label: "Ready", summary };
 }
 
 export function recordEventForInventorySync(event) {
@@ -670,7 +670,7 @@ export function recordEventForInventorySync(event) {
     const refreshed = updateRecord(duplicateMatch.id, (entry) => ({
       ...entry,
       lastUpdatedAt: nowIso(),
-      syncHistory: [hist(entry.status, "Repeat tap ignored. Existing pending sync item kept."), ...(entry.syncHistory || [])],
+      syncHistory: [hist(entry.status, "Repeat tap ignored. Existing pending handoff item kept."), ...(entry.syncHistory || [])],
     }));
     return refreshed || duplicateMatch;
   }
@@ -685,14 +685,14 @@ export function recordEventForInventorySync(event) {
   return record;
 }
 
-export function queueSyncEvent(syncId, reason = "Pending sync with Invyra Inventory.") {
+export function queueSyncEvent(syncId, reason = "Pending future handoff with Invyra Inventory.") {
   return updateRecord(syncId, (entry) => ({
     ...entry,
     status: SYNC_STATUSES.QUEUED,
     statusLabel: labelFor(SYNC_STATUSES.QUEUED),
     failureReason: null,
     lastUpdatedAt: nowIso(),
-    syncHistory: [hist(SYNC_STATUSES.QUEUED, reason || "Pending sync."), ...(entry.syncHistory || [])],
+    syncHistory: [hist(SYNC_STATUSES.QUEUED, reason || "Pending future handoff."), ...(entry.syncHistory || [])],
   }));
 }
 
@@ -737,7 +737,7 @@ export function attemptSync(syncId) {
   const result = pushInventoryEvent(syncing);
   if (result.ok) {
     recordAttempt(syncing, "synced", { started_at: startedAt, response_snapshot: result });
-    return markSyncSucceeded(syncing.id, result.inventoryEventId, result.message || "Synced to Invyra Inventory.");
+    return markSyncSucceeded(syncing.id, result.inventoryEventId, result.message || "Inventory Desktop receipt confirmed.");
   }
   const reason = result.error || SYNC_FAILURE_REASONS.NETWORK_UNAVAILABLE;
   recordAttempt(syncing, "failed", { started_at: startedAt, failure_reason: reason, response_snapshot: result });
@@ -761,7 +761,7 @@ export function isSyncRetryAllowed(record) {
   return canRetryReason(normalizeQueueItem(record || {}));
 }
 
-export function markSyncSucceeded(syncId, inventoryEventId, message = "Synced to Invyra Inventory.") {
+export function markSyncSucceeded(syncId, inventoryEventId, message = "Inventory Desktop receipt confirmed.") {
   return updateRecord(syncId, (entry) => ({
     ...entry,
     inventoryEventId,
@@ -774,7 +774,7 @@ export function markSyncSucceeded(syncId, inventoryEventId, message = "Synced to
   }));
 }
 
-export function markSyncFailed(syncId, reason = "Sync failed.") {
+export function markSyncFailed(syncId, reason = "Handoff failed.") {
   return updateRecord(syncId, (entry) => ({
     ...entry,
     status: SYNC_STATUSES.SYNC_FAILED,

@@ -25,10 +25,10 @@ export default function WorkflowHeader({
   const syncLabel = !online
     ? `Offline${pendingCount ? ` · ${pendingCount} pending` : ""}`
     : issueCount
-      ? `Sync failed · ${issueCount}`
+      ? `Handoff failed · ${issueCount}`
       : pendingCount
-        ? `Pending sync · ${pendingCount}`
-        : "Online";
+        ? `Pending handoff · ${pendingCount}`
+        : "Ready";
   const [manualFocused, setManualFocused] = useState(false);
   const [matches, setMatches] = useState([]);
   const [lookupState, setLookupState] = useState("idle");
