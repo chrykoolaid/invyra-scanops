@@ -1,123 +1,165 @@
-# Invyra ScanOps Pilot Run 0 — Real Device Validation + Evidence Pack v1
+# Invyra ScanOps — Pilot Run 0 Real Device Validation Evidence
 
-Baseline used: `Invyra_ScanOps_StageAT_1_PilotDataHygiene_v1.zip`
+## Baseline
 
-## Purpose
+- Baseline package: `Invyra_ScanOps_StageAT_1_PilotDataHygiene_v1.zip`
+- Output package: `Invyra_ScanOps_PilotRun0_RealDeviceValidationEvidence_v1.zip`
+- Date prepared: 2026-05-14
+- Device / viewport: Pending real handheld validation
+- Browser: Pending real handheld validation
+- Tester: Pending real handheld validation
+- Local build environment: container validation only, not a physical handheld
+- Build command result: `npm run build` passed
+- Lint command result: `npm run lint` passed
 
-Pilot Run 0 is an evidence pass, not a feature stage. The goal is to prove the locked ScanOps app can be opened, used, escaped back to Home, and understood on a real handheld/mobile viewport before any pilot-store release.
+## Pilot Run 0 Rule
 
-## Hard scope lock
+Pilot Run 0 is an evidence and validation pass only.
 
-- No new workflow tiles.
-- No new filters.
-- No dashboard or command-center work.
-- No setup wizard.
-- No backend/API rebuild.
-- No route-host rewrite.
-- No AppEscapeHeader/navigation reopening.
-- No dependency upgrade.
-- No fake operational seed restoration.
+No new workflows, filters, dashboards, setup wizard, backend rebuild, route-host rewrite, navigation rewrite, dependency upgrades, or fake operational seed restoration.
 
-## Baseline confirmations carried forward
+## Scope Lock Carried Forward
 
-- AS.8.1 navigation remains locked: each workflow route should use one app-owned top Home escape and no duplicate route-level Back + Home controls.
-- Stage AT release lock remains active: pilot-facing copy should avoid implementation/debug wording.
-- Stage AT.1 data hygiene remains active: stock item test catalogue is allowed, but fake operational work/history must not auto-populate queues.
+- Stage AT release lock remains active.
+- Stage AT.1 pilot data hygiene remains active.
+- AS.8 / AS.8.1 navigation remains locked.
+- Stock catalogue items may remain available for scan/search testing.
+- Fake operational history, fake queue work, fake backend acceptance, fake remote users, and fake completion states must not appear as live truth.
 
-## Pilot workflow classification — first-pass recommendation
+## Code Preflight Result
 
-| Route | Workflow | Pilot status | Reason |
-|---|---|---|---|
-| `/scan` | Product Lookup | Pilot Active | Core handheld scanning and item lookup. |
-| `/gap-scan` | Gap Scan | Pilot Active | Key shelf-gap execution workflow. |
-| `/stock-count` | Stock Count | Pilot Active | Core inventory validation workflow. |
-| `/replenish` | Replenish | Pilot Active | Strong floor/backroom value with simple operator flow. |
-| `/expiry-check` | Expiry Check | Pilot Active | Strong fresh-food pilot value. |
-| `/inventory-sync` | Inventory Sync | Pilot Active / Supervisor | Needed for pilot confidence and sync visibility. |
-| `/tasks` | Tasks | Pilot Active if empty-state remains simple | Useful queue, but should not show fake tasks. |
-| `/receiving` | Receiving | Observe Only | Valuable, but should be watched for delivery/evidence complexity. |
-| `/transfers` | Transfers | Observe Only | Needs location/approval proof before broad pilot use. |
-| `/markdowns` | Markdowns | Observe Only | Sensitive workflow; needs governance validation. |
-| `/waste` | Waste | Observe Only | Sensitive shrink/waste workflow; requires controlled pilot. |
-| `/shelf-tickets` | Shelf Tickets | Observe Only | Printing handoff must be watched carefully. |
+| Check | Result | Notes |
+|---|---|---|
+| Home-launched route list exists | Passed | Home launcher includes the 12 Pilot Run 0 operational workflow tiles. |
+| App-owned Home escape shell exists | Passed | Non-home routes receive the shared `AppEscapeHeader` from the route host. |
+| Legacy route Home buttons guarded | Passed | Legacy `PageHeader` / `WorkflowHeader` home chrome is hidden while the app escape header is active. |
+| Scope stayed evidence-only | Passed | No app workflow files were changed during this pass. |
+| Package validation commands | Passed | `npm ci --no-audit --no-fund`, `npm run lint`, and `npm run build` completed successfully. |
 
-## Route validation checklist
+## Route Validation Table
 
-Use this table during real device testing. Do not mark Pass until verified on the actual handheld viewport or a matching mobile viewport.
+Use this table on the real handheld or a matching mobile viewport. Do not mark real-device Pass until the route has been physically checked.
 
-| Route | Opens from Home | Home escape visible | Returns to Home | No duplicate Back/Home | No horizontal scroll | Main action reachable | Honest empty state/no fake work | Refresh stable | Result |
-|---|---|---|---|---|---|---|---|---|---|
-| `/scan` | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
-| `/gap-scan` | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
-| `/stock-count` | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
-| `/receiving` | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
-| `/transfers` | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
-| `/replenish` | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
-| `/tasks` | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
-| `/markdowns` | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
-| `/waste` | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
-| `/expiry-check` | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
-| `/shelf-tickets` | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
-| `/inventory-sync` | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending | Pending |
+| Route | Opens | Home Escape | No Duplicate Escape | No Horizontal Scroll | Refresh Stable | Main Action Reachable | Result | Notes |
+|---|---|---|---|---|---|---|---|---|
+| `/` | ☐ | N/A | ☐ | ☐ | ☐ | ☐ | Pending | Home launcher route. Confirm 12 workflow tiles are visible/reachable. |
+| `/scan` | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | Pending | Product Lookup / core scanner flow. |
+| `/gap-scan` | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | Pending | Shelf-gap capture flow. |
+| `/stock-count` | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | Pending | Count / variance workflow. |
+| `/receiving` | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | Pending | Observe-only receiving evidence flow. |
+| `/transfers` | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | Pending | Observe-only transfer flow. |
+| `/replenish` | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | Pending | Backroom-to-shelf execution flow. |
+| `/tasks` | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | Pending | Confirm clean empty state if no created tasks exist. |
+| `/markdowns` | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | Pending | Observe-only markdown governance flow. |
+| `/waste` | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | Pending | Observe-only waste/shrink evidence flow. |
+| `/expiry-check` | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | Pending | Freshness / expiry capture flow. |
+| `/shelf-tickets` | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | Pending | Observe-only shelf-ticket handoff flow. |
+| `/inventory-sync` | ☐ | ☐ | ☐ | ☐ | ☐ | ☐ | Pending | Sync visibility / supervisor confidence flow. |
 
-## Data hygiene verification checklist
+## Data Hygiene Validation
 
-- Product Lookup can still scan/search the controlled pilot stock catalogue.
-- Stock Count can still use pilot stock catalogue items.
-- Tasks opens with no fake operational task queue.
-- Receiving does not show fake receiving exceptions as if they were real work.
-- Transfers does not show fake transfer issues as if they were real work.
-- Markdowns does not show fake approval work as if it were real work.
-- Waste does not show fake review items as if they were real work.
-- Collaboration does not show fake remote users or fake remote device history by default.
-- Inventory Sync does not report fake desktop acceptance or fake successful sync.
-- Any test fixture language remains clearly pilot/test/training language, not live operational truth.
+| Check | Result | Notes |
+|---|---|---|
+| Stock catalogue available for testing | Pending | Allowed. Needed for scan/search and count validation. |
+| Product lookup/search works with stock test items | Pending | Test using known pilot stock items only. |
+| Tasks starts empty | Pending | No fake operational tasks should appear. |
+| Receiving has no fake exceptions | Pending | No fake receiving exceptions should appear as live work. |
+| Transfers has no fake issues | Pending | No fake transfer issues should appear as live work. |
+| Waste has no fake reviews | Pending | No fake waste review queue should appear. |
+| Markdowns has no fake approvals | Pending | No fake markdown approval queue should appear. |
+| Shelf Tickets has no fake print queue | Pending | Print tasks should appear only if created through workflow. |
+| Collaboration has no fake remote users | Pending | No fake remote users/devices should appear by default. |
+| Sync does not fake backend success | Pending | Sync must not imply successful desktop/backend acceptance unless real. |
 
-## Evidence to capture during Pilot Run 0
+## Workflow Pilot Classification
 
-For each tested route, capture one screenshot showing:
+| Workflow | Classification | Reason |
+|---|---|---|
+| Product Lookup | Pilot Active | Core scanner flow. |
+| Stock Count | Pilot Active | Core inventory flow. |
+| Gap Scan | Pilot Active | Core Invyra gap workflow. |
+| Replenish | Pilot Active | Store-floor execution value. |
+| Expiry Check | Pilot Active | Strong pilot value and clear operator action. |
+| Tasks | Pilot Active / Pending | Active only if empty-state clarity passes on device. |
+| Inventory Sync | Supervisor / Pilot Active | Needed for confidence, but must avoid fake success language. |
+| Receiving | Observe Only | Delivery/evidence flow is sensitive. |
+| Transfers | Observe Only | Location and permission-sensitive. |
+| Markdowns | Observe Only | Pricing-sensitive. |
+| Waste | Observe Only | Shrink/waste-sensitive. |
+| Shelf Tickets | Observe Only | Printing handoff risk. |
 
-1. Route loaded on handheld/mobile viewport.
-2. Top Home escape visible.
-3. Main operator action visible or reachable by normal vertical scroll.
-4. Empty state or task state, proving no fake operational records are present.
-5. After tapping Home, launcher is reachable again.
+## Evidence Capture Checklist
 
-## Blocker definition
+For each route, capture at least one screenshot proving:
 
-Only the following issues should trigger a code fix during Pilot Run 0:
+- Route loaded on the handheld/mobile viewport.
+- Home escape is visible on workflow routes.
+- Home escape returns to `/`.
+- No duplicate Back + Home route escape controls are visible.
+- No horizontal scrolling is present.
+- Main operator action is visible or reachable by normal vertical scroll.
+- Footer or primary action is not clipped.
+- Empty state is honest and does not show fake operational work.
+- Route remains stable after refresh.
+- Operator can understand the screen within 3 seconds.
 
-- Missing Home escape on a workflow route.
-- Duplicate route-level Back/Home escape controls.
+## Blocker-Only Fix Rule
+
+Only fix these during Pilot Run 0:
+
+- Missing Home escape.
+- Duplicate Back/Home route escape controls.
 - Route crash or blank route.
 - Horizontal scrolling.
-- Clipped primary action or footer action.
-- Fake operational records still visible by default.
-- Confusing empty state that makes an operator think work already exists.
-- Impossible operator flow where the user cannot complete or exit the task.
+- Clipped primary action.
+- Clipped footer action.
+- Fake operational data still visible.
+- Broken empty state.
+- Operator cannot identify the main action.
+- Refresh breaks the route.
 
-All other findings should go to the post-pilot backlog.
+Everything else goes into the post-pilot backlog.
 
-## Known non-blocking notes
+## Release Blockers Found
 
-- Stock item catalogue remains intentionally available for pilot/test scan validation.
-- Some advanced/admin routes still exist in the codebase, but Pilot Run 0 focuses on Home-launched operational workflows only.
-- Receiving, transfers, markdowns, waste, and shelf tickets should be observed carefully before being considered fully active pilot workflows.
+| Blocker | Route | Severity | Fix Required |
+|---|---|---|---|
+| None found during local code/build preflight | N/A | N/A | Real-device validation still pending. |
 
-## Local validation result
+## Non-Blocking Backlog
 
-- `npm ci --no-audit --no-fund`: passed.
-- `npm run lint`: passed.
-- `npm run build`: passed.
-- Build note: Base44 proxy message appeared because `VITE_BASE44_APP_BASE_URL` was not set in the local container environment; build exit code was `0`.
+| Item | Route | Reason Deferred |
+|---|---|---|
+| Real handheld screenshot evidence still required | All Pilot Run 0 routes | This pass prepared the evidence pack and local build validation; physical device testing must still be recorded. |
 
-## Pilot Run 0 acceptance gate
+## Local Command Evidence
 
-Pilot Run 0 is accepted only when:
+```text
+npm ci --no-audit --no-fund
+Result: passed
 
-- All 12 Home-launched workflow routes pass the route checklist.
-- No fake operational seed work appears by default.
-- Operators can always return to Home.
-- No horizontal scrolling is observed.
-- Only blocker-level issues are fixed.
-- No new feature scope is introduced.
+npm run lint
+Result: passed
+
+npm run build
+Result: passed
+Note: Base44 proxy message appeared because VITE_BASE44_APP_BASE_URL was not set in the local container environment; build exit code was 0.
+```
+
+## Pilot Run 0 Decision
+
+- ☐ Pass — proceed to Pilot Run 1
+- ☐ Conditional pass — blocker fix pack required
+- ☐ Fail — route/device stability must be fixed first
+
+Recommended current status:
+
+```text
+Conditional pending real-device evidence.
+```
+
+Reason:
+
+```text
+The source package passes local lint/build and the evidence file is ready, but real handheld route screenshots and data hygiene observations have not yet been marked in the evidence table.
+```
