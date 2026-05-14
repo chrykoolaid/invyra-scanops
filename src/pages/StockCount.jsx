@@ -641,7 +641,7 @@ export default function StockCount() {
   const approveSession = () => {
     if (!activeSession || !canApprove) return;
     setCountSessionStatus(activeSession.id || activeSession.count_session_id, STOCK_COUNT_STATUSES.APPROVED, {
-      approval_status: "Approved",
+      approval_status: "Evidence Accepted",
       approved_by: actorSession.actorUserId,
       approved_by_name: actorSession.actorName,
     });
@@ -651,7 +651,7 @@ export default function StockCount() {
       counted_items: summary.countedItems,
       variance_items: summary.varianceItems,
       applies_stock_directly: false,
-      status: "approved_evidence_only",
+      status: "evidence_accepted_only",
     });
     refreshSessions();
   };
@@ -663,7 +663,7 @@ export default function StockCount() {
       source_module: "Stock Count",
       count_session_id: activeSession.id || activeSession.count_session_id,
       applies_stock_directly: false,
-      status: "closed_read_only",
+      status: "evidence_locked_only",
     });
     refreshSessions();
     setView("review");
@@ -728,7 +728,7 @@ export default function StockCount() {
           <p className="text-sm font-black text-foreground">{selectedType.title}</p>
           <InfoLine label="Creates" value="Controlled count session" />
           <InfoLine label="Stock mutation" value="No direct adjustment" />
-          <InfoLine label="Review path" value="Submit → variance review → approval" />
+          <InfoLine label="Review path" value="Submit → variance review → evidence acceptance" />
         </SectionCard>
         <StickyActions leftLabel="Back" rightLabel="Start Session" onLeft={() => setView("landing")} onRight={startNewSession} rightDisabled={!String(sessionName || "").trim()} />
       </>
@@ -814,13 +814,13 @@ export default function StockCount() {
         )) : <EmptyState title="No evidence in this session." />}
       </div>
       {activeSession?.status === STOCK_COUNT_STATUSES.APPROVED ? (
-        <StickyActions leftLabel="Back" rightLabel="Close Session" onLeft={goLanding} onRight={closeSession} rightDisabled={!canClose} />
+        <StickyActions leftLabel="Back" rightLabel="Lock Evidence" onLeft={goLanding} onRight={closeSession} rightDisabled={!canClose} />
       ) : [STOCK_COUNT_STATUSES.CLOSED, STOCK_COUNT_STATUSES.CANCELLED].includes(activeSession?.status) ? (
         <StickyActions leftLabel="Back" rightLabel="New Session" onLeft={goLanding} onRight={() => setView("new")} />
       ) : (
         <StickyActions
           leftLabel="Back"
-          rightLabel={canApprove ? "Approve Session" : "Review Only"}
+          rightLabel={canApprove ? "Accept Evidence" : "Review Only"}
           onLeft={goLanding}
           onRight={approveSession}
           rightDisabled={!canApprove || activeSession?.status === STOCK_COUNT_STATUSES.RECOUNT_REQUIRED || !lines.length}
@@ -832,8 +832,8 @@ export default function StockCount() {
   const renderClosed = () => (
     <>
       <DoneCard
-        title="Session closed"
-        helper="Count evidence locked. No stock adjusted here."
+        title="Evidence locked"
+        helper="Count evidence is locked locally. No stock adjusted here."
         rows={[
           { label: "Items counted", value: summary.countedItems },
           { label: "Variance lines", value: summary.varianceItems },

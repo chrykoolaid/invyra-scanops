@@ -25,8 +25,8 @@ export const STOCK_COUNT_STATUSES = {
   SUBMITTED: "Submitted",
   REVIEW_REQUIRED: "Review Required",
   RECOUNT_REQUIRED: "Recount Required",
-  APPROVED: "Approved",
-  CLOSED: "Closed",
+  APPROVED: "Evidence Accepted",
+  CLOSED: "Evidence Locked",
   CANCELLED: "Cancelled",
   // Legacy statuses kept for older imports / stored data safety.
   REVIEW: "Review",

@@ -17,7 +17,7 @@ export const REPLENISHMENT_OUTCOMES = {
 
 export const REPLENISHMENT_STATUS = {
   OPEN: "Open",
-  COMPLETED: "Completed",
+  COMPLETED: "Pending Sync",
   EXCEPTION: "Exception",
   REVIEW_REQUIRED: "Review Required",
 };
@@ -33,9 +33,9 @@ export const REPLENISHMENT_ACTIONS = [
   },
   {
     id: REPLENISHMENT_OUTCOMES.SHELF_FILLED,
-    label: "Shelf Filled",
-    shortLabel: "Filled",
-    helper: "Record that stock was moved from backroom to shelf.",
+    label: "Shelf Fill Evidence",
+    shortLabel: "Evidence",
+    helper: "Record local shelf-fill evidence; stock numbers wait for backend sync.",
     status: REPLENISHMENT_STATUS.COMPLETED,
     eventType: SCANOPS_EVENT_TYPES.REPLENISHMENT_SHELF_FILLED,
   },
@@ -43,7 +43,7 @@ export const REPLENISHMENT_ACTIONS = [
     id: REPLENISHMENT_OUTCOMES.SHORT_FILL,
     label: "Short Fill",
     shortLabel: "Short",
-    helper: "Some stock moved, but the shelf could not be fully filled.",
+    helper: "Record local short-fill evidence; stock numbers wait for backend sync.",
     status: REPLENISHMENT_STATUS.EXCEPTION,
     eventType: SCANOPS_EVENT_TYPES.REPLENISHMENT_SHORT_FILL,
   },

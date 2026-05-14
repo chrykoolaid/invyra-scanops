@@ -34,7 +34,7 @@ const FILTERS = [
 
 function statusClass(status) {
   if (status === SHELF_TICKET_STATUSES.READY_FOR_PRINT_HANDOFF) return "bg-primary/10 text-primary";
-  if (status === SHELF_TICKET_STATUSES.PRINTED_COMPLETED) return "bg-emerald-50 text-emerald-700";
+  if (status === SHELF_TICKET_STATUSES.PRINTED_COMPLETED) return "bg-secondary text-muted-foreground";
   if (status === SHELF_TICKET_STATUSES.CANCELLED) return "bg-secondary text-muted-foreground";
   return "bg-secondary text-secondary-foreground";
 }
@@ -231,7 +231,7 @@ export default function ShelfTickets() {
   };
 
   const readyDisabled = !selectedRequest?.ticketContractId && !selectedContract && !savedContract;
-  const completedDisabled = selectedRequest?.status !== SHELF_TICKET_STATUSES.READY_FOR_PRINT_HANDOFF;
+  const closeHandoffDisabled = selectedRequest?.status !== SHELF_TICKET_STATUSES.READY_FOR_PRINT_HANDOFF;
 
   return (
     <PageShell>
@@ -342,14 +342,14 @@ export default function ShelfTickets() {
                 <button type="button" disabled={readyDisabled} onClick={() => updateStatus(SHELF_TICKET_STATUSES.READY_FOR_PRINT_HANDOFF)} className="min-h-12 rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border disabled:opacity-40">
                   Ready for Handoff
                 </button>
-                <button type="button" disabled={completedDisabled} onClick={() => updateStatus(SHELF_TICKET_STATUSES.PRINTED_COMPLETED)} className="min-h-12 rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border disabled:opacity-40">
-                  Mark Completed
+                <button type="button" disabled={closeHandoffDisabled} onClick={() => updateStatus(SHELF_TICKET_STATUSES.PRINTED_COMPLETED)} className="min-h-12 rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border disabled:opacity-40">
+                  Close Handoff
                 </button>
                 <button type="button" onClick={() => updateStatus(SHELF_TICKET_STATUSES.CANCELLED)} className="min-h-12 rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border">
                   Cancel Ticket
                 </button>
               </div>
-              <p className="text-xs font-semibold leading-snug text-muted-foreground">Completed is manual only. No printer result is claimed.</p>
+              <p className="text-xs font-semibold leading-snug text-muted-foreground">Closing the handoff is manual only. No printer result is claimed.</p>
             </SectionCard>
           </>
         ) : (

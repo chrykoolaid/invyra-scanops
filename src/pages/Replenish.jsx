@@ -37,7 +37,7 @@ function pillTone(value) {
   const normalized = String(value || "").toLowerCase();
   if (["empty", "no stock", "exception", "review required"].includes(normalized)) return "bg-destructive/10 text-destructive border-destructive/20";
   if (["low", "partial"].includes(normalized)) return "bg-amber-100 text-amber-800 border-amber-200";
-  if (["available", "ok", "completed"].includes(normalized)) return "bg-primary/10 text-primary border-primary/20";
+  if (["available", "ok", "pending sync"].includes(normalized)) return "bg-primary/10 text-primary border-primary/20";
   return "bg-secondary text-muted-foreground border-border";
 }
 
@@ -115,7 +115,7 @@ function ShelfNeedCard({ item, quantity, setQuantity }) {
         <InfoLine label="Planogram" value={need.planogramStatus} />
       </div>
 
-      <QuantityStepper label="Qty moved / requested" value={quantity} onChange={setQuantity} unit={need.unit} min={0} />
+      <QuantityStepper label="Qty evidenced / requested" value={quantity} onChange={setQuantity} unit={need.unit} min={0} />
     </SectionCard>
   );
 }
@@ -210,7 +210,7 @@ export default function Replenish() {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm font-black text-foreground">Replenishment action</p>
-              <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Scan item, confirm quantity, save outcome.</p>
+              <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Scan item, confirm quantity, save local evidence.</p>
             </div>
             <div className="shrink-0 rounded-2xl bg-secondary px-3 py-2 text-center">
               <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Open</p>
@@ -222,12 +222,12 @@ export default function Replenish() {
         {savedResult && (
           <DoneCard
             title={`${savedResult.outcomeLabel} saved`}
-            helper="Saved locally. Pending sync."
+            helper="Saved locally. Pending sync; no live stock was changed by handheld."
             rows={[
               { label: "Item", value: savedResult.itemName },
               { label: "Status", value: savedResult.status },
               { label: "Sync", value: savedResult.syncStatusLabel || "Pending sync" },
-              { label: "Qty", value: `${savedResult.quantityMoved} ${savedResult.unit}` },
+              { label: "Qty evidence", value: `${savedResult.quantityMoved} ${savedResult.unit}` },
             ]}
           />
         )}
@@ -278,7 +278,7 @@ export default function Replenish() {
             </SectionCard>
           </>
         ) : (
-          <EmptyState title="No replenishment item selected." helper="Scan an item, confirm quantity and outcome, then save. Nothing is posted until saved." />
+          <EmptyState title="No replenishment item selected." helper="Scan an item, confirm quantity and outcome, then save. No live stock changes are made here." />
         )}
 
         <RecentReplenishmentList records={records} />

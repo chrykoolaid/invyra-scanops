@@ -13,7 +13,7 @@ export const SHELF_TICKET_STATUSES = {
   DRAFT: "Draft",
   NEEDS_REVIEW: "Needs Review",
   READY_FOR_PRINT_HANDOFF: "Ready for Print Handoff",
-  PRINTED_COMPLETED: "Printed / Completed",
+  PRINTED_COMPLETED: "Handoff Closed (Manual)",
   CANCELLED: "Cancelled",
 };
 
@@ -508,7 +508,7 @@ export function updateShelfTicketRequestStatus(requestId, status) {
     shelf_ticket_contract_id: updatedRequest.ticketContractId,
     source_event_id: updatedRequest.sourceEventId,
     status,
-    print_claimed: status === SHELF_TICKET_STATUSES.PRINTED_COMPLETED,
+    print_claimed: false,
     printer_integration: false,
     applies_price_directly: false,
     applies_stock_directly: false,
