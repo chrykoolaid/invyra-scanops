@@ -218,20 +218,10 @@ function SettingsPanel({ session, onMessage }) {
   };
   const DEPARTMENTS = [
     { id: "grocery", name: "Grocery" },
-    { id: "fresh", name: "Fresh Foods" },
-    { id: "bakery", name: "Bakery" },
-    { id: "deli", name: "Deli & Charcuterie" },
-    { id: "dairy", name: "Dairy & Eggs" },
-    { id: "frozen", name: "Frozen Foods" },
-    { id: "meat", name: "Meat & Poultry" },
-    { id: "seafood", name: "Seafood" },
+    { id: "dairy", name: "Dairy" },
+    { id: "deli", name: "Deli" },
     { id: "produce", name: "Produce" },
-    { id: "beverages", name: "Beverages" },
-    { id: "health_beauty", name: "Health & Beauty" },
-    { id: "household", name: "Household" },
-    { id: "baby", name: "Baby" },
-    { id: "pet", name: "Pet Care" },
-    { id: "general_merch", name: "General Merchandise" },
+    { id: "meat", name: "Meat" },
   ];
   const changeContext = (departmentId) => {
     if (!canChangeContext(session)) return block("change_store_department_context", "Manager required");
