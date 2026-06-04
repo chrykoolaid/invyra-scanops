@@ -1,5 +1,7 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Bell, BellOff, ClipboardList, MapPin, PackageCheck, PackageX, ShieldAlert, Warehouse } from "lucide-react";
+import { base44 } from "@/api/base44Client";
+import { getScanOpsSession } from "../lib/scanOpsSession";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import PageHeader from "../components/scanner/PageHeader";
 import { BatchList, DoneCard, EmptyState, FieldError, InfoLine, ItemSummaryCard, MetricPill, OperatorAlert, PageShell, QuantityStepper, SectionCard, StickyActions, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
@@ -213,6 +215,27 @@ export default function Replenish() {
   const [reorderFlags, setReorderFlags] = useState([]);
   const [showReorderSettings, setShowReorderSettings] = useState(false);
 
+  // Load persisted reorder flags from DB on mount
+  useEffect(() => {
+    base44.entities.ReorderFlag.filter({ status: "open" }, "-created_date", 50)
+      .then((rows) => {
+        if (rows && rows.length > 0) {
+          setReorderFlags(rows.map((r) => ({
+            id: r.id,
+            name: r.itemName,
+            sku: r.sku,
+            barcode: r.barcode,
+            shelf: r.shelfStock,
+            backroom: r.backroomStock,
+            threshold: r.threshold,
+            unit: r.unit,
+            flaggedAt: r.created_date,
+          })));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const selectedAction = getReplenishmentAction(actionId);
   const openCount = getOpenReplenishmentTasks().length;
 
@@ -236,6 +259,22 @@ export default function Replenish() {
         const alreadyFlagged = prev.some((f) => f.sku === found.sku && f.barcode === found.barcode && f.name === found.name);
         if (alreadyFlagged) return prev;
         fireThresholdNotification(found.name, need.shelf, reorderSetting.threshold, need.unit);
+        // Persist to DB
+        const session = getScanOpsSession();
+        base44.entities.ReorderFlag.create({
+          itemId: found.internalItemId || found.id,
+          itemName: found.name,
+          sku: found.sku,
+          barcode: found.barcode,
+          shelfStock: need.shelf,
+          backroomStock: need.backroom,
+          threshold: reorderSetting.threshold,
+          unit: need.unit,
+          flaggedBy: session.actorName,
+          flaggedByRole: session.actorRole,
+          storeId: session.storeId,
+          status: "open",
+        }).catch(() => {});
         return [{ id: `reorder_${Date.now()}`, name: found.name, sku: found.sku, barcode: found.barcode, shelf: need.shelf, backroom: need.backroom, threshold: reorderSetting.threshold, unit: need.unit, flaggedAt: new Date().toISOString() }, ...prev];
       });
     }
@@ -443,7 +482,12 @@ export default function Replenish() {
                 <Bell className="h-4 w-4 text-amber-600" />
                 <p className="text-sm font-black text-foreground">Reorder Flags</p>
               </div>
-              <button type="button" onClick={() => setReorderFlags([])} className="rounded-xl bg-secondary px-2 py-1 text-[10px] font-black text-muted-foreground active:bg-border">Clear all</button>
+              <button type="button" onClick={() => {
+                setReorderFlags([]);
+                base44.entities.ReorderFlag.filter({ status: "open" }).then((rows) => {
+                  rows.forEach((r) => base44.entities.ReorderFlag.update(r.id, { status: "dismissed" }).catch(() => {}));
+                }).catch(() => {});
+              }} className="rounded-xl bg-secondary px-2 py-1 text-[10px] font-black text-muted-foreground active:bg-border">Clear all</button>
             </div>
             <p className="text-xs font-semibold text-muted-foreground">Items flagged below the {reorderSetting.threshold}-unit threshold this session. Evidence only — no order created.</p>
             <div className="space-y-2">
@@ -454,7 +498,13 @@ export default function Replenish() {
                     <p className="mt-0.5 break-all font-mono text-[10px] text-amber-700">{[flag.sku && `SKU ${flag.sku}`, flag.barcode && `Barcode ${flag.barcode}`].filter(Boolean).join(" · ") || "—"}</p>
                     <p className="mt-0.5 text-[11px] font-semibold text-amber-700">Shelf {flag.shelf ?? "—"} · Backroom {flag.backroom ?? "—"} · Below {flag.threshold} {flag.unit}</p>
                   </div>
-                  <button type="button" onClick={() => setReorderFlags((prev) => prev.filter((f) => f.id !== flag.id))} className="shrink-0 rounded-xl bg-amber-100 px-2 py-1 text-[10px] font-black text-amber-800 active:bg-amber-200">Dismiss</button>
+                  <button type="button" onClick={() => {
+                    setReorderFlags((prev) => prev.filter((f) => f.id !== flag.id));
+                    // Dismiss in DB if it's a real DB id (not a temp local id)
+                    if (flag.id && !String(flag.id).startsWith("reorder_")) {
+                      base44.entities.ReorderFlag.update(flag.id, { status: "dismissed" }).catch(() => {});
+                    }
+                  }} className="shrink-0 rounded-xl bg-amber-100 px-2 py-1 text-[10px] font-black text-amber-800 active:bg-amber-200">Dismiss</button>
                 </div>
               ))}
             </div>

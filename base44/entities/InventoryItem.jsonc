@@ -1,0 +1,178 @@
+{
+  "name": "InventoryItem",
+  "type": "object",
+  "properties": {
+    "internalItemId": {
+      "type": "string"
+    },
+    "sku": {
+      "type": "string"
+    },
+    "barcode": {
+      "type": "string"
+    },
+    "barcodes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "barcodeAliases": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "plu": {
+      "type": "string"
+    },
+    "scaleCode": {
+      "type": "string"
+    },
+    "batchId": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string",
+      "title": "Item Name"
+    },
+    "brand": {
+      "type": "string"
+    },
+    "size": {
+      "type": "string"
+    },
+    "department": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "sellType": {
+      "type": "string",
+      "enum": [
+        "PACKAGED",
+        "LOOSE_EACH",
+        "LOOSE_WEIGHT",
+        "RANDOM_WEIGHT",
+        "CASE_PACK",
+        "PREPARED_FOOD"
+      ]
+    },
+    "unitType": {
+      "type": "string",
+      "enum": [
+        "each",
+        "kg",
+        "pack",
+        "case"
+      ],
+      "default": "each"
+    },
+    "currency": {
+      "type": "string",
+      "default": "\u20b1"
+    },
+    "currentPrice": {
+      "type": "number"
+    },
+    "pricePerKg": {
+      "type": "number"
+    },
+    "unitCost": {
+      "type": "number"
+    },
+    "shelfLocation": {
+      "type": "string"
+    },
+    "backroomLocation": {
+      "type": "string"
+    },
+    "aisle": {
+      "type": "string"
+    },
+    "bay": {
+      "type": "string"
+    },
+    "shelf": {
+      "type": "string"
+    },
+    "shelfStock": {
+      "type": "number",
+      "default": 0
+    },
+    "backroomStock": {
+      "type": "number",
+      "default": 0
+    },
+    "stockOnHand": {
+      "type": "number",
+      "default": 0
+    },
+    "minimumStock": {
+      "type": "number",
+      "default": 0
+    },
+    "reorderPoint": {
+      "type": "number",
+      "default": 0
+    },
+    "pendingDeliveryQty": {
+      "type": "number",
+      "default": 0
+    },
+    "pendingDeliveryEta": {
+      "type": "string"
+    },
+    "expiryDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "freshnessStatus": {
+      "type": "string",
+      "default": "OK"
+    },
+    "markdownEligible": {
+      "type": "boolean",
+      "default": false
+    },
+    "wasteReviewRequired": {
+      "type": "boolean",
+      "default": false
+    },
+    "coldChainRequired": {
+      "type": "boolean",
+      "default": false
+    },
+    "isWeighted": {
+      "type": "boolean",
+      "default": false
+    },
+    "requiresScale": {
+      "type": "boolean",
+      "default": false
+    },
+    "planogramStatus": {
+      "type": "string",
+      "default": "OK"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive",
+        "discontinued"
+      ],
+      "default": "active"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

@@ -1,10 +1,13 @@
 import React from "react";
 import { useScanOpsSession } from "../../lib/scanOpsSession";
 import { useScanOpsGovernanceContext } from "../../lib/scanOpsGovernance";
+import { useCurrentUser } from "../../lib/useCurrentUser";
 import HeaderOperationalMenu from "./HeaderOperationalMenu";
 import SyncStatusChip from "./SyncStatusChip";
 
 export default function AppHeader() {
+  // Sync real auth identity into session on mount
+  useCurrentUser();
   const session = useScanOpsSession();
   const governance = useScanOpsGovernanceContext();
   const meta = [session.actorName, session.actorRole, governance.shiftLabel, governance.deviceLabel || session.deviceId].filter(Boolean).join(" · ");

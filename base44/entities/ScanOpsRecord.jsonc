@@ -1,0 +1,89 @@
+{
+  "name": "ScanOpsRecord",
+  "type": "object",
+  "properties": {
+    "recordType": {
+      "type": "string",
+      "enum": [
+        "replenishment",
+        "stock_count",
+        "gap_scan",
+        "markdown",
+        "waste",
+        "expiry_check",
+        "receiving",
+        "transfer",
+        "price_check",
+        "shelf_ticket",
+        "reorder_flag"
+      ]
+    },
+    "status": {
+      "type": "string"
+    },
+    "itemId": {
+      "type": "string"
+    },
+    "itemName": {
+      "type": "string"
+    },
+    "itemSku": {
+      "type": "string"
+    },
+    "itemBarcode": {
+      "type": "string"
+    },
+    "quantity": {
+      "type": "number"
+    },
+    "unit": {
+      "type": "string"
+    },
+    "outcomeLabel": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "evidenceNote": {
+      "type": "string"
+    },
+    "actorUserId": {
+      "type": "string"
+    },
+    "actorName": {
+      "type": "string"
+    },
+    "actorRole": {
+      "type": "string"
+    },
+    "storeId": {
+      "type": "string"
+    },
+    "locationId": {
+      "type": "string"
+    },
+    "shiftId": {
+      "type": "string"
+    },
+    "sessionId": {
+      "type": "string"
+    },
+    "deviceId": {
+      "type": "string"
+    },
+    "syncStatus": {
+      "type": "string",
+      "default": "pending"
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "recordType"
+  ]
+}

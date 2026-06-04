@@ -1,0 +1,55 @@
+{
+  "name": "ReorderFlag",
+  "type": "object",
+  "properties": {
+    "itemId": {
+      "type": "string"
+    },
+    "itemName": {
+      "type": "string"
+    },
+    "sku": {
+      "type": "string"
+    },
+    "barcode": {
+      "type": "string"
+    },
+    "shelfStock": {
+      "type": "number"
+    },
+    "backroomStock": {
+      "type": "number"
+    },
+    "threshold": {
+      "type": "number"
+    },
+    "unit": {
+      "type": "string"
+    },
+    "flaggedBy": {
+      "type": "string"
+    },
+    "flaggedByRole": {
+      "type": "string"
+    },
+    "storeId": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "acknowledged",
+        "ordered",
+        "dismissed"
+      ],
+      "default": "open"
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "itemName"
+  ]
+}
