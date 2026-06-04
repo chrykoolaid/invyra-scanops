@@ -367,6 +367,12 @@ function SelectedExceptionPanel({ event, onRefresh }) {
             value={note}
             onChange={(entry) => setNote(entry.target.value)}
             rows={3}
+            inputMode="text"
+            autoComplete="off"
+            autoCorrect="on"
+            autoCapitalize="sentences"
+            spellCheck={true}
+            onClick={(e) => e.target.focus()}
             className="mt-2 w-full resize-none rounded-2xl border border-input bg-card px-3 py-2 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
           />
         </label>
