@@ -8,6 +8,7 @@ import {
   updateShelfTicketRequestStatus,
 } from "./scanOpsShelfTicketContracts";
 import { getCurrentPriceSnapshot, getCurrencySymbol, getOptionLabel, MARKDOWN_REASON_OPTIONS } from "./scanOpsRequestLifecycle";
+import { writeMarkdownRecord, writeMarkdownApprovalAudit } from "./scanOpsRecordWriter";
 import { normalizeSelectedScanItem } from "./scanOpsWorkflowBatch";
 import { buildGovernanceSnapshot } from "./scanOpsGovernance";
 import { COLLABORATION_STATES, COLLABORATION_VERSION, TASK_TYPES, registerCollaborationTaskForRecord } from "./scanOpsCollaboration";
@@ -395,6 +396,23 @@ export function createMarkdownApprovalRequest({ item, reasonCode, selectedMarkdo
     rawItem: selected,
   });
 
+  // Persist to DB (offline-safe) — links via syncStatus: `md_req:<requestId>`
+  writeMarkdownRecord({
+    item,
+    reasonCode,
+    selectedPercent: selectedMarkdownPercent,
+    quantity,
+    expiryDate,
+    notes,
+    status: "pending_approval",
+    requestId: request.requestId,
+    currentPrice: ruleEvaluation.selectedMarkdownPrice != null ? currentPrice : null,
+    selectedMarkdownPrice: ruleEvaluation.selectedMarkdownPrice,
+    currency: getCurrencySymbol(item),
+    approvalRoleRequired: ruleEvaluation.approvalRoleRequired,
+    riskLevel: ruleEvaluation.riskLevel,
+  });
+
   appendMarkdownEvent(SCANOPS_EVENT_TYPES.MARKDOWN_REQUEST_CREATED, request, {
     status: request.status,
     rule_summary: request.ruleSummary,
@@ -466,7 +484,7 @@ export function updateMarkdownApprovalStatus(requestId, action, reason = "") {
   }
 
   if (action === "approve") {
-    return saveUpdatedRequest({
+    const updated = saveUpdatedRequest({
       ...request,
       status: MARKDOWN_STATUSES.APPROVED,
       approvalDecision: "Approved",
@@ -475,25 +493,70 @@ export function updateMarkdownApprovalStatus(requestId, action, reason = "") {
       approvedByRole: actor.requestedByRole,
       labelHandoffStatus: request.labelRequired ? LABEL_HANDOFF_STATUSES.LABEL_NEEDED : LABEL_HANDOFF_STATUSES.NOT_REQUIRED,
     }, SCANOPS_EVENT_TYPES.MARKDOWN_APPROVED, { action });
+    writeMarkdownApprovalAudit({
+      requestId: request.requestId,
+      action: "approved",
+      actorName: actor.requestedBy,
+      actorRole: actor.requestedByRole,
+      itemName: request.itemName,
+      itemSku: request.sku,
+      itemBarcode: request.barcode,
+      reason: reason || "Approved for label handoff",
+      selectedPercent: request.selectedMarkdownPercent,
+      selectedMarkdownPrice: request.selectedMarkdownPrice,
+      currentPrice: request.currentPrice,
+      currency: request.currency,
+    });
+    return updated;
   }
 
   if (action === "return") {
-    return saveUpdatedRequest({
+    const updated = saveUpdatedRequest({
       ...request,
       status: MARKDOWN_STATUSES.RETURNED,
       approvalDecision: "Returned",
       approvalReason: reason || "Returned for correction",
     }, SCANOPS_EVENT_TYPES.MARKDOWN_RETURNED, { action });
+    writeMarkdownApprovalAudit({
+      requestId: request.requestId,
+      action: "returned",
+      actorName: actor.requestedBy,
+      actorRole: actor.requestedByRole,
+      itemName: request.itemName,
+      itemSku: request.sku,
+      itemBarcode: request.barcode,
+      reason: reason || "Returned for correction",
+      selectedPercent: request.selectedMarkdownPercent,
+      selectedMarkdownPrice: request.selectedMarkdownPrice,
+      currentPrice: request.currentPrice,
+      currency: request.currency,
+    });
+    return updated;
   }
 
   if (action === "reject") {
-    return saveUpdatedRequest({
+    const updated = saveUpdatedRequest({
       ...request,
       status: MARKDOWN_STATUSES.REJECTED,
       approvalDecision: "Rejected",
       approvalReason: reason || "Rejected",
       labelHandoffStatus: LABEL_HANDOFF_STATUSES.NOT_REQUIRED,
     }, SCANOPS_EVENT_TYPES.MARKDOWN_REJECTED, { action });
+    writeMarkdownApprovalAudit({
+      requestId: request.requestId,
+      action: "rejected",
+      actorName: actor.requestedBy,
+      actorRole: actor.requestedByRole,
+      itemName: request.itemName,
+      itemSku: request.sku,
+      itemBarcode: request.barcode,
+      reason: reason || "Rejected",
+      selectedPercent: request.selectedMarkdownPercent,
+      selectedMarkdownPrice: request.selectedMarkdownPrice,
+      currentPrice: request.currentPrice,
+      currency: request.currency,
+    });
+    return updated;
   }
 
   return request;

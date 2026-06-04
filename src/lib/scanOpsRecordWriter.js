@@ -43,7 +43,7 @@ export function writeExpiryCheckRecord({ item, expiryDate, condition, expiryStat
   });
 }
 
-export function writeMarkdownRecord({ item, reasonCode, selectedPercent, quantity, expiryDate, notes, status, requestId }) {
+export function writeMarkdownRecord({ item, reasonCode, selectedPercent, quantity, expiryDate, notes, status, requestId, currentPrice, selectedMarkdownPrice, currency, approvalRoleRequired, riskLevel }) {
   writeScanOpsRecord({
     recordType: "markdown",
     status: status || "pending_approval",
@@ -52,9 +52,49 @@ export function writeMarkdownRecord({ item, reasonCode, selectedPercent, quantit
     itemSku: item?.sku,
     itemBarcode: item?.barcode,
     quantity: Number(quantity) || 1,
+    unit: item?.unitType || "each",
     reason: reasonCode,
     notes,
-    payload: { markdown_percent: selectedPercent, expiry_date: expiryDate, request_id: requestId },
+    syncStatus: requestId ? `md_req:${requestId}` : "pending",
+    payload: {
+      markdown_percent: selectedPercent,
+      expiry_date: expiryDate,
+      request_id: requestId,
+      current_price: currentPrice ?? null,
+      new_price: selectedMarkdownPrice ?? null,
+      currency: currency || "₱",
+      approval_role_required: approvalRoleRequired || null,
+      risk_level: riskLevel || null,
+      original_price: currentPrice ?? null,
+      originalPrice: currentPrice ?? null,
+      markdownPercent: Number(selectedPercent) || 0,
+      newPrice: selectedMarkdownPrice ?? null,
+    },
+  });
+}
+
+export function writeMarkdownApprovalAudit({ requestId, action, actorName, actorRole, itemName, itemSku, itemBarcode, reason, selectedPercent, selectedMarkdownPrice, currentPrice, currency }) {
+  writeScanOpsRecord({
+    recordType: "markdown",
+    status: action,
+    itemName,
+    itemSku,
+    itemBarcode,
+    notes: reason || action,
+    syncStatus: requestId ? `md_req:${requestId}` : "pending",
+    payload: {
+      request_id: requestId,
+      approval_action: action,
+      actor_name: actorName,
+      actor_role: actorRole,
+      markdown_percent: selectedPercent,
+      current_price: currentPrice ?? null,
+      new_price: selectedMarkdownPrice ?? null,
+      currency: currency || "₱",
+      originalPrice: currentPrice ?? null,
+      markdownPercent: Number(selectedPercent) || 0,
+      newPrice: selectedMarkdownPrice ?? null,
+    },
   });
 }
 

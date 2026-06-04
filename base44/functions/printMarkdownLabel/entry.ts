@@ -57,10 +57,21 @@ Deno.serve(async (req) => {
     const { recordId, printerConfigId } = await req.json();
     if (!recordId) return Response.json({ error: "recordId is required" }, { status: 400 });
 
-    // Fetch the markdown record
-    const records = await base44.asServiceRole.entities.ScanOpsRecord.filter({ id: recordId });
-    const record = records?.[0];
-    if (!record) return Response.json({ error: "Record not found" }, { status: 404 });
+    // recordId is the markdown approval requestId (localStorage key: md_req_xxx).
+    // ScanOpsRecord rows are linked via syncStatus = `md_req:<requestId>` OR payload.request_id.
+    // Try syncStatus match first, then fall back to exact id match.
+    let record = null;
+    const bySyncStatus = await base44.asServiceRole.entities.ScanOpsRecord.filter({ syncStatus: `md_req:${recordId}`, recordType: "markdown" });
+    if (bySyncStatus?.length) {
+      // Prefer the creation record (status: pending_approval) over audit records
+      record = bySyncStatus.find((r) => r.status === "pending_approval") || bySyncStatus[0];
+    }
+    if (!record) {
+      // Fall back: direct DB id (in case caller passes the actual entity id)
+      const byId = await base44.asServiceRole.entities.ScanOpsRecord.filter({ id: recordId });
+      record = byId?.[0] || null;
+    }
+    if (!record) return Response.json({ error: "Markdown record not found. The request may still be in the offline queue — try again when online." }, { status: 404 });
 
     // Fetch printer config — use specified or find default
     let printer = null;
