@@ -48,6 +48,7 @@ import {
 } from "../lib/scanOpsStockCount";
 import { useScanOpsSession } from "../lib/scanOpsSession";
 import { TASK_DUE_STATES, TASK_PRIORITIES, TASK_TYPES, upsertDerivedTaskFromSource } from "../lib/scanOpsTasks";
+import { writeStockCountRecord } from "../lib/scanOpsRecordWriter";
 
 function findProduct(input) {
   if (!input) return null;
@@ -511,6 +512,7 @@ export default function StockCount() {
       applies_stock_directly: false,
       status: isVariance ? "variance_review_required" : "line_saved",
     });
+    writeStockCountRecord({ item, counted: Number(counted || 0), expected, unit, sessionId: activeSession.id || activeSession.count_session_id, status: varianceStatus });
     setLastSyncMessage(`${item.name || "Count entry"} · ${lineEvent?.syncRecord?.statusLabel || "Pending future handoff"}`);
     refreshLines(activeSession.id || activeSession.count_session_id);
     refreshSessions();

@@ -16,6 +16,7 @@ import {
   savePricePromoVerificationEvent,
 } from "../lib/scanOpsPricePromoVerification";
 import { getNetworkMode } from "../lib/scanOpsSync";
+import { writePriceCheckRecord } from "../lib/scanOpsRecordWriter";
 
 const RESULT_ICON = {
   [PRICE_PROMO_RESULTS.LABEL_CORRECT]: CheckCircle2,
@@ -185,6 +186,7 @@ export default function PriceCheck() {
     setOperatorError(null);
     const result = savePricePromoVerificationEvent({ item, resultId, reasonId, shelfLabelPrice, promoLabelVisible, notes });
     if (!result) return;
+    writePriceCheckRecord({ item, outcome: resultId, scannedPrice: Number(shelfLabelPrice), expectedPrice: expectedShelfPrice, notes });
     setRecords(result.events);
     setSavedResult({ ...result.verification, syncStatusLabel: result.event?.syncRecord?.statusLabel || "Pending sync" });
     setItem(null);

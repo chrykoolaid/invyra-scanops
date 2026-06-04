@@ -46,6 +46,7 @@ import {
   unitForItem,
 } from "../lib/scanOpsReceivingTransfers";
 import { TASK_DUE_STATES, TASK_PRIORITIES, TASK_TYPES, upsertDerivedTaskFromSource } from "../lib/scanOpsTasks";
+import { writeReceivingRecord } from "../lib/scanOpsRecordWriter";
 
 const SUPPLIERS = [
   { id: "fresh_fields", label: "Fresh Fields Co.", helper: "Fresh produce and dairy" },
@@ -315,6 +316,7 @@ export default function Receiving() {
       applies_price_directly: false,
       status: "attribute_evidence_saved",
     });
+    writeReceivingRecord({ item, quantity: Number(quantity || 0), unit, condition, notes: evidenceNote, poRef: activeBatch?.po_ref });
     setItem(null);
     setScanValue("");
     setQuantity(0);
