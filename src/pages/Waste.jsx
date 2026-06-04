@@ -213,6 +213,7 @@ export default function Waste() {
   const [inlineMessage, setInlineMessage] = useState("");
   const [latestContract, setLatestContract] = useState(null);
   const [operatorError, setOperatorError] = useState(null);
+  const [continuousScan, setContinuousScan] = useState(false);
 
   const selectedReview = useMemo(() => reviews.find((review) => review.reviewId === selectedReviewId) || reviews[0] || null, [reviews, selectedReviewId]);
   const filteredReviews = useMemo(() => filterWasteReviews(reviews, filter), [reviews, filter]);
@@ -252,6 +253,19 @@ export default function Waste() {
     setEvidenceNote("");
     setInlineMessage("");
     setLatestContract(null);
+  };
+
+  const handleNewScanWhileActive = (nextItem) => {
+    // Auto-save draft then load new item (skip governance block in continuous mode)
+    if (item && reasonCode && quantity > 0) {
+      const permission = canPerformScanOpsAction(GOVERNED_ACTIONS.WASTE_SUBMIT, governance);
+      if (permission.allowed) {
+        recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", null, permission, { eventLabel: "Waste review draft saved" });
+        const review = createWasteReviewDraft({ item, reasonCode, quantity, expiryDate, batchLot, shelfLocation, evidenceNote });
+        refreshReviews(review.reviewId);
+      }
+    }
+    scan(nextItem);
   };
 
   const saveDraft = () => {
@@ -349,6 +363,10 @@ export default function Waste() {
         onScanValueChange={setScanValue}
         onScan={scan}
         placeholder="Search / scan item, SKU, barcode..."
+        continuousScan={continuousScan}
+        onContinuousScanChange={setContinuousScan}
+        hasActiveItem={!!item}
+        onNewScanWhileItemActive={handleNewScanWhileActive}
       />
       <WorkflowMain>
         <GovernanceContextStrip />

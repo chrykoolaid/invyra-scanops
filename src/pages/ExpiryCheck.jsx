@@ -15,6 +15,7 @@ export default function ExpiryCheck() {
   const [expiryDate, setExpiryDate] = useState("2026-05-06");
   const [condition, setCondition] = useState("near_expiry");
   const [done, setDone] = useState(null);
+  const [continuousScan, setContinuousScan] = useState(false);
   const expiryStatus = useMemo(() => getExpiryStatus(expiryDate, TODAY), [expiryDate]);
   const recommendation = useMemo(() => getFreshnessRecommendation(item, expiryStatus, condition), [item, expiryStatus, condition]);
 
@@ -27,28 +28,46 @@ export default function ExpiryCheck() {
     setDone(null);
   };
 
-  const save = () => {
-    if (!item) return;
+  const save = (itemToSave = item, expiryToSave = expiryDate, conditionToSave = condition) => {
+    if (!itemToSave) return;
+    const statusForSave = getExpiryStatus(expiryToSave, TODAY);
+    const recForSave = getFreshnessRecommendation(itemToSave, statusForSave, conditionToSave);
     createScanOpsEvent(SCANOPS_EVENT_TYPES.EXPIRY_CHECK_RECORDED, {
       source_module: "Expiry Check",
-      item_name: item.name,
-      sku: item.sku,
-      barcode: item.barcode,
-      plu: item.plu || item.scaleCode,
-      match_reason: item._searchMatch?.displayReason || null,
-      expiry_date: expiryDate,
-      expiry_status: expiryStatus.label,
-      freshness_condition: condition,
-      recommended_action: recommendation.action?.label || recommendation.actionLabel || recommendation.title,
+      item_name: itemToSave.name,
+      sku: itemToSave.sku,
+      barcode: itemToSave.barcode,
+      plu: itemToSave.plu || itemToSave.scaleCode,
+      match_reason: itemToSave._searchMatch?.displayReason || null,
+      expiry_date: expiryToSave,
+      expiry_status: statusForSave.label,
+      freshness_condition: conditionToSave,
+      recommended_action: recForSave.action?.label || recForSave.actionLabel || recForSave.title,
       status: "saved_on_device",
     });
     setDone(true);
   };
 
+  const handleNewScanWhileActive = (nextItem) => {
+    save(item, expiryDate, condition);
+    scan(nextItem);
+  };
+
   return (
     <PageShell>
       <PageHeader title="Expiry Check" subtitle="Capture date and freshness truth" />
-      <WorkflowHeader title="Expiry Check" subtitle="Capture date and freshness truth" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} showHeaderChrome={false} />
+      <WorkflowHeader
+        title="Expiry Check"
+        subtitle="Capture date and freshness truth"
+        scanValue={scanValue}
+        onScanValueChange={setScanValue}
+        onScan={scan}
+        showHeaderChrome={false}
+        continuousScan={continuousScan}
+        onContinuousScanChange={setContinuousScan}
+        hasActiveItem={!!item}
+        onNewScanWhileItemActive={handleNewScanWhileActive}
+      />
       <WorkflowMain>
         {!item && <EmptyState title="No item selected." />}
         {item && <>

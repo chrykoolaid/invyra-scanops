@@ -231,6 +231,7 @@ export default function SyncQueue() {
         onRetry={() => handleRetry(selected)}
         retrying={retryingIds.has(selected.id)}
         onResolve={handleResolve}
+        syncMessage={syncMessage}
       />
     );
   }
@@ -330,7 +331,7 @@ function SyncCard({ record, onView, onRetry, retrying = false }) {
   );
 }
 
-function SyncDetail({ record, session, onBack, onRetry, onResolve, retrying = false }) {
+function SyncDetail({ record, session, onBack, onRetry, onResolve, retrying = false, syncMessage = null }) {
   const [reason, setReason] = useState("");
   const isConflict = record.status === SYNC_STATUSES.CONFLICT;
   const isDuplicate = record.status === SYNC_STATUSES.DUPLICATE;

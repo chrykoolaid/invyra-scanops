@@ -151,6 +151,7 @@ export default function Replenish() {
   const [records, setRecords] = useState(() => getReplenishmentTasks());
   const [savedResult, setSavedResult] = useState(null);
   const [operatorError, setOperatorError] = useState(null);
+  const [continuousScan, setContinuousScan] = useState(false);
 
   const selectedAction = getReplenishmentAction(actionId);
   const openCount = getOpenReplenishmentTasks().length;
@@ -173,6 +174,19 @@ export default function Replenish() {
     setEvidenceNote("");
     setSavedResult(null);
     setOperatorError(null);
+  };
+
+  const handleNewScanWhileActive = (nextItem) => {
+    // Auto-submit with current values then load new item
+    if (item && actionId && !(quantity === "" || Number.isNaN(Number(quantity)) || Number(quantity) < 0)) {
+      const issueLabel = ISSUE_OPTIONS.find((o) => o.id === issue)?.label || issue;
+      const result = saveReplenishmentAction({ item, actionId, quantity, issueReason: issueLabel, notes, evidenceNote });
+      if (result) {
+        setRecords(result.tasks);
+        setSavedResult({ ...result.task, syncStatusLabel: result.event?.syncRecord?.statusLabel || "Pending future handoff" });
+      }
+    }
+    scan(nextItem);
   };
 
   const submitAction = () => {
@@ -203,7 +217,18 @@ export default function Replenish() {
   return (
     <PageShell>
       <PageHeader title="Replenishment" subtitle="Backroom-to-shelf execution" />
-      <WorkflowHeader title="Replenishment" subtitle="Backroom-to-shelf execution" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} showHeaderChrome={false} />
+      <WorkflowHeader
+        title="Replenishment"
+        subtitle="Backroom-to-shelf execution"
+        scanValue={scanValue}
+        onScanValueChange={setScanValue}
+        onScan={scan}
+        showHeaderChrome={false}
+        continuousScan={continuousScan}
+        onContinuousScanChange={setContinuousScan}
+        hasActiveItem={!!item}
+        onNewScanWhileItemActive={handleNewScanWhileActive}
+      />
       <WorkflowMain>
         {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} tone={operatorError.tone || "warning"} actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}
         <SectionCard className="space-y-2">

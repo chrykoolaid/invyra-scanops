@@ -20,6 +20,7 @@ export default function GapScan() {
   const [item, setItem] = useState(null);
   const [outcome, setOutcome] = useState(GAP_TYPES.BACKROOM_AVAILABLE);
   const [evidence, setEvidence] = useState([]);
+  const [continuousScan, setContinuousScan] = useState(false);
   const classification = useMemo(() => classifyGap(item), [item]);
   const outcomeLabel = OUTCOMES.find((option) => option.id === outcome)?.label || outcome;
 
@@ -30,18 +31,20 @@ export default function GapScan() {
     setOutcome(classifyGap(found).gap_type || GAP_TYPES.BACKROOM_AVAILABLE);
   };
 
-  const save = () => {
-    if (!item) return;
-    const line = makeWorkflowBatchItem({ workflowType: "gap_scan", item, reason: outcomeLabel, meta: { recommendedAction: classification.title || "Review gap" } });
+  const save = (itemToSave = item, outcomeToSave = outcome) => {
+    if (!itemToSave) return;
+    const outcomeToSaveLabel = OUTCOMES.find((o) => o.id === outcomeToSave)?.label || outcomeToSave;
+    const classificationResult = classifyGap(itemToSave);
+    const line = makeWorkflowBatchItem({ workflowType: "gap_scan", item: itemToSave, reason: outcomeToSaveLabel, meta: { recommendedAction: classificationResult.title || "Review gap" } });
     setEvidence((current) => upsertWorkflowBatchItem(current, line));
     createScanOpsEvent(SCANOPS_EVENT_TYPES.GAP_CONFIRMED, {
       source_module: "Gap Scan",
-      item_name: item.name,
-      sku: item.sku,
-      barcode: item.barcode,
-      gap_outcome: outcome,
-      gap_outcome_label: outcomeLabel,
-      recommended_action: classification.title,
+      item_name: itemToSave.name,
+      sku: itemToSave.sku,
+      barcode: itemToSave.barcode,
+      gap_outcome: outcomeToSave,
+      gap_outcome_label: outcomeToSaveLabel,
+      recommended_action: classificationResult.title,
       applies_stock_directly: false,
       status: "saved_on_device",
     });
@@ -49,10 +52,26 @@ export default function GapScan() {
     setScanValue("");
   };
 
+  const handleNewScanWhileActive = (nextItem) => {
+    save(item, outcome);
+    scan(nextItem);
+  };
+
   return (
     <PageShell>
       <PageHeader title="Gap Scan" subtitle="Capture shelf gap evidence" />
-      <WorkflowHeader title="Gap Scan" subtitle="Capture shelf gap evidence" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} showHeaderChrome={false} />
+      <WorkflowHeader
+        title="Gap Scan"
+        subtitle="Capture shelf gap evidence"
+        scanValue={scanValue}
+        onScanValueChange={setScanValue}
+        onScan={scan}
+        showHeaderChrome={false}
+        continuousScan={continuousScan}
+        onContinuousScanChange={setContinuousScan}
+        hasActiveItem={!!item}
+        onNewScanWhileItemActive={handleNewScanWhileActive}
+      />
       <WorkflowMain>
         {item ? <>
           <ItemSummaryCard item={item} />

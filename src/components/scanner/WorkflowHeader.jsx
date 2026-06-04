@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Home, ScanLine, Search, Wifi, WifiOff, X } from "lucide-react";
+import { Home, ScanLine, Search, Wifi, WifiOff, X, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { getNetworkMode, getSyncSummary } from "../../lib/scanOpsSync";
 import { useScanOpsSession } from "../../lib/scanOpsSession";
@@ -15,6 +15,10 @@ export default function WorkflowHeader({
   disabled = false,
   showSearch = true,
   showHeaderChrome = true,
+  continuousScan = false,
+  onContinuousScanChange,
+  onNewScanWhileItemActive,
+  hasActiveItem = false,
 }) {
   const navigate = useNavigate();
   const session = useScanOpsSession();
@@ -135,7 +139,11 @@ export default function WorkflowHeader({
 
     if (firstMatch && nextMatches.length === 1 && source !== "manualTyping" && autoLoadTypes.has(matchType)) {
       clearResults();
-      onScan?.(firstMatch);
+      if (continuousScan && hasActiveItem) {
+        onNewScanWhileItemActive?.(firstMatch);
+      } else {
+        onScan?.(firstMatch);
+      }
       return;
     }
 
@@ -255,6 +263,22 @@ export default function WorkflowHeader({
 
       {showSearch && (
         <>
+          {onContinuousScanChange && (
+            <div className={`${showHeaderChrome ? "mt-3" : ""} mb-2 flex items-center justify-between gap-2`}>
+              <span className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">Scan mode</span>
+              <button
+                type="button"
+                onClick={() => onContinuousScanChange(!continuousScan)}
+                className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black transition-colors active:scale-[0.98] ${
+                  continuousScan ? "bg-accent text-accent-foreground" : "bg-secondary text-muted-foreground"
+                }`}
+                aria-pressed={continuousScan}
+              >
+                <Zap className="h-3 w-3" />
+                {continuousScan ? "Continuous" : "Single"}
+              </button>
+            </div>
+          )}
           <form
             onSubmit={submit}
             onPointerDown={(event) => {

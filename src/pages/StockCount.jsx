@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import AttributeEvidenceFields from "../components/scanner/AttributeEvidenceFields";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
@@ -289,6 +289,7 @@ export default function StockCount() {
   const [note, setNote] = useState("");
   const [lastSyncMessage, setLastSyncMessage] = useState("");
   const [operatorError, setOperatorError] = useState(null);
+  const [continuousScan, setContinuousScan] = useState(false);
 
   const activeSession = useMemo(() => sessions.find((entry) => (entry.id || entry.count_session_id) === activeSessionId) || null, [activeSessionId, sessions]);
   const visibleSessions = useMemo(() => sessions.filter((session) => isSessionVisibleToRole(session, actorSession)), [actorSession, sessions]);
@@ -516,6 +517,28 @@ export default function StockCount() {
     resetItem();
   };
 
+  const pendingContinuousScanRef = useRef(null);
+
+  const handleNewScanWhileActive = (nextItem) => {
+    // Auto-save current count line, then load next item after reset
+    if (item && canAddCountEvidence && !(counted === "" || Number.isNaN(Number(counted)) || Number(counted) < 0)) {
+      pendingContinuousScanRef.current = nextItem;
+      saveLine();
+    } else {
+      scan(nextItem);
+    }
+  };
+
+  // After saveLine → resetItem clears item; pick up pending continuous scan
+  useEffect(() => {
+    if (!item && pendingContinuousScanRef.current) {
+      const nextItem = pendingContinuousScanRef.current;
+      pendingContinuousScanRef.current = null;
+      scan(nextItem);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item]);
+
   const removeLine = (lineId) => {
     deleteCountSessionItem(lineId);
     refreshLines(activeSessionId);
@@ -739,6 +762,12 @@ export default function StockCount() {
     <>
       <SessionHeaderCard session={activeSession} lines={lines} />
       {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} tone={operatorError.tone || "warning"} actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}
+      {continuousScan && canAddCountEvidence && (
+        <div className="flex items-center gap-2 rounded-2xl bg-accent/10 px-3 py-2">
+          <span className="text-xs font-black text-accent">⚡ Continuous scan on</span>
+          <span className="text-xs font-semibold text-muted-foreground">— each new scan auto-saves the current count.</span>
+        </div>
+      )}
       {lastSyncMessage && <SectionCard className="border-primary/20 bg-primary/5"><p className="text-sm font-black text-foreground">Saved locally</p><p className="mt-1 text-xs font-semibold text-muted-foreground">{lastSyncMessage}</p></SectionCard>}
       {!canAddCountEvidence && <EmptyState title="Session is read-only." helper="This session is locked for handheld edits." />}
       {!item && canAddCountEvidence && <EmptyState title="No item selected." helper={lines.length ? "Scan another item or review the session." : "Scan/search an item."} />}
@@ -858,6 +887,10 @@ export default function StockCount() {
         onScanValueChange={setScanValue}
         onScan={scan}
         showSearch={showSearch}
+        continuousScan={continuousScan}
+        onContinuousScanChange={setContinuousScan}
+        hasActiveItem={!!item && canAddCountEvidence}
+        onNewScanWhileItemActive={handleNewScanWhileActive}
       />
       <WorkflowMain>
         {view === "landing" && renderLanding()}
