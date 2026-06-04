@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { AlertTriangle, ClipboardList, MapPin, PackageCheck, PackageX, ShieldAlert, Warehouse } from "lucide-react";
+import { AlertTriangle, Bell, BellOff, ClipboardList, MapPin, PackageCheck, PackageX, ShieldAlert, Warehouse } from "lucide-react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import PageHeader from "../components/scanner/PageHeader";
 import { BatchList, DoneCard, EmptyState, FieldError, InfoLine, ItemSummaryCard, MetricPill, OperatorAlert, PageShell, QuantityStepper, SectionCard, StickyActions, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
@@ -13,6 +13,32 @@ import {
   REPLENISHMENT_OUTCOMES,
   saveReplenishmentAction,
 } from "../lib/scanOpsReplenishment";
+
+const REORDER_SETTING_KEY = "invyra_scanops_reorder_threshold_v1";
+
+function readReorderSetting() {
+  try {
+    const raw = window.localStorage.getItem(REORDER_SETTING_KEY);
+    return raw ? JSON.parse(raw) : { enabled: false, threshold: 5 };
+  } catch {
+    return { enabled: false, threshold: 5 };
+  }
+}
+
+function writeReorderSetting(setting) {
+  try {
+    window.localStorage.setItem(REORDER_SETTING_KEY, JSON.stringify(setting));
+  } catch {
+    // ignore
+  }
+}
+
+function checkReorderFlag(item, threshold) {
+  const need = getShelfNeedSnapshot(item);
+  const total = (need.shelf ?? 0) + (need.backroom ?? 0);
+  const relevant = need.shelf != null ? need.shelf : total;
+  return relevant < threshold;
+}
 
 const ISSUE_OPTIONS = [
   { id: "shelf_low", label: "Shelf low" },
@@ -152,9 +178,17 @@ export default function Replenish() {
   const [savedResult, setSavedResult] = useState(null);
   const [operatorError, setOperatorError] = useState(null);
   const [continuousScan, setContinuousScan] = useState(false);
+  const [reorderSetting, setReorderSetting] = useState(() => readReorderSetting());
+  const [reorderFlags, setReorderFlags] = useState([]);
+  const [showReorderSettings, setShowReorderSettings] = useState(false);
 
   const selectedAction = getReplenishmentAction(actionId);
   const openCount = getOpenReplenishmentTasks().length;
+
+  const updateReorderSetting = (next) => {
+    setReorderSetting(next);
+    writeReorderSetting(next);
+  };
 
   const scan = (value) => {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
@@ -165,6 +199,14 @@ export default function Replenish() {
     setQuantity(Math.max(0, Number(need.recommendedMove || 0)));
     setSavedResult(null);
     setOperatorError(null);
+    // Auto-flag for reorder if threshold setting is enabled
+    if (reorderSetting.enabled && checkReorderFlag(found, reorderSetting.threshold)) {
+      setReorderFlags((prev) => {
+        const alreadyFlagged = prev.some((f) => f.sku === found.sku && f.barcode === found.barcode && f.name === found.name);
+        if (alreadyFlagged) return prev;
+        return [{ id: `reorder_${Date.now()}`, name: found.name, sku: found.sku, barcode: found.barcode, shelf: need.shelf, backroom: need.backroom, threshold: reorderSetting.threshold, unit: need.unit, flaggedAt: new Date().toISOString() }, ...prev];
+      });
+    }
   };
 
   const clearItem = () => {
@@ -237,12 +279,58 @@ export default function Replenish() {
               <p className="text-sm font-black text-foreground">Replenishment action</p>
               <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Scan item, confirm quantity, save local evidence.</p>
             </div>
-            <div className="shrink-0 rounded-2xl bg-secondary px-3 py-2 text-center">
-              <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Open</p>
-              <p className="text-lg font-black text-foreground">{openCount}</p>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowReorderSettings((v) => !v)}
+                className={`flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black transition-colors active:scale-[0.98] ${reorderSetting.enabled ? "bg-amber-100 text-amber-800" : "bg-secondary text-muted-foreground"}`}
+                title="Reorder threshold settings"
+              >
+                {reorderSetting.enabled ? <Bell className="h-3.5 w-3.5" /> : <BellOff className="h-3.5 w-3.5" />}
+                Reorder
+              </button>
+              <div className="rounded-2xl bg-secondary px-3 py-2 text-center">
+                <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Open</p>
+                <p className="text-lg font-black text-foreground">{openCount}</p>
+              </div>
             </div>
           </div>
+
+          {showReorderSettings && (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-black text-amber-900">Auto-flag for reorder below threshold</p>
+                <button
+                  type="button"
+                  onClick={() => updateReorderSetting({ ...reorderSetting, enabled: !reorderSetting.enabled })}
+                  className={`flex items-center gap-1 rounded-xl px-3 py-1.5 text-xs font-black transition-colors ${reorderSetting.enabled ? "bg-amber-600 text-white" : "bg-secondary text-muted-foreground"}`}
+                >
+                  {reorderSetting.enabled ? "ON" : "OFF"}
+                </button>
+              </div>
+              <div className="flex items-center gap-3">
+                <p className="text-xs font-semibold text-amber-800 shrink-0">Min threshold</p>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => updateReorderSetting({ ...reorderSetting, threshold: Math.max(1, reorderSetting.threshold - 1) })} className="h-8 w-8 rounded-xl bg-white border border-amber-200 text-amber-800 font-black text-sm active:bg-amber-100">−</button>
+                  <span className="w-10 text-center text-sm font-black text-amber-900">{reorderSetting.threshold}</span>
+                  <button type="button" onClick={() => updateReorderSetting({ ...reorderSetting, threshold: Math.min(999, reorderSetting.threshold + 1) })} className="h-8 w-8 rounded-xl bg-white border border-amber-200 text-amber-800 font-black text-sm active:bg-amber-100">+</button>
+                </div>
+                <p className="text-xs text-amber-700">units</p>
+              </div>
+              <p className="text-[11px] leading-snug text-amber-700">When enabled, scanning an item with shelf stock below this number automatically adds it to the reorder flag list below. Evidence only — no purchase order is created.</p>
+            </div>
+          )}
         </SectionCard>
+
+        {reorderSetting.enabled && item && checkReorderFlag(item, reorderSetting.threshold) && (
+          <div className="flex items-start gap-2 rounded-2xl border border-amber-300 bg-amber-50 px-3 py-2.5">
+            <Bell className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div className="min-w-0">
+              <p className="text-xs font-black text-amber-900">Reorder flag triggered</p>
+              <p className="mt-0.5 text-xs font-semibold text-amber-700">Shelf stock is below the {reorderSetting.threshold}-unit threshold. Item added to reorder list.</p>
+            </div>
+          </div>
+        )}
 
         {savedResult && (
           <DoneCard
@@ -307,6 +395,31 @@ export default function Replenish() {
         )}
 
         <RecentReplenishmentList records={records} />
+
+        {reorderFlags.length > 0 && (
+          <SectionCard className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Bell className="h-4 w-4 text-amber-600" />
+                <p className="text-sm font-black text-foreground">Reorder Flags</p>
+              </div>
+              <button type="button" onClick={() => setReorderFlags([])} className="rounded-xl bg-secondary px-2 py-1 text-[10px] font-black text-muted-foreground active:bg-border">Clear all</button>
+            </div>
+            <p className="text-xs font-semibold text-muted-foreground">Items flagged below the {reorderSetting.threshold}-unit threshold this session. Evidence only — no order created.</p>
+            <div className="space-y-2">
+              {reorderFlags.map((flag) => (
+                <div key={flag.id} className="flex items-start justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="break-words text-xs font-black text-amber-900">{flag.name}</p>
+                    <p className="mt-0.5 break-all font-mono text-[10px] text-amber-700">{[flag.sku && `SKU ${flag.sku}`, flag.barcode && `Barcode ${flag.barcode}`].filter(Boolean).join(" · ") || "—"}</p>
+                    <p className="mt-0.5 text-[11px] font-semibold text-amber-700">Shelf {flag.shelf ?? "—"} · Backroom {flag.backroom ?? "—"} · Below {flag.threshold} {flag.unit}</p>
+                  </div>
+                  <button type="button" onClick={() => setReorderFlags((prev) => prev.filter((f) => f.id !== flag.id))} className="shrink-0 rounded-xl bg-amber-100 px-2 py-1 text-[10px] font-black text-amber-800 active:bg-amber-200">Dismiss</button>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+        )}
 
         <StickyActions
           leftLabel="Clear Item"
