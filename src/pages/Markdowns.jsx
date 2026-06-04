@@ -40,6 +40,7 @@ import {
   getCurrentPriceSnapshot,
   MARKDOWN_REASON_OPTIONS,
 } from "../lib/scanOpsRequestLifecycle";
+import MarkdownSuggestionsPanel from "../components/scanner/MarkdownSuggestionsPanel";
 import {
   createMarkdownApprovalRequest,
   createMarkdownLabelHandoff,
@@ -183,6 +184,39 @@ export default function Markdowns() {
     if (filter === "blocked") return request.status === MARKDOWN_STATUSES.BLOCKED_WASTE_REVIEW_REQUIRED || request.status === MARKDOWN_STATUSES.REJECTED;
     return true;
   }), [requests, filter]);
+
+  const selectSuggestion = (inventoryItem, cat) => {
+    // Normalise the raw inventory snapshot item into the shape resolveInventoryIdentity returns
+    const normalized = {
+      ...inventoryItem,
+      id: inventoryItem.internalItemId,
+      shelf_stock: inventoryItem.shelfStock,
+      backroom_stock: inventoryItem.backroomStock,
+      stock_on_hand: inventoryItem.stockOnHand,
+      minimum_shelf_qty: inventoryItem.minimumStock,
+      current_price: inventoryItem.currentPrice,
+      expiry_date: inventoryItem.expiryDate,
+      expiry_status: inventoryItem.freshnessStatus,
+      location: inventoryItem.shelfLocation,
+    };
+    setOperatorError(null);
+    const defaultExpiry = inventoryItem.expiryDate || "";
+    const price = getCurrentPriceSnapshot(normalized);
+    setItem(normalized);
+    setReason(cat.reason || "short_dated");
+    setSelectedPercent(cat.suggestedPercent || "25");
+    setQuantity("1");
+    setExpiryDate(defaultExpiry);
+    setBatchLot(inventoryItem.batchId || "");
+    setQuantityType(inventoryItem.unitType || "each");
+    setLabelRequired(true);
+    setHandoffMethod(LABEL_HANDOFF_METHODS.STORE_PRINT_QUEUE);
+    setNotes(`Suggested by scan round: ${cat.tag}`);
+    setScanValue(inventoryItem.barcode || inventoryItem.sku || "");
+    setDone(null);
+    // Scroll to top of form
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const scan = (value) => {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
@@ -410,6 +444,8 @@ export default function Markdowns() {
             </SectionCard>
           </>
         )}
+
+        <MarkdownSuggestionsPanel onSelectItem={selectSuggestion} />
 
         <SectionCard className="space-y-3">
           <div className="flex items-start justify-between gap-3">
