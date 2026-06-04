@@ -28,6 +28,7 @@ import {
   markStoreOpsLocallyReviewed,
   useStoreOpsDashboard,
 } from "../lib/scanOpsStoreOpsDashboard";
+import { base44 } from "@/api/base44Client";
 
 function titleCase(value) {
   return String(value || "—").replaceAll("_", " ").toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
@@ -388,6 +389,53 @@ function SelectedExceptionPanel({ event, onRefresh }) {
   );
 }
 
+function LiveRecordsPanel({ records, loading }) {
+  const byType = useMemo(() => {
+    const map = {};
+    records.forEach((r) => { map[r.recordType] = (map[r.recordType] || 0) + 1; });
+    return map;
+  }, [records]);
+
+  const needsAttention = records.filter((r) =>
+    ["pending_approval", "blocked", "review_required", "draft"].includes(r.status)
+  );
+
+  return (
+    <SectionCard className="space-y-3">
+      <PanelHeader icon={Database} title="Live DB Records" helper={loading ? "Loading…" : `${records.length} synced records from database`} />
+      {!loading && records.length === 0 && (
+        <p className="rounded-2xl bg-secondary/50 px-3 py-3 text-sm font-bold text-muted-foreground">No synced records yet. Complete workflow actions to see live data here.</p>
+      )}
+      {!loading && Object.keys(byType).length > 0 && (
+        <div className="grid grid-cols-2 gap-2">
+          {Object.entries(byType).map(([type, count]) => (
+            <div key={type} className="rounded-2xl bg-secondary/70 px-3 py-2">
+              <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">{String(type).replaceAll("_", " ")}</p>
+              <p className="mt-0.5 text-xl font-black text-foreground">{count}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {!loading && needsAttention.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Needs Attention ({needsAttention.length})</p>
+          {needsAttention.slice(0, 5).map((r) => (
+            <div key={r.id} className="rounded-2xl border border-amber-200 bg-amber-50/60 px-3 py-2.5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="break-words text-xs font-black text-foreground">{r.itemName || "Record"}</p>
+                  <p className="mt-0.5 text-[11px] font-semibold text-muted-foreground">{String(r.recordType || "").replaceAll("_", " ")} · {r.actorName || "Operator"}</p>
+                </div>
+                <span className="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-black uppercase text-amber-800">{r.status}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
 export default function StoreOpsDashboard() {
   const navigate = useNavigate();
   const session = useScanOpsSession();
@@ -395,9 +443,19 @@ export default function StoreOpsDashboard() {
   const [filter, setFilter] = useState("needs_action");
   const [selectedId, setSelectedId] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [dbRecords, setDbRecords] = useState([]);
+  const [dbLoading, setDbLoading] = useState(true);
 
   const filteredEvents = useMemo(() => filterStoreOpsDashboardEvents(model.events, filter), [model.events, filter]);
   const selectedEvent = useMemo(() => model.events.find((event) => event.dashboardEventId === selectedId) || filteredEvents[0] || model.events[0] || null, [model.events, filteredEvents, selectedId]);
+
+  // Fetch live DB records on mount
+  useEffect(() => {
+    setDbLoading(true);
+    base44.entities.ScanOpsRecord.list("-created_date", 100)
+      .then((rows) => { setDbRecords(rows || []); setDbLoading(false); })
+      .catch(() => setDbLoading(false));
+  }, [refreshKey]);
 
   useEffect(() => {
     createScanOpsEvent(SCANOPS_EVENT_TYPES.STORE_OPS_DASHBOARD_VIEWED, {
@@ -430,6 +488,8 @@ export default function StoreOpsDashboard() {
       <PageHeader title="Store Exceptions" subtitle="Items that need review before the store can continue smoothly" />
       <WorkflowMain key={refreshKey}>
         <StoreStatusPanel model={model} session={session} />
+
+        <LiveRecordsPanel records={dbRecords} loading={dbLoading} />
 
         <SectionCard className="space-y-3">
           <PanelHeader icon={ShieldCheck} title="Review Sections" helper="Simple handheld sections replace desktop-style filters." />
