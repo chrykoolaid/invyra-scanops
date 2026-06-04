@@ -1,3 +1,4 @@
+import { base44 } from "@/api/base44Client";
 import { getScanOpsEvents } from "./scanOpsEvents";
 import { getScanOpsSession } from "./scanOpsSession";
 import { hasRoleAtLeast } from "./scanOpsPermissions";
@@ -8,6 +9,47 @@ import { getCountApprovalEvents, getCountRecountRequests, getCountSessionItems, 
 import { getWorkflowItemAttributeSnapshots } from "./scanOpsItemAttributes";
 import { getMarkdownRequests, getReceivingRequests, getShelfTicketRequests, getTransferRequests, getWasteRequests } from "./scanOpsRequestLifecycle";
 import { getReceivingBatches, getTransferBatches } from "./scanOpsReceivingTransfers";
+
+/**
+ * Fetch real ScanOpsRecord rows from DB, filtered by dateRange.
+ * Returns an empty array on failure so reporting still works offline.
+ */
+export async function fetchScanOpsRecordsFromDB(dateRange = "7d") {
+  try {
+    const limit = dateRange === "30d" ? 200 : dateRange === "today" ? 100 : 150;
+    const rows = await base44.entities.ScanOpsRecord.list("-created_date", limit);
+    if (!rows || !rows.length) return [];
+    const cutoff = dateRange === "today"
+      ? new Date().setHours(0, 0, 0, 0)
+      : dateRange === "30d"
+        ? Date.now() - 30 * 24 * 60 * 60 * 1000
+        : Date.now() - 7 * 24 * 60 * 60 * 1000;
+    return rows.filter((r) => new Date(r.created_date).getTime() >= cutoff);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Build KPI + event summary from real DB records to augment the local snapshot.
+ */
+export function summariseDBRecords(dbRecords = []) {
+  const byType = {};
+  dbRecords.forEach((r) => {
+    const t = r.recordType || "unknown";
+    byType[t] = (byType[t] || 0) + 1;
+  });
+
+  const recentEvents = dbRecords.slice(0, 20).map((r) => ({
+    id: r.id,
+    createdAt: r.created_date,
+    title: String(r.recordType || "scan_ops").replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase()),
+    summary: [r.itemName, r.actorName, r.status].filter(Boolean).join(" · "),
+    source: "db",
+  }));
+
+  return { byType, recentEvents, total: dbRecords.length };
+}
 
 const DONE_TASK_STATUSES = new Set([TASK_STATUSES.DONE, TASK_STATUSES.CANCELLED, "done", "completed", "cancelled"]);
 const ACTIVE_SYNC_ISSUES = new Set([

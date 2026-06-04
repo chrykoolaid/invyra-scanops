@@ -5,7 +5,7 @@ import PageHeader from "../components/scanner/PageHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
 import { EmptyState, PageShell, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsAuditEvent } from "../lib/scanOpsAudit";
-import { canViewScanOpsReporting, getScanOpsReportingSnapshot, scanOpsReportingScopeLabel } from "../lib/scanOpsReporting";
+import { canViewScanOpsReporting, fetchScanOpsRecordsFromDB, getScanOpsReportingSnapshot, scanOpsReportingScopeLabel, summariseDBRecords } from "../lib/scanOpsReporting";
 import { useScanOpsSession } from "../lib/scanOpsSession";
 
 const DATE_OPTIONS = [
@@ -193,6 +193,8 @@ function AccessRestricted({ session }) {
 export default function ScanOpsReporting() {
   const session = useScanOpsSession();
   const [filters, setFilters] = useState({ dateRange: "7d", workflow: "all", department: "all", device: "all", user: "all" });
+  const [dbRecords, setDbRecords] = useState([]);
+  const [dbLoading, setDbLoading] = useState(false);
   const allowed = canViewScanOpsReporting(session);
 
   useEffect(() => {
@@ -202,7 +204,18 @@ export default function ScanOpsReporting() {
     });
   }, [allowed, session.actorRole]);
 
+  // Fetch real DB records whenever dateRange changes
+  useEffect(() => {
+    if (!allowed) return;
+    setDbLoading(true);
+    fetchScanOpsRecordsFromDB(filters.dateRange).then((rows) => {
+      setDbRecords(rows);
+      setDbLoading(false);
+    });
+  }, [allowed, filters.dateRange]);
+
   const snapshot = useMemo(() => allowed ? getScanOpsReportingSnapshot(filters, session) : null, [allowed, filters, session]);
+  const dbSummary = useMemo(() => summariseDBRecords(dbRecords), [dbRecords]);
 
   if (!allowed) return <AccessRestricted session={session} />;
 
@@ -242,6 +255,33 @@ export default function ScanOpsReporting() {
           {snapshot.kpis.map((item) => <StatCard key={item.id} item={item} />)}
         </div>
 
+        {/* Live DB records panel */}
+        <section className="scanops-work-card space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-wider text-primary">Live Database</p>
+              <h2 className="mt-1 text-base font-black text-foreground">
+                {dbLoading ? "Loading records…" : `${dbSummary.total} records synced`}
+              </h2>
+              <p className="mt-0.5 text-xs font-semibold text-muted-foreground">Real ScanOpsRecord entries from the database.</p>
+            </div>
+            <Database className="h-5 w-5 shrink-0 text-primary" />
+          </div>
+          {!dbLoading && dbSummary.total > 0 && (
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(dbSummary.byType).map(([type, count]) => (
+                <div key={type} className="rounded-2xl bg-secondary/70 px-3 py-2">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">{String(type).replaceAll("_", " ")}</p>
+                  <p className="mt-0.5 text-xl font-black text-foreground">{count}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {!dbLoading && dbSummary.total === 0 && (
+            <p className="rounded-2xl bg-secondary/50 px-3 py-2 text-sm font-bold text-muted-foreground">No synced records yet for this period. Records appear here as workflows are completed.</p>
+          )}
+        </section>
+
         <SectionCard title="Queue Health" helper="Backlogs that may need existing workflow attention" icon={Database}>
           <div className="space-y-2">
             {snapshot.queueHealth.map((item) => <QueueRow key={item.id} item={item} />)}
@@ -260,8 +300,11 @@ export default function ScanOpsReporting() {
           <DeviceActivity devices={snapshot.deviceActivity} users={snapshot.userActivity} />
         </SectionCard>
 
-        <SectionCard title="Recent ScanOps Events" helper="Read-only event feed from scanner workflows" icon={Activity}>
-          <EventFeed events={snapshot.recentEvents} />
+        <SectionCard title="Recent ScanOps Events" helper="Read-only event feed — local + database records" icon={Activity}>
+          <EventFeed events={[
+            ...dbSummary.recentEvents,
+            ...snapshot.recentEvents.filter((e) => e.source !== "db"),
+          ].sort((a, b) => (new Date(b.createdAt).getTime() || 0) - (new Date(a.createdAt).getTime() || 0)).slice(0, 15)} />
         </SectionCard>
       </WorkflowMain>
     </PageShell>
