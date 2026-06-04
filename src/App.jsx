@@ -29,6 +29,7 @@ import DesktopSyncContract from './pages/DesktopSyncContract';
 import StoreOpsDashboard from './pages/StoreOpsDashboard';
 import PilotReadiness from './pages/PilotReadiness';
 import PrinterSettings from './pages/PrinterSettings';
+import UserManagement from './pages/UserManagement';
 import RoleGate from './components/scanner/RoleGate';
 import AppEscapeHeader from './components/scanner/AppEscapeHeader';
 import OfflineBanner from './components/scanner/OfflineBanner';
@@ -155,6 +156,7 @@ const AuthenticatedApp = () => {
             <Route path="/store-ops-dashboard" element={roleGated(<StoreOpsDashboard />, "Manager", "Store Ops Dashboard")} />
             <Route path="/pilot-readiness" element={<PilotReadiness />} />
             <Route path="/printer-settings" element={roleGated(<PrinterSettings />, "Manager", "Printer Settings")} />
+            <Route path="/user-management" element={roleGated(<UserManagement />, "Manager", "User Management")} />
             <Route path="*" element={<PageNotFound />} />
           </Routes>
         </div>
