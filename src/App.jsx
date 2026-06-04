@@ -30,6 +30,7 @@ import StoreOpsDashboard from './pages/StoreOpsDashboard';
 import PilotReadiness from './pages/PilotReadiness';
 import RoleGate from './components/scanner/RoleGate';
 import AppEscapeHeader from './components/scanner/AppEscapeHeader';
+import OfflineBanner from './components/scanner/OfflineBanner';
 
 
 const ScrollToTopOnRouteChange = () => {
@@ -122,6 +123,7 @@ const AuthenticatedApp = () => {
   return (
     <div className="scanops-root-shell" data-scanops-app-escape-active={appEscapeMeta ? "true" : "false"}>
       <ScrollToTopOnRouteChange />
+      <OfflineBanner />
       <div className="scanops-route-host">
         {appEscapeMeta && <AppEscapeHeader {...appEscapeMeta} />}
         <div className="scanops-route-content">

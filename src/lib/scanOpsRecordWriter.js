@@ -1,34 +1,17 @@
 /**
  * scanOpsRecordWriter — writes workflow outcomes to the ScanOpsRecord DB entity.
+ * Offline-safe: buffers to localStorage when offline, auto-syncs when reconnected.
  * Fire-and-forget: never blocks the UI, never throws to caller.
  */
-import { base44 } from "@/api/base44Client";
-import { getScanOpsSession } from "./scanOpsSession";
-
-function actor() {
-  const s = getScanOpsSession();
-  return {
-    actorUserId: s.actorUserId || null,
-    actorName: s.actorName || "Operator",
-    actorRole: s.actorRole || "Staff",
-    storeId: s.storeId || null,
-    sessionId: s.sessionId || null,
-    deviceId: s.deviceId || s.scannerId || null,
-  };
-}
+import { writeOrEnqueue } from "./offlineSyncQueue";
 
 /**
- * Write a single ScanOpsRecord to the DB.
+ * Write a single ScanOpsRecord — online goes direct to DB, offline buffers locally.
  * @param {object} fields - ScanOpsRecord fields (recordType is required)
  */
 export function writeScanOpsRecord(fields) {
   if (!fields?.recordType) return;
-  const ctx = actor();
-  base44.entities.ScanOpsRecord.create({
-    syncStatus: "pending",
-    ...ctx,
-    ...fields,
-  }).catch(() => {});
+  writeOrEnqueue(fields);
 }
 
 // Convenience wrappers per workflow type
