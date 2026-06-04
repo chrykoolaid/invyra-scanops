@@ -42,6 +42,7 @@ import {
   MARKDOWN_REASON_OPTIONS,
 } from "../lib/scanOpsRequestLifecycle";
 import MarkdownSuggestionsPanel from "../components/scanner/MarkdownSuggestionsPanel";
+import PrintLabelButton from "../components/scanner/PrintLabelButton";
 import {
   createMarkdownApprovalRequest,
   createMarkdownLabelHandoff,
@@ -570,6 +571,13 @@ export default function Markdowns() {
               <button type="button" disabled={!canHandoffSelected} onClick={createHandoff} className="min-h-12 w-full rounded-2xl bg-primary px-3 text-sm font-black text-primary-foreground active:scale-[0.98] disabled:opacity-40">
                 Ready for Label Handoff
               </button>
+              {selectedRequest?.status === MARKDOWN_STATUSES.APPROVED && (
+                <PrintLabelButton
+                  recordId={selectedRequest.requestId}
+                  disabled={!canApprove}
+                  onPrinted={() => refreshRequests(selectedId)}
+                />
+              )}
             </SectionCard>
           </>
         ) : (

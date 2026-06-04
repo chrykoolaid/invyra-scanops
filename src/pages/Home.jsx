@@ -43,6 +43,7 @@ const ALL_TILES = [
   { icon: Shield,         label: "Device Governance",  to: "/device-governance",       minRole: "Manager" },
   { icon: Layers,         label: "Desktop Sync",       to: "/desktop-sync-contract",   minRole: "Manager" },
   { icon: CheckSquare,    label: "Pilot Readiness",    to: "/pilot-readiness",         minRole: "Admin" },
+  { icon: Printer,        label: "Printer Settings",   to: "/printer-settings",        minRole: "Manager" },
 ];
 
 const ROLE_LEVELS = { Staff: 1, Supervisor: 2, Manager: 3, Admin: 4 };

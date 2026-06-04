@@ -1,0 +1,58 @@
+{
+  "name": "PrinterConfig",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Friendly name for this printer, e.g. 'Backroom Zebra'"
+    },
+    "ipAddress": {
+      "type": "string",
+      "description": "Printer static IP address on store WiFi, e.g. 192.168.1.100"
+    },
+    "port": {
+      "type": "number",
+      "default": 9100,
+      "description": "TCP port \u2014 almost always 9100"
+    },
+    "labelFormat": {
+      "type": "string",
+      "enum": [
+        "ZPL",
+        "ESC/POS"
+      ],
+      "default": "ZPL",
+      "description": "Label command language supported by the printer"
+    },
+    "labelWidth": {
+      "type": "number",
+      "default": 50,
+      "description": "Label width in mm"
+    },
+    "labelHeight": {
+      "type": "number",
+      "default": 30,
+      "description": "Label height in mm"
+    },
+    "storeId": {
+      "type": "string"
+    },
+    "isDefault": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this is the default printer for the store"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive"
+      ],
+      "default": "active"
+    }
+  },
+  "required": [
+    "name",
+    "ipAddress"
+  ]
+}
