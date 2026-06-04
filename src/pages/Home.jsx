@@ -19,7 +19,6 @@ import {
   Shield,
   LayoutDashboard,
   CheckSquare,
-  Users,
 } from "lucide-react";
 
 // minRole: minimum role required to see the tile
@@ -44,7 +43,7 @@ const ALL_TILES = [
 
   { icon: CheckSquare,    label: "Pilot Readiness",    to: "/pilot-readiness",         minRole: "Admin" },
   { icon: Printer,        label: "Printer Settings",   to: "/printer-settings",        minRole: "Manager" },
-  { icon: Users,          label: "User Management",    to: "/user-management",         minRole: "Manager" },
+
 ];
 
 const ROLE_LEVELS = { Staff: 1, Supervisor: 2, Manager: 3, Admin: 4 };

@@ -25,6 +25,7 @@ import {
   Tags,
   Ticket,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import { createScanOpsAuditEvent, getVisibleAuditEvents } from "../../lib/scanOpsAudit";
@@ -69,6 +70,7 @@ const MENU_SECTIONS = [
       { label: "Sync Review", icon: Database, description: "Review local sync evidence", route: "/sync-queue", minRole: "Supervisor" },
       { label: "Product Review", icon: GitPullRequest, description: "Unknown item and alias evidence", route: "/product-identity-review", minRole: "Supervisor" },
       { label: "Device / Shift Status", icon: MonitorSmartphone, description: "Device, user, and shift governance", route: "/device-governance", minRole: "Manager" },
+      { label: "User Management", icon: Users, description: "Invite staff and manage ScanOps roles", route: "/user-management", minRole: "Manager" },
     ],
   },
   {
