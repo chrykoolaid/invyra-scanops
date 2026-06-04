@@ -17,7 +17,6 @@ import {
   Database,
   BarChart2,
   Shield,
-  Layers,
   LayoutDashboard,
   CheckSquare,
 } from "lucide-react";
@@ -35,13 +34,13 @@ const ALL_TILES = [
   { icon: Clock,          label: "Expiry Check",       to: "/expiry-check",            minRole: "Staff" },
   { icon: Printer,        label: "Shelf Tickets",      to: "/shelf-tickets",           minRole: "Staff" },
   { icon: ArrowLeftRight, label: "Transfers",          to: "/transfers",               minRole: "Staff" },
-  { icon: Database,       label: "Inventory Sync",     to: "/inventory-sync",          minRole: "Staff" },
+  { icon: Database,       label: "Sync & Handoff",     to: "/sync-handoff",            minRole: "Staff" },
   { icon: BarChart2,      label: "Reporting",          to: "/scanops-reporting",       minRole: "Supervisor" },
   { icon: Shield,         label: "Product Review",     to: "/product-identity-review", minRole: "Supervisor" },
-  { icon: Layers,         label: "Session Collab",     to: "/session-collaboration",   minRole: "Supervisor" },
+  { icon: LayoutDashboard,label: "Session Collab",     to: "/session-collaboration",   minRole: "Supervisor" },
   { icon: LayoutDashboard,label: "Store Ops",          to: "/store-ops-dashboard",     minRole: "Manager" },
   { icon: Shield,         label: "Device Governance",  to: "/device-governance",       minRole: "Manager" },
-  { icon: Layers,         label: "Desktop Sync",       to: "/desktop-sync-contract",   minRole: "Manager" },
+
   { icon: CheckSquare,    label: "Pilot Readiness",    to: "/pilot-readiness",         minRole: "Admin" },
   { icon: Printer,        label: "Printer Settings",   to: "/printer-settings",        minRole: "Manager" },
 ];

@@ -17,7 +17,7 @@ import Markdowns from './pages/Markdowns';
 import Waste from './pages/Waste';
 import ExpiryCheck from './pages/ExpiryCheck';
 import Tasks from './pages/Tasks';
-import InventorySync from './pages/InventorySync';
+import SyncHandoff from './pages/SyncHandoff';
 import SyncQueue from './pages/SyncQueue';
 import ShelfTickets from './pages/ShelfTickets';
 import Transfers from './pages/Transfers';
@@ -78,6 +78,7 @@ const getAppEscapeMeta = (pathname) => {
     "/scanops-reporting": { title: "ScanOps Reporting", subtitle: "Review scanner operations" },
     "/device-governance": { title: "Device & Shift Governance", subtitle: "Review device readiness" },
     "/session-collaboration": { title: "Session Collaboration", subtitle: "Review multi-user work" },
+    "/sync-handoff": { title: "Sync & Handoff", subtitle: "Queue, setup, and contract review" },
     "/desktop-sync-contract": { title: "Desktop Sync Contract", subtitle: "Review integration contracts" },
     "/store-ops-dashboard": { title: "Store Ops Dashboard", subtitle: "Review store exceptions" },
     "/pilot-readiness": { title: "Pilot Readiness", subtitle: "Review UAT and release evidence" },
@@ -141,7 +142,8 @@ const AuthenticatedApp = () => {
             <Route path="/waste" element={<Waste />} />
             <Route path="/expiry-check" element={<ExpiryCheck />} />
             <Route path="/tasks" element={<Tasks />} />
-            <Route path="/inventory-sync" element={<InventorySync />} />
+            <Route path="/sync-handoff" element={<SyncHandoff />} />
+            <Route path="/inventory-sync" element={<SyncHandoff />} />
             <Route path="/sync-queue" element={<SyncQueue />} />
             <Route path="/shelf-tickets" element={<ShelfTickets />} />
             <Route path="/transfers" element={<Transfers />} />
