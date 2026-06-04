@@ -216,9 +216,28 @@ function SettingsPanel({ session, onMessage }) {
     const event = createScanOpsAuditEvent(mode === "offline" ? SCANOPS_EVENT_TYPES.OFFLINE_MODE_ENTERED : SCANOPS_EVENT_TYPES.ONLINE_MODE_RESTORED, { status: "saved", network_mode: mode });
     onMessage(`Network mode changed · ${event.traceId || event.trace_id}`);
   };
-  const changeContext = () => {
+  const DEPARTMENTS = [
+    { id: "grocery", name: "Grocery" },
+    { id: "fresh", name: "Fresh Foods" },
+    { id: "bakery", name: "Bakery" },
+    { id: "deli", name: "Deli & Charcuterie" },
+    { id: "dairy", name: "Dairy & Eggs" },
+    { id: "frozen", name: "Frozen Foods" },
+    { id: "meat", name: "Meat & Poultry" },
+    { id: "seafood", name: "Seafood" },
+    { id: "produce", name: "Produce" },
+    { id: "beverages", name: "Beverages" },
+    { id: "health_beauty", name: "Health & Beauty" },
+    { id: "household", name: "Household" },
+    { id: "baby", name: "Baby" },
+    { id: "pet", name: "Pet Care" },
+    { id: "general_merch", name: "General Merchandise" },
+  ];
+  const changeContext = (departmentId) => {
     if (!canChangeContext(session)) return block("change_store_department_context", "Manager required");
-    const next = session.departmentId === "grocery" ? { departmentId: "fresh", departmentName: "Fresh Foods" } : { departmentId: "grocery", departmentName: "Grocery" };
+    const dept = DEPARTMENTS.find((d) => d.id === departmentId);
+    if (!dept) return;
+    const next = { departmentId: dept.id, departmentName: dept.name };
     updateScanOpsSession(next);
     const event = createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.SCANOPS_SETTING_CHANGED, { status: "saved", setting_patch: next });
     onMessage(`Department context changed · ${event.traceId || event.trace_id}`);
@@ -226,7 +245,7 @@ function SettingsPanel({ session, onMessage }) {
   return (
     <Section title="Scanner Settings" helper="Comfort settings first; manager-only controls stay secondary.">
       <div className="grid grid-cols-2 gap-2"><button className="rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-bold">Beep On</button><button className="rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-bold">Vibration On</button><button className="rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-bold">Large Targets</button><button className="rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-bold">Comfortable</button></div>
-      {hasRoleAtLeast(session.actorRole, "Manager") ? <><div className="mt-3 rounded-xl border border-border bg-card p-3"><p className="text-xs font-bold text-foreground">Offline Mode · {network}</p><div className="grid grid-cols-2 gap-2 mt-2"><button onClick={() => changeNetwork("online")} className="rounded-xl bg-secondary py-2 text-xs font-bold">Online</button><button onClick={() => changeNetwork("offline")} className="rounded-xl bg-secondary py-2 text-xs font-bold">Offline</button></div></div><div className="mt-3 rounded-xl border border-border bg-card p-3"><p className="text-xs font-bold text-foreground">Store / Department Context</p><p className="text-xs text-muted-foreground">{session.storeName} · {session.departmentName}</p><button type="button" onClick={changeContext} className="mt-2 w-full rounded-xl bg-secondary py-3 text-sm font-bold">Change Department Context</button></div></> : <p className="mt-3 rounded-xl border border-border bg-card p-3 text-xs font-bold text-muted-foreground">Manager required</p>}
+      {hasRoleAtLeast(session.actorRole, "Manager") ? <><div className="mt-3 rounded-xl border border-border bg-card p-3"><p className="text-xs font-bold text-foreground">Offline Mode · {network}</p><div className="grid grid-cols-2 gap-2 mt-2"><button onClick={() => changeNetwork("online")} className="rounded-xl bg-secondary py-2 text-xs font-bold">Online</button><button onClick={() => changeNetwork("offline")} className="rounded-xl bg-secondary py-2 text-xs font-bold">Offline</button></div></div><div className="mt-3 rounded-xl border border-border bg-card p-3"><p className="text-xs font-bold text-foreground">Store / Department Context</p><p className="text-xs text-muted-foreground mb-2">{session.storeName} · {session.departmentName}</p><select value={session.departmentId || ""} onChange={(e) => changeContext(e.target.value)} className="w-full rounded-xl border border-input bg-secondary px-3 py-3 text-sm font-bold text-foreground outline-none focus:ring-2 focus:ring-ring">{DEPARTMENTS.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div></> : <p className="mt-3 rounded-xl border border-border bg-card p-3 text-xs font-bold text-muted-foreground">Manager required</p>}
     </Section>
   );
 }
