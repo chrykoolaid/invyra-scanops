@@ -1,18 +1,21 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import PageHeader from "../components/scanner/PageHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
 import { DoneCard, EmptyState, ItemSummaryCard, MetricPill, PageShell, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
+import { writeExpiryCheckRecord } from "../lib/scanOpsRecordWriter";
+import { ensureInventoryLoaded } from "../lib/inventorySystemAdapter";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { FRESHNESS_CONDITIONS, getExpiryStatus, getFreshnessRecommendation } from "../lib/scanOpsRules";
 
-const TODAY = "2026-05-05";
+const TODAY = new Date().toISOString().slice(0, 10);
 
 export default function ExpiryCheck() {
+  useEffect(() => { ensureInventoryLoaded(); }, []);
   const [scanValue, setScanValue] = useState("");
   const [item, setItem] = useState(null);
-  const [expiryDate, setExpiryDate] = useState("2026-05-06");
+  const [expiryDate, setExpiryDate] = useState(TODAY);
   const [condition, setCondition] = useState("near_expiry");
   const [done, setDone] = useState(null);
   const [continuousScan, setContinuousScan] = useState(false);
@@ -44,6 +47,13 @@ export default function ExpiryCheck() {
       freshness_condition: conditionToSave,
       recommended_action: recForSave.action?.label || recForSave.actionLabel || recForSave.title,
       status: "saved_on_device",
+    });
+    writeExpiryCheckRecord({
+      item: itemToSave,
+      expiryDate: expiryToSave,
+      condition: conditionToSave,
+      expiryStatusLabel: statusForSave.label,
+      recommendedAction: recForSave.action?.label || recForSave.actionLabel || recForSave.title,
     });
     setDone(true);
   };
@@ -82,7 +92,7 @@ export default function ExpiryCheck() {
             <div className="rounded-2xl bg-secondary/60 p-3 text-xs leading-snug text-muted-foreground">Show test scenarios is development-only and collapsed from the operator path.</div>
           </SectionCard>
           {done && <DoneCard title="Expiry check saved" helper="Freshness/expiry truth was recorded on device for sync and review." rows={[{ label: "Expiry", value: expiryStatus.label }, { label: "Condition", value: FRESHNESS_CONDITIONS.find((c) => c.id === condition)?.label || condition }]} />}
-          <StickyActions leftLabel="Review" rightLabel="Save Check" onLeft={() => setDone(null)} onRight={save} />
+          <StickyActions leftLabel="Clear" rightLabel="Save Check" onLeft={() => { setItem(null); setScanValue(""); setDone(null); }} onRight={save} />
         </>}
       </WorkflowMain>
     </PageShell>

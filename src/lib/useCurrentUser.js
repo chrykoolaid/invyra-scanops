@@ -14,7 +14,11 @@ const BASE44_TO_SCANOPS_ROLE = {
   user: "Staff",
 };
 
-function mapRole(base44Role) {
+function mapRole(base44Role, scanopsRole) {
+  // Prefer explicit scanops_role field if set on the user profile
+  if (scanopsRole && ["Admin", "Manager", "Supervisor", "Staff"].includes(scanopsRole)) {
+    return scanopsRole;
+  }
   return BASE44_TO_SCANOPS_ROLE[String(base44Role || "").toLowerCase()] || "Staff";
 }
 
@@ -26,7 +30,7 @@ export function useCurrentUser() {
     base44.auth.me()
       .then((me) => {
         if (me) {
-          const scanOpsRole = mapRole(me.role);
+          const scanOpsRole = mapRole(me.role, me.scanops_role);
           // Sync real identity into ScanOps session
           updateScanOpsSession({
             actorUserId: me.id,

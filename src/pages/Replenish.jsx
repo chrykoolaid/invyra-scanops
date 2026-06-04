@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Bell, BellOff, ClipboardList, MapPin, PackageCheck, PackageX, ShieldAlert, Warehouse } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { getScanOpsSession } from "../lib/scanOpsSession";
+import { writeReplenishRecord, writeReorderFlagRecord } from "../lib/scanOpsRecordWriter";
+import { ensureInventoryLoaded } from "../lib/inventorySystemAdapter";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import PageHeader from "../components/scanner/PageHeader";
 import { BatchList, DoneCard, EmptyState, FieldError, InfoLine, ItemSummaryCard, MetricPill, OperatorAlert, PageShell, QuantityStepper, SectionCard, StickyActions, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
@@ -215,6 +217,9 @@ export default function Replenish() {
   const [reorderFlags, setReorderFlags] = useState([]);
   const [showReorderSettings, setShowReorderSettings] = useState(false);
 
+  // Warm DB inventory cache on mount
+  useEffect(() => { ensureInventoryLoaded(); }, []);
+
   // Load persisted reorder flags from DB on mount
   useEffect(() => {
     base44.entities.ReorderFlag.filter({ status: "open" }, "-created_date", 50)
@@ -319,6 +324,7 @@ export default function Replenish() {
     const issueLabel = ISSUE_OPTIONS.find((option) => option.id === issue)?.label || issue;
     const result = saveReplenishmentAction({ item, actionId, quantity, issueReason: issueLabel, notes, evidenceNote });
     if (!result) return;
+    writeReplenishRecord({ item, quantity: Number(quantity), unit: item?.unitType || "each", outcome: actionId, notes });
     setRecords(result.tasks);
     setSavedResult({ ...result.task, syncStatusLabel: result.event?.syncRecord?.statusLabel || "Pending future handoff" });
     setItem(null);

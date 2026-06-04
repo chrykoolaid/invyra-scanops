@@ -1,17 +1,26 @@
 {
+  "name": "User",
+  "type": "object",
   "properties": {
     "role": {
       "type": "string",
-      "description": "The role of the user in the app",
       "enum": [
         "admin",
         "user"
-      ]
+      ],
+      "default": "user"
+    },
+    "scanops_role": {
+      "type": "string",
+      "enum": [
+        "Admin",
+        "Manager",
+        "Supervisor",
+        "Staff"
+      ],
+      "default": "Staff",
+      "title": "ScanOps Role",
+      "description": "Operational role within ScanOps. Maps to permissions for markdowns, waste approvals, governance, and reporting."
     }
-  },
-  "required": [
-    "role"
-  ],
-  "name": "User",
-  "type": "object"
+  }
 }

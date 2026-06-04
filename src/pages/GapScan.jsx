@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import PageHeader from "../components/scanner/PageHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
@@ -7,6 +7,8 @@ import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { classifyGap, GAP_TYPES } from "../lib/scanOpsRules";
 import { makeWorkflowBatchItem, removeWorkflowBatchItem, upsertWorkflowBatchItem } from "../lib/scanOpsWorkflowBatch";
+import { writeGapScanRecord } from "../lib/scanOpsRecordWriter";
+import { ensureInventoryLoaded } from "../lib/inventorySystemAdapter";
 
 const OUTCOMES = [
   { id: GAP_TYPES.BACKROOM_AVAILABLE, label: "Shelf gap, stock in backroom" },
@@ -16,6 +18,7 @@ const OUTCOMES = [
 ];
 
 export default function GapScan() {
+  useEffect(() => { ensureInventoryLoaded(); }, []);
   const [scanValue, setScanValue] = useState("");
   const [item, setItem] = useState(null);
   const [outcome, setOutcome] = useState(GAP_TYPES.BACKROOM_AVAILABLE);
@@ -48,6 +51,7 @@ export default function GapScan() {
       applies_stock_directly: false,
       status: "saved_on_device",
     });
+    writeGapScanRecord({ item: itemToSave, outcome: outcomeToSave, outcomeLabel: outcomeToSaveLabel });
     setItem(null);
     setScanValue("");
   };

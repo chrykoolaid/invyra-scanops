@@ -16,7 +16,8 @@ import {
   TextInputField,
   WorkflowMain,
 } from "../components/scanner/WorkflowPrimitives";
-import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
+import { resolveInventoryIdentity, ensureInventoryLoaded } from "../lib/inventorySystemAdapter";
+import { writeWasteRecord } from "../lib/scanOpsRecordWriter";
 import { getDefaultExpiryDate, getDefaultLotBatch } from "../lib/scanOpsItemAttributes";
 import { useScanOpsSession } from "../lib/scanOpsSession";
 import { restrictedActionReason } from "../lib/scanOpsPermissions";
@@ -230,6 +231,8 @@ export default function Waste() {
     }
   };
 
+  useEffect(() => { ensureInventoryLoaded(); }, []);
+
   useEffect(() => {
     refreshReviews(null);
     const contracts = getAdjustmentContracts();
@@ -291,6 +294,7 @@ export default function Waste() {
     }
     recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", null, permission, { eventLabel: "Waste review draft saved" });
     const review = createWasteReviewDraft({ item, reasonCode, quantity, expiryDate, batchLot, shelfLocation, evidenceNote });
+    writeWasteRecord({ item, reasonCode, quantity, expiryDate, batchLot, evidenceNote, status: "draft", reviewId: review.reviewId });
     refreshReviews(review.reviewId);
     setItem(null);
     setScanValue("");

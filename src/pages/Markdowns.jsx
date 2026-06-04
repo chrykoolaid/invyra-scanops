@@ -19,7 +19,8 @@ import {
   WorkflowMain,
 } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
-import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
+import { resolveInventoryIdentity, ensureInventoryLoaded } from "../lib/inventorySystemAdapter";
+import { writeMarkdownRecord } from "../lib/scanOpsRecordWriter";
 import {
   buildWorkflowItemAttributeSnapshot,
   getDefaultExpiryDate,
@@ -161,6 +162,8 @@ export default function Markdowns() {
     setSelectedId(stillExists ? nextSelectedId : fallback);
   };
 
+  useEffect(() => { ensureInventoryLoaded(); }, []);
+
   useEffect(() => {
     refreshRequests(null);
     // Stage AD queue is pilot-safe and explicit.
@@ -278,6 +281,7 @@ export default function Markdowns() {
     });
     saveWorkflowItemAttributeSnapshot(attributeSnapshot);
     recordGovernedAction(GOVERNED_ACTIONS.MARKDOWN_SUBMIT, "Markdowns", null, markdownSubmitPermission, { eventLabel: "Markdown request created" });
+    writeMarkdownRecord({ item, reasonCode: reason, selectedPercent, quantity, expiryDate, notes, status: "pending_approval" });
     const request = createMarkdownApprovalRequest({
       item,
       reasonCode: reason,
