@@ -220,27 +220,91 @@ export async function removeOutboxEvent(eventId) {
 
 /**
  * Archive a terminal outbox event to sync_history for audit retention.
- * The original event record is preserved; a final_status and archived_at stamp are added.
+ *
+ * LOSSLESS ARCHIVAL PROTOCOL (Phase 1B):
+ *   1. Read full original event from event_outbox.
+ *   2. Build archive record preserving ALL fields: payload, payload_hash,
+ *      event_id, event_type, snapshot evidence, sync metadata, receipt metadata.
+ *   3. Write to sync_history — confirmed via promisify before any deletion.
+ *   4. Only after sync_history write is confirmed successful,
+ *      remove the event from event_outbox.
+ *   5. If sync_history write throws, the outbox event is NOT removed.
+ *      Instead it is marked with archived_failed_at so callers can retry.
+ *
+ * Two stores are used in separate transactions because IndexedDB does not
+ * support cross-store atomic transactions in a portable way. The write-first
+ * / delete-second order guarantees no data loss on failure.
  *
  * @param {string} eventId
  * @param {string} finalStatus — one of OUTBOX_SYNC_STATUS terminal values
+ * @returns {Promise<{ ok: boolean, archived?: object, error?: string }>}
  */
 export async function archiveOutboxEventToHistory(eventId, finalStatus) {
-  const outboxStore = await tx(STORES.EVENT_OUTBOX, "readwrite");
-  const event = await promisify(outboxStore.get(eventId));
-  if (!event) return null;
+  // ── Step 1: Read the full original event ───────────────────────────────────
+  const outboxReadStore = await tx(STORES.EVENT_OUTBOX, "readonly");
+  const event = await promisify(outboxReadStore.get(eventId));
+  if (!event) {
+    return { ok: false, error: `Event ${eventId} not found in event_outbox.` };
+  }
 
-  const histStore = await tx(STORES.SYNC_HISTORY, "readwrite");
+  // ── Step 2: Build archive record — full copy, no fields stripped ───────────
   const archived = {
+    // All original fields preserved verbatim (payload, payload_hash, event_id,
+    // event_type, event_version, source_*, captured_at, created_at,
+    // inventory_snapshot_*, sync_*, receipt_*).
     ...event,
+    // Archive-specific metadata appended (never overwrites event fields).
     final_status: finalStatus || event.sync_status || "UNKNOWN",
     archived_at: new Date().toISOString(),
+    archive_schema_version: "1.0",
   };
-  await promisify(histStore.put(archived));
 
-  // Remove from live outbox after successful archive
-  await promisify(outboxStore.delete(eventId));
-  return archived;
+  // ── Step 3: Write to sync_history — must succeed before deletion ───────────
+  try {
+    const histStore = await tx(STORES.SYNC_HISTORY, "readwrite");
+    await promisify(histStore.put(archived));
+  } catch (histError) {
+    // sync_history write failed — do NOT remove from outbox.
+    // Mark the outbox event with a failure stamp so callers can identify and retry.
+    try {
+      const outboxMark = await tx(STORES.EVENT_OUTBOX, "readwrite");
+      const current = await promisify(outboxMark.get(eventId));
+      if (current) {
+        await promisify(outboxMark.put({
+          ...current,
+          archive_failed_at: new Date().toISOString(),
+          archive_failure_reason: String(histError?.message || "sync_history write failed"),
+        }));
+      }
+    } catch {
+      // Best-effort mark — original event remains intact regardless.
+    }
+    return {
+      ok: false,
+      error: `sync_history write failed for ${eventId}: ${histError?.message}. Outbox event preserved.`,
+    };
+  }
+
+  // ── Step 4: Only now remove from active event_outbox ──────────────────────
+  try {
+    const outboxDelStore = await tx(STORES.EVENT_OUTBOX, "readwrite");
+    await promisify(outboxDelStore.delete(eventId));
+  } catch (delError) {
+    // Deletion failed — event exists in both stores (sync_history already has it).
+    // This is safe: duplicate in outbox will be ignored on future read if
+    // archive_confirmed_at is present. Callers should check sync_history first.
+    const outboxMarkStore = await tx(STORES.EVENT_OUTBOX, "readwrite");
+    const current = await promisify(outboxMarkStore.get(eventId));
+    if (current) {
+      await promisify(outboxMarkStore.put({
+        ...current,
+        archive_confirmed_at: archived.archived_at,
+        outbox_delete_failed: true,
+      })).catch(() => {});
+    }
+  }
+
+  return { ok: true, archived };
 }
 
 export async function getSyncHistory() {

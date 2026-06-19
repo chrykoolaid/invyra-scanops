@@ -2,6 +2,25 @@ import { SCANOPS_USER_CONTEXT } from "./scanOpsInventoryFixtures";
 import { getInventoryConnection, pushInventoryEvent, setInventoryConnectionMode } from "./inventorySystemAdapter";
 import { getScanOpsSession } from "./scanOpsSession";
 import { TASK_DUE_STATES, TASK_PRIORITIES, TASK_STATUSES, TASK_TYPES, upsertDerivedTaskFromSource } from "./scanOpsTasks";
+import {
+  OUTBOX_SYNC_STATUS,
+  RECEIPT_STATUS,
+  RETAINED_OUTBOX_STATUSES,
+  buildOutboxSyncMetaPatch,
+  isReplayEligible,
+  isStuckSending,
+  isTerminalOutboxStatus,
+  mapReceiptToOutboxStatus,
+  mapStaleSnapshotReceiptByEventType,
+  replayOrderComparator,
+  validateReceiptEnvelope,
+} from "./scanopsSyncStatus";
+import {
+  getOutboxEvents,
+  getOutboxEvent,
+  updateOutboxEventSyncMeta,
+  archiveOutboxEventToHistory,
+} from "./inventory/storageProvider";
 
 const QUEUE_KEY = "invyra_scanops_sync_queue_v3_stage_y";
 const LEGACY_QUEUE_KEYS = ["invyra_scanops_sync_queue_v2", "invyra_scanops_sync_queue_v1"];
@@ -976,4 +995,206 @@ export function resetSyncQueue() {
   writeKey(LOCAL_HASHES_KEY, []);
   writeKey(SERVER_REFS_KEY, []);
   return [];
+}
+
+// ── Phase 1B: Bridge Outbox Replay & Receipt Handling ────────────────────────
+//
+// HARD RULES:
+//   - No stock mutation, no price mutation, no StockMovement, no POSLineItem.
+//   - ScanOps remains capture-only. Inventory decides what events mean.
+//   - All outbox mutations go through updateOutboxEventSyncMeta() only.
+//   - Immutable fields (event_id, event_type, payload, payload_hash,
+//     captured_at, inventory_snapshot_*) are never touched.
+
+/**
+ * Collect and sort bridge outbox events eligible for replay.
+ *
+ * Eligible statuses: QUEUED, FAILED_RETRYABLE.
+ * SENDING is eligible only if stuck beyond STUCK_SENDING_TIMEOUT_MS (10 min).
+ * All other statuses (ACKED, DUPLICATE_ACKED, HELD, REJECTED,
+ * FAILED_TERMINAL, QUARANTINED) are excluded from replay.
+ *
+ * Ordering: created_at ASC → captured_at ASC → event_id ASC (deterministic).
+ *
+ * @returns {Promise<{ ok: boolean, queued: object[], skipped: object[], errors: string[] }>}
+ */
+export async function replayBridgeOutboxEvents() {
+  let allEvents;
+  try {
+    allEvents = await getOutboxEvents();
+  } catch (err) {
+    return { ok: false, queued: [], skipped: [], errors: [`getOutboxEvents failed: ${err?.message}`] };
+  }
+
+  const eligible = [];
+  const skipped = [];
+
+  for (const event of allEvents) {
+    if (isReplayEligible(event)) {
+      eligible.push(event);
+    } else {
+      skipped.push({ event_id: event.event_id, sync_status: event.sync_status, reason: "ineligible_status" });
+    }
+  }
+
+  // Sort deterministically before replay
+  eligible.sort(replayOrderComparator);
+
+  // For each stuck-SENDING event: reset to QUEUED before replay attempt
+  // (conservative — only if past timeout)
+  const resetErrors = [];
+  for (const event of eligible) {
+    if (isStuckSending(event)) {
+      try {
+        await updateOutboxEventSyncMeta(event.event_id, buildOutboxSyncMetaPatch({
+          sync_status: OUTBOX_SYNC_STATUS.QUEUED,
+          last_error_code: "STUCK_SENDING_RESET",
+          last_error_message: "Event was stuck in SENDING beyond timeout. Reset to QUEUED for replay.",
+        }));
+      } catch (resetErr) {
+        resetErrors.push(`Reset failed for ${event.event_id}: ${resetErr?.message}`);
+      }
+    }
+  }
+
+  // Mark each eligible event as SENDING (sync metadata update only — immutable fields untouched)
+  const sendingErrors = [];
+  const queued = [];
+  for (const event of eligible) {
+    try {
+      await updateOutboxEventSyncMeta(event.event_id, buildOutboxSyncMetaPatch({
+        sync_status: OUTBOX_SYNC_STATUS.SENDING,
+        sync_attempt_count: (event.sync_attempt_count ?? 0) + 1,
+        last_sync_attempt_at: nowIso(),
+      }));
+      queued.push({ event_id: event.event_id, event_type: event.event_type, sync_status: OUTBOX_SYNC_STATUS.SENDING });
+    } catch (sendErr) {
+      sendingErrors.push(`Mark SENDING failed for ${event.event_id}: ${sendErr?.message}`);
+    }
+  }
+
+  const errors = [...resetErrors, ...sendingErrors];
+  return { ok: errors.length === 0, queued, skipped, errors };
+}
+
+/**
+ * Apply a validated receipt envelope to an outbox event.
+ *
+ * Updates sync metadata only. Immutable fields are never written.
+ * If the resulting status is terminal and archive-eligible, triggers
+ * archiveOutboxEventToHistory() with the lossless safety protocol.
+ *
+ * @param {string} eventId
+ * @param {object} receipt — validated receipt envelope from Inventory
+ * @returns {Promise<{ ok: boolean, outboxStatus: string, archived: boolean, error?: string }>}
+ */
+export async function applyReceiptToOutboxEvent(eventId, receipt) {
+  const existing = await getOutboxEvent(eventId);
+  if (!existing) {
+    return { ok: false, outboxStatus: null, archived: false, error: `Event ${eventId} not found in outbox.` };
+  }
+
+  // Determine the correct outbox status from the receipt
+  let outboxStatus;
+  if (receipt.status === RECEIPT_STATUS.REJECTED_STALE_SNAPSHOT) {
+    // Event-type dependent — use bridge event_type from the outbox record
+    outboxStatus = mapStaleSnapshotReceiptByEventType(existing.event_type);
+  } else {
+    outboxStatus = mapReceiptToOutboxStatus(receipt.status);
+  }
+
+  // Build the safe metadata patch (allowed mutable fields only)
+  const patch = buildOutboxSyncMetaPatch({
+    sync_status: outboxStatus,
+    receipt_id: receipt.receipt_id || null,
+    receipt_status: receipt.status,
+    receipt_received_at: receipt.inventory_received_at || nowIso(),
+    inventory_ack_ref: receipt.linked_workflow_ref || null,
+    last_error_code: outboxStatus === OUTBOX_SYNC_STATUS.FAILED_RETRYABLE
+      || outboxStatus === OUTBOX_SYNC_STATUS.FAILED_TERMINAL
+      || outboxStatus === OUTBOX_SYNC_STATUS.REJECTED
+      ? (receipt.decision_code || receipt.status) : null,
+    last_error_message: receipt.decision_message || null,
+  });
+
+  try {
+    await updateOutboxEventSyncMeta(eventId, patch);
+  } catch (updateErr) {
+    return { ok: false, outboxStatus, archived: false, error: `Metadata update failed: ${updateErr?.message}` };
+  }
+
+  // Archive terminal events to sync_history using lossless protocol
+  let archived = false;
+  if (RETAINED_OUTBOX_STATUSES.has(outboxStatus) && isTerminalOutboxStatus(outboxStatus)) {
+    const archiveResult = await archiveOutboxEventToHistory(eventId, outboxStatus);
+    archived = archiveResult?.ok === true;
+    if (!archiveResult?.ok) {
+      // Non-fatal — outbox event is updated correctly; archive can be retried
+      console.warn(`[ScanOps Bridge] Archive to sync_history failed for ${eventId}:`, archiveResult?.error);
+    }
+  }
+
+  return { ok: true, outboxStatus, archived };
+}
+
+/**
+ * Process an incoming Inventory receipt envelope.
+ *
+ * Entry point for future Inventory ingestion receipts.
+ * Validates the receipt, resolves the outbox event, applies the receipt,
+ * and handles Duplicate ACK as a special non-error terminal state.
+ *
+ * @param {object} receipt — Inventory receipt envelope
+ * @returns {Promise<{ ok: boolean, event_id: string, outboxStatus: string, archived: boolean, errors: string[] }>}
+ */
+export async function processSyncReceipt(receipt) {
+  const validationErrors = validateReceiptEnvelope(receipt);
+  if (validationErrors.length > 0) {
+    return { ok: false, event_id: receipt?.event_id || null, outboxStatus: null, archived: false, errors: validationErrors };
+  }
+
+  const { event_id } = receipt;
+
+  // Special handling: ACK_DUPLICATE is not an error — do not replay, do not create correction
+  if (receipt.status === RECEIPT_STATUS.ACK_DUPLICATE) {
+    const existing = await getOutboxEvent(event_id);
+    if (!existing) {
+      // Already archived or unknown — treat as safe
+      return { ok: true, event_id, outboxStatus: OUTBOX_SYNC_STATUS.DUPLICATE_ACKED, archived: false, errors: [] };
+    }
+
+    const patch = buildOutboxSyncMetaPatch({
+      sync_status: OUTBOX_SYNC_STATUS.DUPLICATE_ACKED,
+      receipt_id: receipt.receipt_id || null,
+      receipt_status: receipt.status,
+      receipt_received_at: receipt.inventory_received_at || nowIso(),
+      inventory_ack_ref: receipt.linked_workflow_ref || null,
+    });
+
+    try {
+      await updateOutboxEventSyncMeta(event_id, patch);
+    } catch (err) {
+      return { ok: false, event_id, outboxStatus: OUTBOX_SYNC_STATUS.DUPLICATE_ACKED, archived: false, errors: [`Duplicate ACK metadata update failed: ${err?.message}`] };
+    }
+
+    // DUPLICATE_ACKED is terminal → archive
+    const archiveResult = await archiveOutboxEventToHistory(event_id, OUTBOX_SYNC_STATUS.DUPLICATE_ACKED);
+    return {
+      ok: true,
+      event_id,
+      outboxStatus: OUTBOX_SYNC_STATUS.DUPLICATE_ACKED,
+      archived: archiveResult?.ok === true,
+      errors: [],
+    };
+  }
+
+  // General receipt application
+  const result = await applyReceiptToOutboxEvent(event_id, receipt);
+  return {
+    ok: result.ok,
+    event_id,
+    outboxStatus: result.outboxStatus,
+    archived: result.archived,
+    errors: result.error ? [result.error] : [],
+  };
 }
