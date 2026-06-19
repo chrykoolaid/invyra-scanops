@@ -54,6 +54,7 @@ import {
   evaluateBusinessConflicts,
   ledgerStatusForReceipt,
 } from "./syncIngestionDecisions";
+import { routeToMarkdownSyncReviewQueue } from "./syncIngestionRouter";
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -461,25 +462,26 @@ export async function buildInventorySyncReceipt(event, decision, persist = true)
   return receiptObj;
 }
 
-// ── 7. Review Queue Routing (non-mutating stub — Phase 1C-E) ─────────────────
+// ── 7. Review Queue Routing (Phase 1C-E: live routing) ───────────────────────
 
 /**
- * Non-mutating routing stub.
- * Phase 1C-E will implement safe routing to MarkdownSyncReviewQueue.
+ * Route an eligible ScanOps bridge event to the MarkdownSyncReviewQueue.
  *
- * Does NOT create: MarkdownReviewQueue, MarkdownSyncReviewQueue,
- * StockMovement, POSLineItem, Item Master changes, Purchase Orders,
- * or Forecasting records.
+ * Phase 1C-E: delegates to routeToMarkdownSyncReviewQueue() in syncIngestionRouter.js.
+ *
+ * Eligible receipt statuses: ACK_RECEIVED, ACK_PROCESSED, HELD_FOR_REVIEW.
+ * Ineligible: ACK_DUPLICATE, REJECTED_*, FAILED_*, QUARANTINED.
+ *
+ * Routing is idempotent — duplicate ingestion_ids do not create duplicate records.
+ * mutation_performed is always false — review record creation is not an
+ * operational mutation (no stock, price, POS, order, or forecast change).
  *
  * @param {object} event
- * @param {object} decision
- * @returns {{ routed: boolean, reason: string }}
+ * @param {object} decision — { ingestion_id, status, decision_code, decision_reason }
+ * @returns {Promise<{ routed: boolean, route_type?: string, linked_workflow_ref?: string, mutation_performed: boolean, reason?: string }>}
  */
-export function routeAcceptedEventToReviewQueue(event, decision) {
-  return {
-    routed: false,
-    reason: "ROUTING_NOT_ENABLED_IN_PHASE_1C_D",
-  };
+export async function routeAcceptedEventToReviewQueue(event, decision) {
+  return routeToMarkdownSyncReviewQueue(event, decision);
 }
 
 // ── 8. Main Ingestion Entry Point ─────────────────────────────────────────────
@@ -487,7 +489,7 @@ export function routeAcceptedEventToReviewQueue(event, decision) {
 /**
  * Process an inbound ScanOps bridge event through the Inventory ingestion pipeline.
  *
- * Pipeline order (Phase 1C-D — Ledger First):
+ * Pipeline order (Phase 1C-E — Ledger First + Review Routing):
  *   1.  Validate bridge event schema
  *   2.  Build idempotency key
  *   3.  Check idempotency (live DB)
@@ -498,7 +500,7 @@ export function routeAcceptedEventToReviewQueue(event, decision) {
  *   6.  Validate business rules (conflict matrix — Phase 1C-D safe checks)
  *   7.  Persist InventorySyncInboundEvent ledger record
  *   8.  Persist InventorySyncReceipt (ACK_RECEIVED)
- *   9.  Route to review queue (non-mutating stub)
+ *   9.  Route to MarkdownSyncReviewQueue (idempotent; updates linked_workflow_ref)
  *
  * NEVER mutates stock, price, POS, orders, forecasting, or Item Master.
  *
@@ -634,7 +636,7 @@ export async function processInboundScanOpsEvent(event) {
   }
 
   // ── Step 7: Persist InventorySyncInboundEvent ledger record ───────────────
-  // Status: PROCESSED — ledger written; routing not yet enabled.
+  // Status: PROCESSED — ledger written; review routing follows in Step 9.
   const processed_at = nowIso();
   await persistInboundEvent(event, {
     ...ctx,
@@ -642,7 +644,7 @@ export async function processInboundScanOpsEvent(event) {
     status:          INVENTORY_SYNC_INBOUND_STATUS.PROCESSED,
     decision:        "ACK_RECEIVED",
     decision_code:   "INGESTED_LEDGER_ONLY",
-    decision_reason: "Event accepted into Inventory sync ledger. Workflow routing not enabled in Phase 1C-D.",
+    decision_reason: "Event accepted into Inventory sync ledger. Routing to MarkdownSyncReviewQueue in Phase 1C-E.",
   });
 
   // ── Step 8: Persist InventorySyncReceipt ─────────────────────────────────
@@ -651,22 +653,32 @@ export async function processInboundScanOpsEvent(event) {
     received_at: processed_at,
     status:          INVENTORY_SYNC_RECEIPT_STATUS.ACK_RECEIVED,
     decision_code:   "INGESTED_LEDGER_ONLY",
-    decision_message: "Event received and stored in Inventory sync ledger. Workflow routing not enabled in Phase 1C-D.",
+    decision_message: "Event received and stored in Inventory sync ledger. Routed to MarkdownSyncReviewQueue for review.",
   });
 
-  // ── Step 9: Route to review queue (non-mutating stub) ─────────────────────
-  const routingResult = routeAcceptedEventToReviewQueue(event, { ingestion_id, status: receipt.status });
+  // ── Step 9: Route to MarkdownSyncReviewQueue ──────────────────────────────
+  // Idempotent — duplicate ingestion_ids return the existing review_id.
+  // linked_workflow_ref is written back to both ledger and receipt by the router.
+  // mutation_performed is always false — no stock/price/POS/order/forecast change.
+  const routingResult = await routeAcceptedEventToReviewQueue(event, {
+    ingestion_id,
+    status:          receipt.status,
+    decision_code:   "INGESTED_LEDGER_ONLY",
+    decision_reason: "Event passed all Phase 1C-E ingestion checks. Routed to MarkdownSyncReviewQueue.",
+  });
 
   return {
     ok: true,
     ingestion_id,
     receipt,
     decision: {
-      stage:          "ledger_persisted",
-      status:         INVENTORY_SYNC_INBOUND_STATUS.PROCESSED,
-      decision_code:  "INGESTED_LEDGER_ONLY",
-      decision_reason: "Phase 1C-D complete. Ledger and receipt persisted. No mutations performed.",
-      routing:        routingResult,
+      stage:               "ledger_and_review_routed",
+      status:              INVENTORY_SYNC_INBOUND_STATUS.PROCESSED,
+      decision_code:       "INGESTED_LEDGER_ONLY",
+      decision_reason:     "Phase 1C-E complete. Ledger, receipt, and review queue record persisted. No operational mutations performed.",
+      routing:             routingResult,
+      linked_workflow_ref: routingResult?.linked_workflow_ref || null,
+      mutation_performed:  false,
     },
   };
 }
