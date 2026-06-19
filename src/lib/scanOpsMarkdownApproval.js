@@ -8,9 +8,12 @@ import {
   updateShelfTicketRequestStatus,
 } from "./scanOpsShelfTicketContracts";
 import { getCurrentPriceSnapshot, getCurrencySymbol, getOptionLabel, MARKDOWN_REASON_OPTIONS } from "./scanOpsRequestLifecycle";
+import { writeMarkdownRecord, writeMarkdownApprovalAudit } from "./scanOpsRecordWriter";
 import { normalizeSelectedScanItem } from "./scanOpsWorkflowBatch";
 import { buildGovernanceSnapshot } from "./scanOpsGovernance";
 import { COLLABORATION_STATES, COLLABORATION_VERSION, TASK_TYPES, registerCollaborationTaskForRecord } from "./scanOpsCollaboration";
+import { addOutboxEvent } from "./inventory/storageProvider";
+import { buildInventorySnapshotEvidence, inventorySnapshotEventFields } from "./inventory/inventorySnapshotEvidence";
 
 const REQUESTS_KEY = "invyra_scanops_markdown_approval_requests_v1";
 const EVENTS_KEY = "invyra_scanops_markdown_approval_events_v1";
@@ -142,6 +145,48 @@ function actorSnapshot() {
   };
 }
 
+
+function requestSnapshotFields(requestOrEvidence = {}) {
+  const evidence = requestOrEvidence?.inventorySnapshotEvidence || {
+    inventory_snapshot_id: requestOrEvidence?.inventory_snapshot_id || requestOrEvidence?.inventorySnapshotId,
+    inventory_snapshot_ref: requestOrEvidence?.inventory_snapshot_ref || requestOrEvidence?.inventorySnapshotRef,
+    inventory_snapshot_hash: requestOrEvidence?.inventory_snapshot_hash || requestOrEvidence?.inventorySnapshotHash,
+    inventory_record_version: requestOrEvidence?.inventory_record_version || requestOrEvidence?.inventoryRecordVersion,
+    last_inventory_sync_at: requestOrEvidence?.last_inventory_sync_at || requestOrEvidence?.lastInventorySyncAt,
+    inventory_snapshot: requestOrEvidence?.inventory_snapshot || requestOrEvidence?.inventorySnapshot,
+    source: requestOrEvidence?.inventorySnapshotSource || requestOrEvidence?.source,
+    schema_version: requestOrEvidence?.inventorySnapshotSchemaVersion || requestOrEvidence?.schema_version,
+  };
+  return inventorySnapshotEventFields(evidence);
+}
+
+function queueMarkdownOutboxEvent(eventType, request, payload = {}) {
+  const snapshotFields = requestSnapshotFields(request);
+  const eventId = makeId("outbox_md");
+  void addOutboxEvent({
+    event_id: eventId,
+    event_type: eventType,
+    workflow: "MARKDOWN",
+    source: "SCANOPS",
+    sync_status: "queued",
+    inventory_snapshot_ref: snapshotFields.inventory_snapshot_ref,
+    inventory_snapshot_id: snapshotFields.inventory_snapshot_id,
+    inventory_snapshot_hash: snapshotFields.inventory_snapshot_hash,
+    payload: {
+      request_id: request?.requestId || payload?.requestId || null,
+      item_id: request?.itemId || null,
+      sku: request?.sku || null,
+      barcode: request?.barcode || null,
+      item_name: request?.itemName || null,
+      status: request?.status || payload?.status || null,
+      ...snapshotFields,
+      ...payload,
+    },
+  }).catch((error) => {
+    console.warn("Unable to mirror Markdown event to IndexedDB outbox", error);
+  });
+}
+
 function appendMarkdownEvent(eventType, request, extra = {}) {
   const event = {
     eventId: makeId("md_evt"),
@@ -151,11 +196,13 @@ function appendMarkdownEvent(eventType, request, extra = {}) {
     sku: request?.sku || extra.sku || null,
     barcode: request?.barcode || extra.barcode || null,
     status: request?.status || extra.status || "recorded",
+    ...requestSnapshotFields(request || extra),
     ...actorSnapshot(),
     ...extra,
     createdAt: nowIso(),
   };
   safeWrite(EVENTS_KEY, [event, ...safeRead(EVENTS_KEY)]);
+  queueMarkdownOutboxEvent(eventType, request || extra, event);
   return event;
 }
 
@@ -264,6 +311,13 @@ function normalizeRequest(input = {}) {
   const actorInput = input.actorSnapshot || {};
   const status = input.status || rule.status || MARKDOWN_STATUSES.DRAFT;
   const selectedMarkdownPrice = numberOrNull(input.selectedMarkdownPrice ?? rule.selectedMarkdownPrice);
+  const inventorySnapshotEvidence = input.inventorySnapshotEvidence || buildInventorySnapshotEvidence(input.rawItem?.raw || input.rawItem || input.item || {}, {
+    item_id: input.itemId,
+    sku: input.sku,
+    barcode: input.barcode,
+    current_unit_price: currentPrice,
+  });
+  const inventoryFields = inventorySnapshotEventFields(inventorySnapshotEvidence);
 
   return {
     requestId,
@@ -333,6 +387,19 @@ function normalizeRequest(input = {}) {
     locationName: input.locationName || actorInput.locationName || actor.locationName,
     attributeSnapshot: input.attributeSnapshot || null,
     rawItem: input.rawItem || null,
+    inventorySnapshotEvidence,
+    inventorySnapshotId: input.inventorySnapshotId || inventoryFields.inventory_snapshot_id,
+    inventorySnapshotRef: input.inventorySnapshotRef || inventoryFields.inventory_snapshot_ref,
+    inventorySnapshotHash: input.inventorySnapshotHash || inventoryFields.inventory_snapshot_hash,
+    inventoryRecordVersion: input.inventoryRecordVersion || inventoryFields.inventory_record_version,
+    lastInventorySyncAt: input.lastInventorySyncAt || inventoryFields.last_inventory_sync_at,
+    inventorySnapshot: input.inventorySnapshot || inventoryFields.inventory_snapshot,
+    inventory_snapshot_id: input.inventory_snapshot_id || inventoryFields.inventory_snapshot_id,
+    inventory_snapshot_ref: input.inventory_snapshot_ref || inventoryFields.inventory_snapshot_ref,
+    inventory_snapshot_hash: input.inventory_snapshot_hash || inventoryFields.inventory_snapshot_hash,
+    inventory_record_version: input.inventory_record_version || inventoryFields.inventory_record_version,
+    last_inventory_sync_at: input.last_inventory_sync_at || inventoryFields.last_inventory_sync_at,
+    inventory_snapshot: input.inventory_snapshot || inventoryFields.inventory_snapshot,
     collaborationVersion: input.collaborationVersion || COLLABORATION_VERSION,
     collaborationTaskId: input.collaborationTaskId || `task_${requestId}`,
     collaborationOwnershipStatus: input.collaborationOwnershipStatus || COLLABORATION_STATES.TASK_CLAIMED,
@@ -360,6 +427,8 @@ export function saveMarkdownApprovalRequest(request) {
 
 export function createMarkdownApprovalRequest({ item, reasonCode, selectedMarkdownPercent, quantity, expiryDate, batchLot, notes, labelRequired, labelHandoffMethod, attributeSnapshot }) {
   const selected = normalizeSelectedScanItem(item, "manual_search");
+  const inventorySnapshotEvidence = buildInventorySnapshotEvidence(item);
+  const inventoryFields = inventorySnapshotEventFields(inventorySnapshotEvidence);
   const currentPrice = getCurrentPriceSnapshot(item);
   const ruleEvaluation = evaluateMarkdownRule({ expiryDate, reasonCode, selectedMarkdownPercent, currentPrice, quantity });
   const request = saveMarkdownApprovalRequest({
@@ -393,6 +462,35 @@ export function createMarkdownApprovalRequest({ item, reasonCode, selectedMarkdo
     labelHandoffMethod,
     attributeSnapshot,
     rawItem: selected,
+    inventorySnapshotEvidence,
+    inventorySnapshotId: inventoryFields.inventory_snapshot_id,
+    inventorySnapshotRef: inventoryFields.inventory_snapshot_ref,
+    inventorySnapshotHash: inventoryFields.inventory_snapshot_hash,
+    inventoryRecordVersion: inventoryFields.inventory_record_version,
+    lastInventorySyncAt: inventoryFields.last_inventory_sync_at,
+    inventorySnapshot: inventoryFields.inventory_snapshot,
+  });
+
+  // Persist to DB (offline-safe) — links via syncStatus: `md_req:<requestId>`
+  writeMarkdownRecord({
+    item,
+    reasonCode,
+    selectedPercent: selectedMarkdownPercent,
+    quantity,
+    expiryDate,
+    notes,
+    status: "pending_approval",
+    requestId: request.requestId,
+    currentPrice: ruleEvaluation.selectedMarkdownPrice != null ? currentPrice : null,
+    selectedMarkdownPrice: ruleEvaluation.selectedMarkdownPrice,
+    currency: getCurrencySymbol(item),
+    approvalRoleRequired: ruleEvaluation.approvalRoleRequired,
+    riskLevel: ruleEvaluation.riskLevel,
+    inventorySnapshotEvidence,
+    inventorySnapshotRef: inventoryFields.inventory_snapshot_ref,
+    inventorySnapshotId: inventoryFields.inventory_snapshot_id,
+    inventorySnapshotHash: inventoryFields.inventory_snapshot_hash,
+    inventoryRecordVersion: inventoryFields.inventory_record_version,
   });
 
   appendMarkdownEvent(SCANOPS_EVENT_TYPES.MARKDOWN_REQUEST_CREATED, request, {
@@ -400,6 +498,7 @@ export function createMarkdownApprovalRequest({ item, reasonCode, selectedMarkdo
     rule_summary: request.ruleSummary,
     applies_price_directly: false,
     printer_connection_deferred: true,
+    ...requestSnapshotFields(request),
   });
   registerCollaborationTaskForRecord({
     taskId: request.collaborationTaskId || `task_${request.requestId}`,
@@ -427,6 +526,7 @@ export function createMarkdownApprovalRequest({ item, reasonCode, selectedMarkdo
     label_handoff_method: request.labelHandoffMethod,
     applies_price_directly: false,
     printer_connection_deferred: true,
+    ...requestSnapshotFields(request),
   });
   return request;
 }
@@ -445,6 +545,7 @@ function saveUpdatedRequest(request, eventType, extra = {}) {
     approval_reason: updated.approvalReason,
     applies_price_directly: false,
     printer_connection_deferred: true,
+    ...requestSnapshotFields(updated),
     ...extra,
   });
   return updated;
@@ -466,7 +567,7 @@ export function updateMarkdownApprovalStatus(requestId, action, reason = "") {
   }
 
   if (action === "approve") {
-    return saveUpdatedRequest({
+    const updated = saveUpdatedRequest({
       ...request,
       status: MARKDOWN_STATUSES.APPROVED,
       approvalDecision: "Approved",
@@ -475,25 +576,85 @@ export function updateMarkdownApprovalStatus(requestId, action, reason = "") {
       approvedByRole: actor.requestedByRole,
       labelHandoffStatus: request.labelRequired ? LABEL_HANDOFF_STATUSES.LABEL_NEEDED : LABEL_HANDOFF_STATUSES.NOT_REQUIRED,
     }, SCANOPS_EVENT_TYPES.MARKDOWN_APPROVED, { action });
+    writeMarkdownApprovalAudit({
+      requestId: request.requestId,
+      action: "approved",
+      actorName: actor.requestedBy,
+      actorRole: actor.requestedByRole,
+      itemName: request.itemName,
+      itemSku: request.sku,
+      itemBarcode: request.barcode,
+      reason: reason || "Approved for label handoff",
+      selectedPercent: request.selectedMarkdownPercent,
+      selectedMarkdownPrice: request.selectedMarkdownPrice,
+      currentPrice: request.currentPrice,
+      currency: request.currency,
+      inventorySnapshotRef: request.inventorySnapshotRef || request.inventory_snapshot_ref,
+      inventorySnapshotId: request.inventorySnapshotId || request.inventory_snapshot_id,
+      inventorySnapshotHash: request.inventorySnapshotHash || request.inventory_snapshot_hash,
+      inventoryRecordVersion: request.inventoryRecordVersion || request.inventory_record_version,
+      inventorySnapshot: request.inventorySnapshot || request.inventory_snapshot,
+    });
+    return updated;
   }
 
   if (action === "return") {
-    return saveUpdatedRequest({
+    const updated = saveUpdatedRequest({
       ...request,
       status: MARKDOWN_STATUSES.RETURNED,
       approvalDecision: "Returned",
       approvalReason: reason || "Returned for correction",
     }, SCANOPS_EVENT_TYPES.MARKDOWN_RETURNED, { action });
+    writeMarkdownApprovalAudit({
+      requestId: request.requestId,
+      action: "returned",
+      actorName: actor.requestedBy,
+      actorRole: actor.requestedByRole,
+      itemName: request.itemName,
+      itemSku: request.sku,
+      itemBarcode: request.barcode,
+      reason: reason || "Returned for correction",
+      selectedPercent: request.selectedMarkdownPercent,
+      selectedMarkdownPrice: request.selectedMarkdownPrice,
+      currentPrice: request.currentPrice,
+      currency: request.currency,
+      inventorySnapshotRef: request.inventorySnapshotRef || request.inventory_snapshot_ref,
+      inventorySnapshotId: request.inventorySnapshotId || request.inventory_snapshot_id,
+      inventorySnapshotHash: request.inventorySnapshotHash || request.inventory_snapshot_hash,
+      inventoryRecordVersion: request.inventoryRecordVersion || request.inventory_record_version,
+      inventorySnapshot: request.inventorySnapshot || request.inventory_snapshot,
+    });
+    return updated;
   }
 
   if (action === "reject") {
-    return saveUpdatedRequest({
+    const updated = saveUpdatedRequest({
       ...request,
       status: MARKDOWN_STATUSES.REJECTED,
       approvalDecision: "Rejected",
       approvalReason: reason || "Rejected",
       labelHandoffStatus: LABEL_HANDOFF_STATUSES.NOT_REQUIRED,
     }, SCANOPS_EVENT_TYPES.MARKDOWN_REJECTED, { action });
+    writeMarkdownApprovalAudit({
+      requestId: request.requestId,
+      action: "rejected",
+      actorName: actor.requestedBy,
+      actorRole: actor.requestedByRole,
+      itemName: request.itemName,
+      itemSku: request.sku,
+      itemBarcode: request.barcode,
+      reason: reason || "Rejected",
+      selectedPercent: request.selectedMarkdownPercent,
+      selectedMarkdownPrice: request.selectedMarkdownPrice,
+      currentPrice: request.currentPrice,
+      currency: request.currency,
+      inventorySnapshotRef: request.inventorySnapshotRef || request.inventory_snapshot_ref,
+      inventorySnapshotId: request.inventorySnapshotId || request.inventory_snapshot_id,
+      inventorySnapshotHash: request.inventorySnapshotHash || request.inventory_snapshot_hash,
+      inventoryRecordVersion: request.inventoryRecordVersion || request.inventory_record_version,
+      inventorySnapshot: request.inventorySnapshot || request.inventory_snapshot,
+    });
+    return updated;
   }
 
   return request;
@@ -535,6 +696,7 @@ export function createMarkdownLabelHandoff(requestId) {
       duplicate_blocked: true,
       applies_price_directly: false,
       printer_connection_deferred: true,
+      ...requestSnapshotFields(request),
     });
     return { request, duplicateBlocked: true };
   }
@@ -562,6 +724,11 @@ export function createMarkdownLabelHandoff(requestId) {
     quantity: request.quantity,
     copies: request.quantity,
     itemSnapshot: request.rawItem,
+    inventorySnapshotRef: request.inventorySnapshotRef || request.inventory_snapshot_ref || null,
+    inventorySnapshotId: request.inventorySnapshotId || request.inventory_snapshot_id || null,
+    inventorySnapshotHash: request.inventorySnapshotHash || request.inventory_snapshot_hash || null,
+    inventoryRecordVersion: request.inventoryRecordVersion || request.inventory_record_version || null,
+    inventorySnapshot: request.inventorySnapshot || request.inventory_snapshot || null,
     requestedBy: request.requestedBy,
     requestedByRole: request.requestedByRole,
     requestedById: request.requestedById,
@@ -591,6 +758,7 @@ export function createMarkdownLabelHandoff(requestId) {
     handoffId: makeId("printer_handoff"),
     sourceWorkflow: "MARKDOWNS",
     sourceRequestId: request.requestId,
+    ...requestSnapshotFields(request),
     labelType: "MARKDOWN_LABEL",
     handoffMethod: request.labelHandoffMethod || LABEL_HANDOFF_METHODS.STORE_PRINT_QUEUE,
     targetPrinterType: handoffTargetType(request.labelHandoffMethod),
@@ -642,6 +810,7 @@ export function createMarkdownLabelHandoff(requestId) {
     hardware_connection_implemented: false,
     printer_connection_deferred: true,
     applies_price_directly: false,
+    ...requestSnapshotFields(updated),
   });
 
   return { request: updated, shelfTicketRequest: shelfRequest, printContract, printerHandoff, duplicateBlocked: false };

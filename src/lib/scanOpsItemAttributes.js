@@ -1,5 +1,6 @@
 import { getScanOpsSession } from "./scanOpsSession";
 import { normalizeSelectedScanItem } from "./scanOpsWorkflowBatch";
+import { buildInventorySnapshotEvidence, inventorySnapshotEventFields } from "./inventory/inventorySnapshotEvidence";
 
 const SNAPSHOT_STORAGE_KEY = "invyra_scanops_workflow_item_attribute_snapshots_v1";
 const EXPIRY_STORAGE_KEY = "invyra_scanops_expiry_evidence_v1";
@@ -135,6 +136,13 @@ export function buildWorkflowItemAttributeSnapshot({
   const actor = getActorFields();
   const itemId = selected?.itemId || item?.internalItemId || item?.itemId || item?.id || item?.sku || "unknown_item";
 
+  const inventoryEvidence = buildInventorySnapshotEvidence(item, {
+    item_id: itemId,
+    sku: selected?.sku,
+    barcode: selected?.barcode || rawBarcode || undefined,
+  });
+  const inventoryEvidenceFields = inventorySnapshotEventFields(inventoryEvidence);
+
   const itemSnapshot = selected ? {
     item_id: itemId,
     sku: selected.sku,
@@ -146,6 +154,7 @@ export function buildWorkflowItemAttributeSnapshot({
     unit: selected.unit,
     sell_type: item?.sellType || item?.sell_type,
     weighted_item: isWeightedItem(item),
+    ...inventoryEvidenceFields,
   } : null;
 
   const expirySnapshot = normalizedExpiry ? {
@@ -208,6 +217,7 @@ export function buildWorkflowItemAttributeSnapshot({
     workflow_type: workflowType,
     workflow_item_id: workflowItemId || idBase,
     item_snapshot: itemSnapshot,
+    ...inventoryEvidenceFields,
     expiry_snapshot: expirySnapshot,
     lot_batch_snapshot: lotBatchSnapshot,
     weighted_snapshot: weightedSnapshot,

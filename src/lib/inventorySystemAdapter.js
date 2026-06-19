@@ -1,20 +1,139 @@
-import { getInventorySnapshot } from "./inventorySnapshot";
+/**
+ * inventorySystemAdapter.js — Phase C refactor
+ *
+ * All item lookup is now routed through the active InventoryProvider.
+ * Provider is selected by DATA_MODE (see lib/inventory/inventoryConfig.js).
+ *
+ * HARD RULES:
+ *   - In inventory_bridge mode, null means "not in Inventory cache."
+ *     Callers must show "Item not found in Inventory cache / refresh required."
+ *   - No stock or price mutation.
+ *   - Sync/connection state is tracked separately from snapshot cache.
+ */
+import { getActiveInventoryProvider } from "./inventory/activeInventoryProvider";
+import { fetchInventoryItems } from "./useInventoryItems";
 import { resolveProductIdentity } from "./productIdentityResolver";
+import { getDataMode, isMockMode } from "./inventory/inventoryConfig";
+import { MOCK_INVENTORY_ITEMS } from "./dev/inventoryFixtures";
 
-const SNAPSHOT_KEY = "invyra_scanops_inventory_snapshot_v1";
+// ── In-memory warm cache for synchronous resolveInventoryIdentity calls ──
+// Populated on ensureInventoryLoaded(). Used only as a sync bridge for
+// legacy workflow components that call resolveInventoryIdentity() synchronously.
+let _syncCache = null;
+let _syncCacheAt = 0;
+let _syncCacheMode = null;
+const SYNC_CACHE_TTL = 60_000;
+
+function clearWarmCacheIfModeChanged() {
+  const mode = getDataMode();
+  if (_syncCacheMode && _syncCacheMode !== mode) {
+    _syncCache = null;
+    _syncCacheAt = 0;
+  }
+  return mode;
+}
+
+export function clearInventoryWarmCache() {
+  _syncCache = null;
+  _syncCacheAt = 0;
+  _syncCacheMode = getDataMode();
+}
+
+export async function ensureInventoryLoaded() {
+  const now = Date.now();
+  const mode = clearWarmCacheIfModeChanged();
+  if (_syncCache && _syncCacheMode === mode && now - _syncCacheAt < SYNC_CACHE_TTL) return;
+  try {
+    const provider = getActiveInventoryProvider();
+    await provider.refreshInventoryCache();
+    // Populate sync cache from live DB for bridge mode, fixtures for mock mode.
+    // The cache is tagged by DATA_MODE to prevent mock-warmed rows leaking into bridge mode.
+    const rows = await fetchInventoryItems();
+    if (rows && rows.length > 0) {
+      _syncCache = rows;
+      _syncCacheAt = now;
+      _syncCacheMode = mode;
+    } else if (isMockMode()) {
+      _syncCache = MOCK_INVENTORY_ITEMS;
+      _syncCacheAt = now;
+      _syncCacheMode = mode;
+    } else {
+      _syncCache = [];
+      _syncCacheAt = now;
+      _syncCacheMode = mode;
+    }
+  } catch {
+    if (!isMockMode()) {
+      _syncCache = [];
+      _syncCacheAt = now;
+      _syncCacheMode = mode;
+    }
+  }
+}
+
+/**
+ * Synchronous item resolver — used by existing workflow scan handlers.
+ * 
+ * In bridge mode: resolves against live DB cache warmed by ensureInventoryLoaded().
+ * Returns null (never mock) if item not found in bridge mode.
+ */
+export function resolveInventoryIdentity(input) {
+  const mode = clearWarmCacheIfModeChanged();
+  const items = _syncCacheMode === mode && _syncCache ? _syncCache : (isMockMode() ? MOCK_INVENTORY_ITEMS : []);
+  return resolveProductIdentity(input, items);
+}
+
+// ── Connection/sync status (non-mutating, event-handoff only) ──
 const CONNECTION_KEY = "invyra_scanops_inventory_connection_v1";
-function read(key, fallback) { if (typeof window === "undefined") return fallback; try { const raw = window.localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch { return fallback; } }
-function write(key, value) { if (typeof window === "undefined") return; try { window.localStorage.setItem(key, JSON.stringify(value)); } catch {} }
+function readLS(key, fallback) { try { const r = window.localStorage.getItem(key); return r ? JSON.parse(r) : fallback; } catch { return fallback; } }
+function writeLS(key, value) { try { window.localStorage.setItem(key, JSON.stringify(value)); } catch {} }
 
-export function getInventoryConnection() { return read(CONNECTION_KEY, { mode: "online", statusLabel: "Online", adapterName: "Invyra Inventory Local Pilot Adapter", lastPullAt: null, lastPushAt: null }); }
-export function setInventoryConnectionMode(mode) { const next = { ...getInventoryConnection(), mode, statusLabel: mode === "offline" ? "Offline" : "Online", updatedAt: new Date().toISOString() }; write(CONNECTION_KEY, next); return next; }
-export function getLocalInventorySnapshot() { return read(SNAPSHOT_KEY, getInventorySnapshot()); }
-export function pullInventorySnapshot() { const c = getInventoryConnection(); if (c.mode === "offline") return { ok: false, error: "Inventory system unavailable while scanner is offline.", snapshot: getLocalInventorySnapshot() }; const snapshot = { ...getInventorySnapshot(), pulledAt: new Date().toISOString() }; write(SNAPSHOT_KEY, snapshot); write(CONNECTION_KEY, { ...c, mode: "online", statusLabel: "Online", lastPullAt: snapshot.pulledAt }); return { ok: true, snapshot }; }
-export function pushInventoryEvent(syncRecord) { const c = getInventoryConnection(); if (c.mode === "offline") return { ok: false, error: "Network unavailable. Event remains saved on device." }; const attemptedAt = new Date().toISOString(); write(CONNECTION_KEY, { ...c, mode: "online", statusLabel: "Pilot local", lastPushAt: null, lastPushAttemptAt: attemptedAt }); return { ok: false, attemptedAt, inventoryEventId: null, error: "Desktop inventory connection is not configured. Event remains saved locally for pilot review.", localEventId: syncRecord?.localEventId || null }; }
-export function resolveInventoryIdentity(input) { return resolveProductIdentity(input, getLocalInventorySnapshot().items); }
+export function getInventoryConnection() {
+  return readLS(CONNECTION_KEY, { mode: "online", statusLabel: "Online", adapterName: "Invyra Inventory Bridge Adapter", lastPullAt: null, lastPushAt: null });
+}
+export function setInventoryConnectionMode(mode) {
+  const next = { ...getInventoryConnection(), mode, statusLabel: mode === "offline" ? "Offline" : "Online", updatedAt: new Date().toISOString() };
+  writeLS(CONNECTION_KEY, next);
+  return next;
+}
+
+/** @deprecated Use getActiveInventoryProvider().refreshInventoryCache() */
+export function getLocalInventorySnapshot() {
+  const mode = clearWarmCacheIfModeChanged();
+  const items = _syncCacheMode === mode && _syncCache ? _syncCache : (isMockMode() ? MOCK_INVENTORY_ITEMS : []);
+  return { items, dataMode: mode, cacheMode: _syncCacheMode };
+}
+
+export function pullInventorySnapshot() {
+  const c = getInventoryConnection();
+  if (c.mode === "offline") return { ok: false, error: "Inventory system unavailable while scanner is offline.", snapshot: getLocalInventorySnapshot() };
+  ensureInventoryLoaded();
+  const pulledAt = new Date().toISOString();
+  writeLS(CONNECTION_KEY, { ...c, mode: "online", statusLabel: "Online", lastPullAt: pulledAt });
+  return { ok: true, snapshot: getLocalInventorySnapshot() };
+}
+
+export function pushInventoryEvent(syncRecord) {
+  const c = getInventoryConnection();
+  if (c.mode === "offline") return { ok: false, error: "Network unavailable. Event remains saved on device." };
+  const attemptedAt = new Date().toISOString();
+  writeLS(CONNECTION_KEY, { ...c, mode: "online", statusLabel: "Bridge stub", lastPushAt: null, lastPushAttemptAt: attemptedAt });
+  return { ok: false, attemptedAt, inventoryEventId: null, error: "Desktop inventory connection is not configured. Event remains saved locally.", localEventId: syncRecord?.localEventId || null };
+}
+
+export function simulateInventoryConnection(mode) { return setInventoryConnectionMode(mode); }
+
+// Convenience aliases
 export function getInventoryItemByBarcode(barcode) { return resolveInventoryIdentity(barcode); }
 export function getInventoryItemBySku(sku) { return resolveInventoryIdentity(sku); }
 export function getInventoryItemByPLU(plu) { return resolveInventoryIdentity(plu); }
-export function getStockForLocation(identity) { const item = resolveInventoryIdentity(identity); if (!item) return null; return { shelfStock: item.shelfStock ?? item.shelf_stock, backroomStock: item.backroomStock ?? item.backroom_stock, stockOnHand: item.stockOnHand ?? item.stock_on_hand, unitType: item.unitType || "each", shelfLocation: item.shelfLocation || item.location, backroomLocation: item.backroomLocation }; }
-export function getExpiryBatches(identity) { const item = resolveInventoryIdentity(identity); if (!item) return []; return [{ batchId: item.batchId || item.batch_id || "batch_pending", lotId: item.lotId || item.lot_id || null, expiryDate: item.expiryDate || item.expiry_date || null, freshnessStatus: item.freshnessStatus || item.expiry_status || "OK", stockOnHand: item.stockOnHand ?? item.stock_on_hand ?? null }]; }
-export function simulateInventoryConnection(mode) { return setInventoryConnectionMode(mode); }
+export function getStockForLocation(identity) {
+  const item = resolveInventoryIdentity(identity);
+  if (!item) return null;
+  return { shelfStock: item.shelfStock ?? item.shelf_stock, backroomStock: item.backroomStock ?? item.backroom_stock, stockOnHand: item.stockOnHand ?? item.stock_on_hand, unitType: item.unitType || "each", shelfLocation: item.shelfLocation || item.location, backroomLocation: item.backroomLocation };
+}
+export function getExpiryBatches(identity) {
+  const item = resolveInventoryIdentity(identity);
+  if (!item) return [];
+  return [{ batchId: item.batchId || item.batch_id || "batch_pending", lotId: item.lotId || item.lot_id || null, expiryDate: item.expiryDate || item.expiry_date || null, freshnessStatus: item.freshnessStatus || item.expiry_status || "OK", stockOnHand: item.stockOnHand ?? item.stock_on_hand ?? null }];
+}

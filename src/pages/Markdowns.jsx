@@ -19,7 +19,11 @@ import {
   WorkflowMain,
 } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
-import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
+import { resolveInventoryIdentity, ensureInventoryLoaded } from "../lib/inventorySystemAdapter";
+import { addOutboxEvent } from "../lib/inventory/storageProvider";
+import { useInventoryCacheStatus, isStaleCacheBlockingForPriceSensitiveWorkflow } from "../lib/inventory/useInventoryCacheStatus";
+import InventoryCacheStatusBar from "../components/scanner/InventoryCacheStatusBar";
+
 import {
   buildWorkflowItemAttributeSnapshot,
   getDefaultExpiryDate,
@@ -40,6 +44,8 @@ import {
   getCurrentPriceSnapshot,
   MARKDOWN_REASON_OPTIONS,
 } from "../lib/scanOpsRequestLifecycle";
+import MarkdownSuggestionsPanel from "../components/scanner/MarkdownSuggestionsPanel";
+import PrintLabelButton from "../components/scanner/PrintLabelButton";
 import {
   createMarkdownApprovalRequest,
   createMarkdownLabelHandoff,
@@ -135,6 +141,9 @@ export default function Markdowns() {
   const handoffPermission = canPerformScanOpsAction(GOVERNED_ACTIONS.SHELF_TICKET_PRINT_HANDOFF, governance);
   const canApprove = markdownApprovePermission.allowed;
 
+  const cacheStatus = useInventoryCacheStatus();
+  const staleCacheBlocking = isStaleCacheBlockingForPriceSensitiveWorkflow(cacheStatus);
+
   const [scanValue, setScanValue] = useState("");
   const [item, setItem] = useState(null);
   const [reason, setReason] = useState(() => MARKDOWN_REASON_OPTIONS.some((option) => option.id === taskReason) ? taskReason : "short_dated");
@@ -160,6 +169,8 @@ export default function Markdowns() {
     setSelectedId(stillExists ? nextSelectedId : fallback);
   };
 
+  useEffect(() => { ensureInventoryLoaded(); }, []);
+
   useEffect(() => {
     refreshRequests(null);
     // Stage AD queue is pilot-safe and explicit.
@@ -183,6 +194,39 @@ export default function Markdowns() {
     if (filter === "blocked") return request.status === MARKDOWN_STATUSES.BLOCKED_WASTE_REVIEW_REQUIRED || request.status === MARKDOWN_STATUSES.REJECTED;
     return true;
   }), [requests, filter]);
+
+  const selectSuggestion = (inventoryItem, cat) => {
+    // Normalise the raw inventory snapshot item into the shape resolveInventoryIdentity returns
+    const normalized = {
+      ...inventoryItem,
+      id: inventoryItem.internalItemId,
+      shelf_stock: inventoryItem.shelfStock,
+      backroom_stock: inventoryItem.backroomStock,
+      stock_on_hand: inventoryItem.stockOnHand,
+      minimum_shelf_qty: inventoryItem.minimumStock,
+      current_price: inventoryItem.currentPrice,
+      expiry_date: inventoryItem.expiryDate,
+      expiry_status: inventoryItem.freshnessStatus,
+      location: inventoryItem.shelfLocation,
+    };
+    setOperatorError(null);
+    const defaultExpiry = inventoryItem.expiryDate || "";
+    const price = getCurrentPriceSnapshot(normalized);
+    setItem(normalized);
+    setReason(cat.reason || "short_dated");
+    setSelectedPercent(cat.suggestedPercent || "25");
+    setQuantity("1");
+    setExpiryDate(defaultExpiry);
+    setBatchLot(inventoryItem.batchId || "");
+    setQuantityType(inventoryItem.unitType || "each");
+    setLabelRequired(true);
+    setHandoffMethod(LABEL_HANDOFF_METHODS.STORE_PRINT_QUEUE);
+    setNotes(`Suggested by scan round: ${cat.tag}`);
+    setScanValue(inventoryItem.barcode || inventoryItem.sku || "");
+    setDone(null);
+    // Scroll to top of form
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const scan = (value) => {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
@@ -225,6 +269,10 @@ export default function Markdowns() {
       return;
     }
     setOperatorError(null);
+    if (staleCacheBlocking) {
+      setOperatorError({ title: "Inventory cache stale", helper: "Refresh the inventory cache before creating a markdown request. Pricing data may be outdated.", tone: "danger" });
+      return;
+    }
     if (!markdownSubmitPermission.allowed) {
       recordGovernedAction(GOVERNED_ACTIONS.MARKDOWN_SUBMIT, "Markdowns", null, markdownSubmitPermission);
       setOperatorError({ title: "Supervisor required", helper: markdownSubmitPermission.reason || "Staff can save permitted requests, but cannot approve restricted markdown actions." });
@@ -256,7 +304,8 @@ export default function Markdowns() {
       labelHandoffMethod: handoffMethod,
       attributeSnapshot,
     });
-    createScanOpsEvent(attributeSnapshot.weighted_snapshot ? SCANOPS_EVENT_TYPES.WEIGHTED_ITEM_EVIDENCE_CAPTURED : SCANOPS_EVENT_TYPES.ATTRIBUTE_EVIDENCE_CAPTURED, {
+    const attributeEventType = attributeSnapshot.weighted_snapshot ? SCANOPS_EVENT_TYPES.WEIGHTED_ITEM_EVIDENCE_CAPTURED : SCANOPS_EVENT_TYPES.ATTRIBUTE_EVIDENCE_CAPTURED;
+    const attributeEventPayload = {
       source_module: "Markdowns",
       markdown_request_id: request.requestId,
       item_name: request.itemName,
@@ -268,7 +317,25 @@ export default function Markdowns() {
       applies_stock_directly: false,
       applies_price_directly: false,
       status: "attribute_evidence_saved",
-    });
+      inventory_snapshot_id: request.inventory_snapshot_id || request.inventorySnapshotId,
+      inventory_snapshot_ref: request.inventory_snapshot_ref || request.inventorySnapshotRef,
+      inventory_snapshot_hash: request.inventory_snapshot_hash || request.inventorySnapshotHash,
+      inventory_record_version: request.inventory_record_version || request.inventoryRecordVersion,
+      last_inventory_sync_at: request.last_inventory_sync_at || request.lastInventorySyncAt,
+      inventory_snapshot: request.inventory_snapshot || request.inventorySnapshot,
+    };
+    createScanOpsEvent(attributeEventType, attributeEventPayload);
+    void addOutboxEvent({
+      event_id: `outbox_md_attr_${request.requestId}_${Date.now()}`,
+      event_type: attributeEventType,
+      workflow: "MARKDOWN",
+      source: "SCANOPS",
+      sync_status: "queued",
+      inventory_snapshot_ref: attributeEventPayload.inventory_snapshot_ref,
+      inventory_snapshot_id: attributeEventPayload.inventory_snapshot_id,
+      inventory_snapshot_hash: attributeEventPayload.inventory_snapshot_hash,
+      payload: attributeEventPayload,
+    }).catch(() => {});
     setDone({
       title: request.wasteReviewRequired ? "Markdown blocked for Waste Review" : "Markdown request created",
       helper: request.wasteReviewRequired ? "Expired stock is not eligible for markdown approval in this stage." : "Saved locally. Pending sync. Approval-led; no price has changed.",
@@ -298,6 +365,10 @@ export default function Markdowns() {
 
   const createHandoff = () => {
     if (!selectedRequest) return;
+    if (staleCacheBlocking) {
+      setOperatorError({ title: "Inventory cache stale", helper: "Refresh cache before creating a label handoff.", tone: "danger" });
+      return;
+    }
     if (!handoffPermission.allowed) {
       recordGovernedAction(GOVERNED_ACTIONS.SHELF_TICKET_PRINT_HANDOFF, "Markdowns", selectedRequest.requestId, handoffPermission);
       setOperatorError({ title: "Permission required", helper: handoffPermission.reason || "This handoff is blocked until an authorised role is available." });
@@ -340,6 +411,15 @@ export default function Markdowns() {
       />
       <WorkflowMain>
         <GovernanceContextStrip />
+        <InventoryCacheStatusBar cacheStatus={cacheStatus} onRefresh={cacheStatus.refresh} isStrict={true} />
+        {staleCacheBlocking && (
+          <OperatorAlert
+            title="Inventory cache stale — submit and print blocked"
+            helper="Markdown pricing depends on current inventory data. Refresh the cache before creating or approving requests."
+            tone="danger"
+            actions={[{ label: "Refresh Cache", onClick: cacheStatus.refresh, variant: "primary" }]}
+          />
+        )}
         {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} tone={operatorError.tone || "warning"} actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}
         {done && !done.request && (
           <SectionCard className="border-amber-200 bg-amber-50/70">
@@ -410,6 +490,8 @@ export default function Markdowns() {
             </SectionCard>
           </>
         )}
+
+        <MarkdownSuggestionsPanel onSelectItem={selectSuggestion} />
 
         <SectionCard className="space-y-3">
           <div className="flex items-start justify-between gap-3">
@@ -530,6 +612,13 @@ export default function Markdowns() {
               <button type="button" disabled={!canHandoffSelected} onClick={createHandoff} className="min-h-12 w-full rounded-2xl bg-primary px-3 text-sm font-black text-primary-foreground active:scale-[0.98] disabled:opacity-40">
                 Ready for Label Handoff
               </button>
+              {selectedRequest?.status === MARKDOWN_STATUSES.APPROVED && (
+                <PrintLabelButton
+                  recordId={selectedRequest.requestId}
+                  disabled={!canApprove}
+                  onPrinted={() => refreshRequests(selectedId)}
+                />
+              )}
             </SectionCard>
           </>
         ) : (
@@ -539,13 +628,13 @@ export default function Markdowns() {
         {item && (
           <StickyActions
             leftLabel="Cancel Request"
-            rightLabel="Create Request"
+            rightLabel={staleCacheBlocking ? "Cache stale — refresh" : "Create Request"}
             onLeft={() => {
               setItem(null);
               setScanValue("");
             }}
-            onRight={createRequest}
-            rightDisabled={false}
+            onRight={staleCacheBlocking ? cacheStatus.refresh : createRequest}
+            rightDisabled={cacheStatus.refreshing}
           />
         )}
       </WorkflowMain>
