@@ -3,11 +3,10 @@ import PageHeader from "../components/scanner/PageHeader";
 import {
   AlertTriangle, CheckCircle2, Eye, FileWarning, GitCompareArrows,
   RefreshCw, RotateCcw, ShieldAlert, Trash2, Wifi, WifiOff,
-  Settings2, Database, ClipboardCheck, FileJson2, GitBranch,
-  LockKeyhole, MonitorSmartphone, ShieldCheck, Save,
+  Settings2, Database, FileJson2, GitBranch,
+  LockKeyhole, MonitorSmartphone, Save,
 } from "lucide-react";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
-import { getInventoryConnection } from "../lib/inventorySystemAdapter";
 import { useScanOpsSession } from "../lib/scanOpsSession";
 import { hasRoleAtLeast, restrictedActionReason } from "../lib/scanOpsPermissions";
 import { deriveHandoffStateFromSyncStatus, formatHandoffStateLabel } from "../lib/scanOpsInventoryDesktopHandoffContract";

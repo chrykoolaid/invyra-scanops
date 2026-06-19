@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Bell, BellOff, ClipboardList, MapPin, PackageCheck, PackageX, ShieldAlert, Warehouse } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { getScanOpsSession } from "../lib/scanOpsSession";
-import { writeReplenishRecord, writeReorderFlagRecord } from "../lib/scanOpsRecordWriter";
+import { writeReplenishRecord } from "../lib/scanOpsRecordWriter";
 import { ensureInventoryLoaded } from "../lib/inventorySystemAdapter";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import PageHeader from "../components/scanner/PageHeader";
