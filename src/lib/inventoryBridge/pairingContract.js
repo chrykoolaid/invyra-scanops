@@ -1,11 +1,12 @@
 /**
- * pairingContract.js — ScanOps Phase 1D-D-H
+ * pairingContract.js — ScanOps Phase 1D-D-H / 1D-D-J
  *
- * ScanOps-side pairing request contract mirror for the ScanOps ↔ Inventory
- * Bridge v1 pairing flow.
+ * ScanOps-side pairing contract mirror for the ScanOps ↔ Inventory Bridge v1
+ * pairing flow.
  *
- * Scope for this phase:
+ * Scope for these phases:
  * - Local contract helpers only.
+ * - Validates Inventory pairing offer shapes before ScanOps builds a request.
  * - Builds and validates ScanOps pairing request shapes that Inventory can
  *   understand later.
  * - Does not send pairing requests, create device approvals, enforce relay
@@ -19,6 +20,7 @@
  */
 
 export const SCANOPS_INVENTORY_BRIDGE_PAIRING_PHASE = '1D-D-H';
+export const SCANOPS_INVENTORY_BRIDGE_PAIRING_OFFER_ACCEPTANCE_PHASE = '1D-D-J';
 export const SCANOPS_INVENTORY_BRIDGE_PAIRING_CONTRACT_VERSION = '1.0.0';
 export const SCANOPS_INVENTORY_BRIDGE_PROTOCOL_VERSION = '1.0.0';
 export const SCANOPS_INVENTORY_BRIDGE_SOURCE_SYSTEM = 'scanops';
@@ -42,12 +44,31 @@ export const SCANOPS_INVENTORY_BRIDGE_DEVICE_TYPE = Object.freeze({
   UNKNOWN: 'UNKNOWN',
 });
 
+export const SCANOPS_INVENTORY_BRIDGE_PAIRING_TRANSPORT_MODE = Object.freeze({
+  PROTOTYPE_CLOUD_RELAY: 'PROTOTYPE_CLOUD_RELAY',
+  PRODUCTION_LAN_SPEC_ONLY: 'PRODUCTION_LAN_SPEC_ONLY',
+});
+
 export const SCANOPS_INVENTORY_BRIDGE_PAIRING_RESULT_CODE = Object.freeze({
+  PAIRING_OFFER_VALID: 'PAIRING_OFFER_VALID',
+  PAIRING_OFFER_INVALID: 'PAIRING_OFFER_INVALID',
+  PAIRING_OFFER_EXPIRED: 'PAIRING_OFFER_EXPIRED',
   PAIRING_REQUEST_VALID: 'PAIRING_REQUEST_VALID',
   PAIRING_REQUEST_INVALID: 'PAIRING_REQUEST_INVALID',
   PAIRING_PROTOCOL_MISMATCH: 'PAIRING_PROTOCOL_MISMATCH',
   PAIRING_ENVIRONMENT_MISMATCH: 'PAIRING_ENVIRONMENT_MISMATCH',
 });
+
+export const SCANOPS_INVENTORY_BRIDGE_PAIRING_OFFER_REQUIRED_FIELDS = Object.freeze([
+  'bridge_protocol_version',
+  'pairing_contract_version',
+  'pairing_method',
+  'environment',
+  'issued_at',
+  'expires_at',
+  'store_id',
+  'inventory_instance_id',
+]);
 
 export const SCANOPS_INVENTORY_BRIDGE_PAIRING_REQUIRED_FIELDS = Object.freeze([
   'bridge_protocol_version',
@@ -115,15 +136,116 @@ function redact(value) {
   return `${text.slice(0, 4)}••••${text.slice(-4)}`;
 }
 
-function classifyPairingValidationCode(errors) {
-  if (!errors.length) return SCANOPS_INVENTORY_BRIDGE_PAIRING_RESULT_CODE.PAIRING_REQUEST_VALID;
+function classifyPairingValidationCode(errors, type = 'request') {
+  if (!errors.length) {
+    return type === 'offer'
+      ? SCANOPS_INVENTORY_BRIDGE_PAIRING_RESULT_CODE.PAIRING_OFFER_VALID
+      : SCANOPS_INVENTORY_BRIDGE_PAIRING_RESULT_CODE.PAIRING_REQUEST_VALID;
+  }
+  if (errors.some((error) => error.includes('expired'))) {
+    return SCANOPS_INVENTORY_BRIDGE_PAIRING_RESULT_CODE.PAIRING_OFFER_EXPIRED;
+  }
   if (errors.some((error) => error.includes('Environment mismatch'))) {
     return SCANOPS_INVENTORY_BRIDGE_PAIRING_RESULT_CODE.PAIRING_ENVIRONMENT_MISMATCH;
   }
   if (errors.some((error) => error.includes('protocol mismatch') || error.includes('contract mismatch'))) {
     return SCANOPS_INVENTORY_BRIDGE_PAIRING_RESULT_CODE.PAIRING_PROTOCOL_MISMATCH;
   }
-  return SCANOPS_INVENTORY_BRIDGE_PAIRING_RESULT_CODE.PAIRING_REQUEST_INVALID;
+  return type === 'offer'
+    ? SCANOPS_INVENTORY_BRIDGE_PAIRING_RESULT_CODE.PAIRING_OFFER_INVALID
+    : SCANOPS_INVENTORY_BRIDGE_PAIRING_RESULT_CODE.PAIRING_REQUEST_INVALID;
+}
+
+export function validateScanOpsInventoryBridgePairingOffer(input, expected = {}) {
+  const offer = parseJsonMaybe(input);
+  const errors = [];
+
+  if (!offer) {
+    return {
+      ok: false,
+      code: SCANOPS_INVENTORY_BRIDGE_PAIRING_RESULT_CODE.PAIRING_OFFER_INVALID,
+      errors: ['Pairing offer must be an object or JSON string.'],
+      offer: null,
+    };
+  }
+
+  for (const field of SCANOPS_INVENTORY_BRIDGE_PAIRING_OFFER_REQUIRED_FIELDS) {
+    if (!offer[field]) errors.push(`Missing ${field}.`);
+  }
+
+  if (
+    offer.bridge_protocol_version &&
+    offer.bridge_protocol_version !== SCANOPS_INVENTORY_BRIDGE_PROTOCOL_VERSION
+  ) {
+    errors.push(`Bridge protocol mismatch. Expected ${SCANOPS_INVENTORY_BRIDGE_PROTOCOL_VERSION}.`);
+  }
+
+  if (
+    offer.pairing_contract_version &&
+    offer.pairing_contract_version !== SCANOPS_INVENTORY_BRIDGE_PAIRING_CONTRACT_VERSION
+  ) {
+    errors.push(`Pairing contract mismatch. Expected ${SCANOPS_INVENTORY_BRIDGE_PAIRING_CONTRACT_VERSION}.`);
+  }
+
+  if (offer.pairing_method && !isKnown(offer.pairing_method, SCANOPS_INVENTORY_BRIDGE_PAIRING_METHOD)) {
+    errors.push(`Unsupported pairing method: ${offer.pairing_method}.`);
+  }
+
+  if (offer.environment && !isKnown(offer.environment, SCANOPS_INVENTORY_BRIDGE_ENVIRONMENT)) {
+    errors.push(`Unsupported bridge environment: ${offer.environment}.`);
+  }
+
+  const expectedEnvironment = expected.environment
+    ? normalizeEnvironment(expected.environment)
+    : null;
+  if (expectedEnvironment && offer.environment && offer.environment !== expectedEnvironment) {
+    errors.push(`Environment mismatch. Pairing is ${offer.environment}; expected ${expectedEnvironment}.`);
+  }
+
+  const issuedMs = parseDateMs(offer.issued_at);
+  if (offer.issued_at && !issuedMs) {
+    errors.push('issued_at must be a valid ISO date.');
+  }
+
+  const expiresMs = parseDateMs(offer.expires_at);
+  if (!expiresMs) {
+    errors.push('expires_at must be a valid ISO date.');
+  } else if (Date.now() > expiresMs) {
+    errors.push('Pairing offer has expired.');
+  }
+
+  if (offer.transport_mode && !isKnown(offer.transport_mode, SCANOPS_INVENTORY_BRIDGE_PAIRING_TRANSPORT_MODE)) {
+    errors.push(`Unsupported transport mode: ${offer.transport_mode}.`);
+  }
+
+  return {
+    ok: errors.length === 0,
+    code: classifyPairingValidationCode(errors, 'offer'),
+    errors,
+    offer,
+  };
+}
+
+export function getScanOpsInventoryBridgePairingOfferSafeSummary(input = {}) {
+  const offer = parseJsonMaybe(input) || {};
+  return {
+    bridge_protocol_version: offer.bridge_protocol_version || null,
+    pairing_contract_version: offer.pairing_contract_version || null,
+    pairing_method: offer.pairing_method || null,
+    environment: offer.environment || null,
+    issued_at: offer.issued_at || null,
+    expires_at: offer.expires_at || null,
+    store_id: offer.store_id || null,
+    inventory_instance_id: offer.inventory_instance_id || null,
+    transport_mode: offer.transport_mode || null,
+    bridge_host: offer.bridge_host || null,
+    bridge_port: offer.bridge_port || null,
+    bridge_base_url: offer.bridge_base_url || null,
+    pairing_ref: redact(offer.pairing_ref),
+    challenge_ref: redact(offer.challenge_ref),
+    prototype_transport: offer.prototype_transport ?? null,
+    transport_note: offer.transport_note || null,
+  };
 }
 
 export function buildScanOpsInventoryBridgePairingRequest(overrides = {}) {
