@@ -1,17 +1,20 @@
 /**
- * inventorySnapshotEvidence.js
+ * inventorySnapshotEvidence.js — Phase 1A update
  *
- * Generates standardised inventory snapshot evidence blocks to be attached
- * to all ScanOps Markdown capture / request / approval / reject / return /
- * handoff records.
+ * Generates standardised inventory snapshot evidence blocks AND normalised
+ * outbox events for the ScanOps ↔ Inventory Bridge v1.
  *
  * HARD RULES:
  *   - Does NOT mutate inventory stock, price, or any Inventory entity.
  *   - Does NOT create StockMovement or POSLineItem records.
  *   - Read-only snapshot attestation only.
+ *   - Outbox events are immutable once queued (Phase 1A contract).
  */
 
 import { getSnapshotMeta } from "./storageProvider";
+import { buildBridgeEvent, toBridgeEventType } from "../scanopsBridgeEventContract";
+import { getScanOpsSession, buildEventIdentity } from "../scanOpsSession";
+import { buildGovernanceSnapshot } from "../scanOpsGovernance";
 
 const SCHEMA_VERSION = "1.0.0";
 
@@ -105,22 +108,73 @@ export async function buildItemSnapshotEvidenceAsync(item) {
 }
 
 /**
- * Build the outbox event shape for mirroring a Markdown event into IndexedDB.
+ * Build a normalised Bridge v1 outbox event for mirroring a Markdown event into IndexedDB.
  *
- * @param {string} eventType        — e.g. "MARKDOWN_REQUEST_CREATED"
- * @param {object} payload          — The full event payload
- * @param {string} snapshotRef      — inventory_snapshot_ref from evidence block
- * @returns {object} Outbox record (ready for addOutboxEvent())
+ * Produces a fully-compliant bridge envelope (Phase 1A).
+ * Falls back gracefully with validation errors logged — never silently queues
+ * an incomplete event.
+ *
+ * @param {string} internalEventType — e.g. "MARKDOWN_REQUEST_CREATED"
+ * @param {object} payload           — The full internal event payload
+ * @param {object|null} snapshotEvidence — Full evidence block from buildItemSnapshotEvidence()
+ * @returns {object|null} Bridge event envelope (ready for addOutboxEvent()), or null on validation failure
  */
-export function buildMarkdownOutboxEvent(eventType, payload, snapshotRef) {
-  return {
-    event_id: `md_out_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-    event_type: eventType,
-    workflow: "MARKDOWN",
-    source: "SCANOPS",
+export function buildMarkdownOutboxEvent(internalEventType, payload, snapshotEvidence) {
+  const bridgeEventType = toBridgeEventType(internalEventType);
+
+  // If event type is not in the v1 bridge set, fall back to legacy shape
+  // so existing non-markdown workflows are unaffected.
+  if (!bridgeEventType) {
+    return {
+      event_id: `md_out_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      event_type: internalEventType,
+      workflow: "MARKDOWN",
+      source: "SCANOPS",
+      payload,
+      inventory_snapshot_ref: typeof snapshotEvidence === "string" ? snapshotEvidence : (snapshotEvidence?.inventory_snapshot_ref || null),
+      queued_at: nowIso(),
+      sync_status: "QUEUED",
+    };
+  }
+
+  // Resolve actor identity for bridge envelope
+  let session = {};
+  let governance = {};
+  try { session = getScanOpsSession() || {}; } catch {}
+  try { governance = buildGovernanceSnapshot() || {}; } catch {}
+  const identity = buildEventIdentity(session);
+
+  const eventId = payload?.eventId
+    || `md_bridge_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+  // snapshotEvidence may be a string (legacy snapshot_ref) or a full evidence object
+  const evidence = typeof snapshotEvidence === "object" && snapshotEvidence !== null
+    ? snapshotEvidence
+    : null;
+
+  const result = buildBridgeEvent({
+    event_id: eventId,
+    event_type: bridgeEventType,
+    source_device_id: identity.deviceId || identity.scannerId || governance.deviceId || null,
+    source_session_id: identity.sessionId || governance.sessionId || null,
+    source_user_id: identity.actorUserId || governance.userId || null,
+    source_user_role: identity.actorRole || governance.role || null,
+    snapshot_evidence: evidence,
     payload,
-    inventory_snapshot_ref: snapshotRef || null,
+    created_at: payload?.createdAt || nowIso(),
+  });
+
+  if (!result.ok) {
+    // Do not silently queue an invalid event — log errors and return null
+    // Caller (appendMarkdownEvent) must handle null gracefully
+    console.warn("[ScanOps Bridge] Outbox event failed validation:", result.errors, { internalEventType, bridgeEventType });
+    return null;
+  }
+
+  return {
+    ...result.event,
+    workflow: "MARKDOWN",
     queued_at: nowIso(),
-    sync_status: "queued",
+    sync_status: "QUEUED",
   };
 }

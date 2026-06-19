@@ -171,10 +171,12 @@ function appendMarkdownEvent(eventType, request, extra = {}) {
   };
   safeWrite(EVENTS_KEY, [event, ...safeRead(EVENTS_KEY)]);
 
-  // Mirror into IndexedDB event_outbox (fire-and-forget)
-  addOutboxEvent(
-    buildMarkdownOutboxEvent(eventType, event, snapshotEvidence?.inventory_snapshot_ref || null)
-  ).catch(() => {});
+  // Mirror into IndexedDB event_outbox as a normalised Bridge v1 envelope (fire-and-forget)
+  // buildMarkdownOutboxEvent returns null if validation fails — do not queue invalid events.
+  const outboxEvent = buildMarkdownOutboxEvent(eventType, event, snapshotEvidence || null);
+  if (outboxEvent) {
+    addOutboxEvent(outboxEvent).catch(() => {});
+  }
 
   return event;
 }
