@@ -20,6 +20,8 @@ import {
 } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { resolveInventoryIdentity, ensureInventoryLoaded } from "../lib/inventorySystemAdapter";
+import { useInventoryCacheStatus, isStaleCacheBlockingForPriceSensitiveWorkflow } from "../lib/inventory/useInventoryCacheStatus";
+import InventoryCacheStatusBar from "../components/scanner/InventoryCacheStatusBar";
 
 import {
   buildWorkflowItemAttributeSnapshot,
@@ -137,6 +139,9 @@ export default function Markdowns() {
   const markdownRejectPermission = canPerformScanOpsAction(GOVERNED_ACTIONS.MARKDOWN_REJECT, governance);
   const handoffPermission = canPerformScanOpsAction(GOVERNED_ACTIONS.SHELF_TICKET_PRINT_HANDOFF, governance);
   const canApprove = markdownApprovePermission.allowed;
+
+  const cacheStatus = useInventoryCacheStatus();
+  const staleCacheBlocking = isStaleCacheBlockingForPriceSensitiveWorkflow(cacheStatus);
 
   const [scanValue, setScanValue] = useState("");
   const [item, setItem] = useState(null);
@@ -263,6 +268,10 @@ export default function Markdowns() {
       return;
     }
     setOperatorError(null);
+    if (staleCacheBlocking) {
+      setOperatorError({ title: "Inventory cache stale", helper: "Refresh the inventory cache before creating a markdown request. Pricing data may be outdated.", tone: "danger" });
+      return;
+    }
     if (!markdownSubmitPermission.allowed) {
       recordGovernedAction(GOVERNED_ACTIONS.MARKDOWN_SUBMIT, "Markdowns", null, markdownSubmitPermission);
       setOperatorError({ title: "Supervisor required", helper: markdownSubmitPermission.reason || "Staff can save permitted requests, but cannot approve restricted markdown actions." });
@@ -336,6 +345,10 @@ export default function Markdowns() {
 
   const createHandoff = () => {
     if (!selectedRequest) return;
+    if (staleCacheBlocking) {
+      setOperatorError({ title: "Inventory cache stale", helper: "Refresh cache before creating a label handoff.", tone: "danger" });
+      return;
+    }
     if (!handoffPermission.allowed) {
       recordGovernedAction(GOVERNED_ACTIONS.SHELF_TICKET_PRINT_HANDOFF, "Markdowns", selectedRequest.requestId, handoffPermission);
       setOperatorError({ title: "Permission required", helper: handoffPermission.reason || "This handoff is blocked until an authorised role is available." });
@@ -378,6 +391,15 @@ export default function Markdowns() {
       />
       <WorkflowMain>
         <GovernanceContextStrip />
+        <InventoryCacheStatusBar cacheStatus={cacheStatus} onRefresh={cacheStatus.refresh} isStrict={true} />
+        {staleCacheBlocking && (
+          <OperatorAlert
+            title="Inventory cache stale — submit and print blocked"
+            helper="Markdown pricing depends on current inventory data. Refresh the cache before creating or approving requests."
+            tone="danger"
+            actions={[{ label: "Refresh Cache", onClick: cacheStatus.refresh, variant: "primary" }]}
+          />
+        )}
         {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} tone={operatorError.tone || "warning"} actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}
         {done && !done.request && (
           <SectionCard className="border-amber-200 bg-amber-50/70">
@@ -586,13 +608,13 @@ export default function Markdowns() {
         {item && (
           <StickyActions
             leftLabel="Cancel Request"
-            rightLabel="Create Request"
+            rightLabel={staleCacheBlocking ? "Cache stale — refresh" : "Create Request"}
             onLeft={() => {
               setItem(null);
               setScanValue("");
             }}
-            onRight={createRequest}
-            rightDisabled={false}
+            onRight={staleCacheBlocking ? cacheStatus.refresh : createRequest}
+            rightDisabled={cacheStatus.refreshing}
           />
         )}
       </WorkflowMain>
