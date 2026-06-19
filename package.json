@@ -11,6 +11,7 @@
     "typecheck": "tsc -p ./jsconfig.json",
     "validate:scanops-inventory-bridge-pairing-contract": "node scripts/validate-scanops-inventory-bridge-pairing-contract.mjs",
     "validate:scanops-inventory-bridge-pairing-offer-fixture": "node scripts/validate-scanops-inventory-bridge-pairing-offer-fixture.mjs",
+    "validate:scanops-inventory-bridge-pairing-request-derivation": "node scripts/validate-scanops-inventory-bridge-pairing-request-derivation.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
