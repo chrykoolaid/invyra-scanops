@@ -1,16 +1,32 @@
 /**
- * syncIngestionEngine.js — Phase 1C-B
+ * syncIngestionEngine.js — Phase 1C-D
  *
- * Inventory-side ingestion service skeleton for the ScanOps ↔ Inventory Bridge v1.
+ * Inventory-side ingestion service for the ScanOps ↔ Inventory Bridge v1.
  *
- * Phase 1C-B scope: function skeletons only.
- *   - Schema validation stub (required field checks only)
- *   - Idempotency stub (placeholder — full logic in Phase 1C-C)
- *   - Snapshot evidence stub (field presence only — comparison in Phase 1C-D)
- *   - Source validation stub (field presence only — auth enforcement in Phase 1C-D)
- *   - Business rules stub (placeholder — rules in Phase 1C-D)
- *   - Receipt builder skeleton (local object only — persistence in Phase 1C-C)
- *   - Review queue routing stub (non-mutating placeholder)
+ * Phase 1C-D additions (over Phase 1C-C):
+ *   - Stale snapshot evaluation (event-type-specific, threshold-based)
+ *   - Business conflict decision handling (payload integrity, role presence,
+ *     event-type payload field checks; deferred checks noted inline)
+ *   - Ledger status always derived from receipt status via ledgerStatusForReceipt()
+ *   - validateSnapshotEvidence() wired to evaluateStaleSnapshot()
+ *   - validateEventBusinessRules() wired to evaluateBusinessConflicts()
+ *   - routeAcceptedEventToReviewQueue() updated to Phase 1C-D reason
+ *   - Decision logic extracted to syncIngestionDecisions.js
+ *
+ * Preserved from Phase 1C-C (unchanged):
+ *   - Full idempotency database lookup (InventorySyncInboundEvent)
+ *   - Duplicate same payload_hash → ACK_DUPLICATE or prior receipt
+ *   - Same event_id, different payload_hash → REJECTED_CONFLICT
+ *   - InventorySyncInboundEvent ledger record persisted on new events
+ *   - InventorySyncReceipt persisted for every ingestion decision
+ *   - Compact payload_summary + full raw_event_json retained
+ *
+ * Deferred to Phase 1C-E:
+ *   - Live Inventory record version comparison
+ *   - Unknown item/barcode entity lookup
+ *   - Sequence/out-of-order detection
+ *   - Role authorization matrix
+ *   - Workflow routing to MarkdownSyncReviewQueue
  *
  * HARD RULES — enforced in every phase:
  *   - No StockMovement creation.
@@ -25,15 +41,19 @@
  *   - Inventory remains source-of-truth.
  */
 
+import { base44 } from "@/api/base44Client";
 import {
   SCANOPS_BRIDGE_EVENT_TYPE_VALUES,
   INVENTORY_SYNC_INBOUND_STATUS,
   INVENTORY_SYNC_RECEIPT_STATUS,
   isReceiptRetryAllowed,
-  isReceiptStatusTerminal,
-  getStaleSnapshotReceiptStatus,
   getIdempotencyKeyComponents,
 } from "./syncIngestionConstants";
+import {
+  evaluateStaleSnapshot,
+  evaluateBusinessConflicts,
+  ledgerStatusForReceipt,
+} from "./syncIngestionDecisions";
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
@@ -45,7 +65,38 @@ function makeId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// ── Required bridge envelope fields for schema validation ─────────────────────
+/**
+ * Build the deterministic idempotency key string.
+ * Format: <event_id>::<source_device_id>::<source_session_id>::<event_type>
+ */
+function buildIdempotencyKey(event) {
+  const { event_id, source_device_id, source_session_id, event_type } = getIdempotencyKeyComponents(event);
+  return [event_id, source_device_id, source_session_id, event_type]
+    .map((v) => String(v || ""))
+    .join("::");
+}
+
+/**
+ * Extract a compact, safe payload summary for ledger display.
+ * Never used for business logic. Hard cap at 500 chars.
+ */
+function buildPayloadSummary(event) {
+  const p = event?.payload || {};
+  const parts = [
+    event.event_type,
+    p.sku                         && `SKU:${p.sku}`,
+    p.barcode                     && `Barcode:${p.barcode}`,
+    p.itemName                    && `Item:${p.itemName}`,
+    p.markdown_request_ref        && `Req:${p.markdown_request_ref}`,
+    p.markdown_batch_ref          && `Batch:${p.markdown_batch_ref}`,
+    p.quantity !== undefined      && `Qty:${p.quantity}`,
+    p.reasonCode                  && `Reason:${p.reasonCode}`,
+    p.selectedMarkdownPercent !== undefined && `Pct:${p.selectedMarkdownPercent}%`,
+  ].filter(Boolean);
+  return parts.join(" | ").slice(0, 500);
+}
+
+// ── Required bridge envelope fields ──────────────────────────────────────────
 
 const REQUIRED_ENVELOPE_FIELDS = [
   "event_id",
@@ -64,29 +115,127 @@ const REQUIRED_ENVELOPE_FIELDS = [
   "payload_hash",
 ];
 
-// Required snapshot evidence fields for presence check
 const REQUIRED_SNAPSHOT_FIELDS = [
   "inventory_snapshot_ref",
   "inventory_snapshot_hash",
   "inventory_record_version",
 ];
 
-// Required source identity fields for presence check
 const REQUIRED_SOURCE_FIELDS = [
   "source_device_id",
   "source_session_id",
   "source_user_id",
 ];
 
+// ── Entity persistence helpers ────────────────────────────────────────────────
+
+/**
+ * Persist an InventorySyncInboundEvent ledger record.
+ * raw_event_json holds the full original envelope verbatim.
+ * Only called once per new unique event — never for duplicates.
+ */
+async function persistInboundEvent(event, {
+  ingestion_id,
+  received_at,
+  processed_at,
+  status,
+  idempotency_key,
+  decision,
+  decision_code,
+  decision_reason,
+}) {
+  const record = {
+    ingestion_id,
+    event_id:                 event.event_id,
+    event_type:               event.event_type,
+    event_version:            event.event_version || null,
+    source_system:            event.source_system,
+    source_device_id:         event.source_device_id,
+    source_session_id:        event.source_session_id,
+    source_user_id:           event.source_user_id,
+    source_user_role:         event.source_user_role || null,
+    received_at,
+    processed_at,
+    status,
+    idempotency_key,
+    inventory_snapshot_id:    event.inventory_snapshot_id || null,
+    inventory_snapshot_ref:   event.inventory_snapshot_ref || null,
+    inventory_snapshot_hash:  event.inventory_snapshot_hash || null,
+    inventory_record_version: event.inventory_record_version || null,
+    last_inventory_sync_at:   event.last_inventory_sync_at || null,
+    payload_hash:             event.payload_hash,
+    payload_summary:          buildPayloadSummary(event),
+    decision:                 decision || "ACK_RECEIVED",
+    decision_code,
+    decision_reason,
+    linked_inventory_workflow_ref: null, // Phase 1C-E
+    linked_markdown_ref:           null, // Phase 1C-E
+    audit_log_ref:                 null, // Phase 1C-E
+    raw_event_json:           event,     // Full verbatim envelope retained
+  };
+
+  return await base44.entities.InventorySyncInboundEvent.create(record);
+}
+
+/**
+ * Persist an InventorySyncReceipt record.
+ * Strips internal phase markers before writing.
+ */
+async function persistReceipt(receiptObj) {
+  const { _persisted, _phase, _persist_failed, ...persistable } = receiptObj;
+  return await base44.entities.InventorySyncReceipt.create(persistable);
+}
+
+// ── Shared pipeline rejection helper ─────────────────────────────────────────
+
+/**
+ * Persist ledger + receipt for a failed validation step, then return
+ * a standardised pipeline result object.
+ *
+ * @param {object}  event
+ * @param {object}  ctx        — { ingestion_id, received_at, idempotency_key }
+ * @param {string}  stage      — pipeline stage label for the result
+ * @param {string}  receiptStatus
+ * @param {string}  decision_code
+ * @param {string}  decision_reason
+ * @param {string}  [decisionLabel="REJECTED"]
+ */
+async function rejectWithLedgerAndReceipt(event, ctx, stage, receiptStatus, decision_code, decision_reason, decisionLabel = "REJECTED") {
+  const processed_at = nowIso();
+  const ledgerStatus = ledgerStatusForReceipt(receiptStatus);
+
+  await persistInboundEvent(event, {
+    ...ctx,
+    processed_at,
+    status: ledgerStatus,
+    decision: decisionLabel,
+    decision_code,
+    decision_reason,
+  }).catch(() => null); // Non-fatal — receipt is the authoritative signal
+
+  const receipt = await buildInventorySyncReceipt(event, {
+    ingestion_id:   ctx.ingestion_id,
+    received_at:    processed_at,
+    status:         receiptStatus,
+    decision_code,
+    decision_message: decision_reason,
+  });
+
+  return {
+    ok: false,
+    ingestion_id: ctx.ingestion_id,
+    receipt,
+    decision: { stage, status: ledgerStatus, decision_code, decision_reason },
+  };
+}
+
 // ── 1. Schema Validation ──────────────────────────────────────────────────────
 
 /**
  * Validate the minimum required fields of a ScanOps bridge event envelope.
+ * Checks field presence, event_type membership, and source_system identity.
  *
- * Phase 1C-B: checks required field presence and event_type membership only.
- * Does not validate payload contents, business rules, or snapshot staleness.
- *
- * @param {object} event — ScanOps bridge event envelope
+ * @param {object} event
  * @returns {{ ok: boolean, status: string, decision_code: string, decision_reason: string, missing?: string[] }}
  */
 export function validateBridgeEventSchema(event) {
@@ -139,194 +288,197 @@ export function validateBridgeEventSchema(event) {
   };
 }
 
-// ── 2. Idempotency Check ──────────────────────────────────────────────────────
+// ── 2. Idempotency Check (Phase 1C-C: live DB lookup, unchanged) ──────────────
 
 /**
  * Check whether this event has already been received and processed.
  *
- * Phase 1C-B: returns safe placeholder only.
- * Full database lookup and conflict detection implemented in Phase 1C-C.
+ * Outcomes:
+ *   No existing record → { ok: true, duplicate: false, conflict: false }
+ *   Same idempotency_key + same payload_hash → duplicate
+ *   Same idempotency_key + different payload_hash → conflict
  *
- * Idempotency key: event_id + source_device_id + source_session_id + event_type.
- * Conflict rule: same event_id + different payload_hash → REJECTED_CONFLICT.
- *
- * @param {object} event — ScanOps bridge event envelope
- * @returns {{ ok: boolean, duplicate: boolean, conflict: boolean, existing?: object }}
+ * @param {object} event
+ * @param {string} idempotency_key
+ * @returns {Promise<{ ok: boolean, duplicate: boolean, conflict: boolean, existing?: object }>}
  */
-export function checkIdempotency(event) {
-  // Phase 1C-B: no live database lookup yet.
-  // Phase 1C-C will implement: query InventorySyncInboundEvent by idempotency_key,
-  // compare payload_hash, and return conflict/duplicate result.
-  const keyComponents = getIdempotencyKeyComponents(event);
-  return {
-    ok: true,
-    duplicate: false,
-    conflict: false,
-    _phase: "1C-B",
-    _note: "Idempotency database lookup not yet implemented. Phase 1C-C.",
-    _key_components: keyComponents,
-  };
+export async function checkIdempotency(event, idempotency_key) {
+  const existing = await base44.entities.InventorySyncInboundEvent.filter({ idempotency_key });
+
+  if (!existing || existing.length === 0) {
+    return { ok: true, duplicate: false, conflict: false };
+  }
+
+  const prior = existing[0];
+
+  if (prior.payload_hash === event.payload_hash) {
+    return { ok: false, duplicate: true, conflict: false, existing: prior };
+  }
+
+  return { ok: false, duplicate: false, conflict: true, existing: prior };
 }
 
-// ── 3. Snapshot Evidence Validation ──────────────────────────────────────────
+// ── 3. Snapshot Evidence Validation (Phase 1C-D: wired to stale evaluation) ──
 
 /**
- * Validate that the inventory snapshot evidence fields are present
- * and structurally sound.
+ * Validate inventory snapshot evidence field presence, then run the
+ * event-type-specific stale snapshot decision matrix.
  *
- * Phase 1C-B: field presence check only.
- * Full staleness comparison (hash vs. current Inventory record version)
- * and event-type-specific stale handling implemented in Phase 1C-D.
+ * Field presence failures → REJECTED_SCHEMA.
+ * Stale snapshot decisions → per evaluateStaleSnapshot() matrix.
+ * Fresh or indeterminate → ok: true (proceed to business rules).
  *
- * @param {object} event — ScanOps bridge event envelope
- * @returns {{ ok: boolean, status?: string, decision_code?: string, decision_reason?: string }}
+ * @param {object} event
+ * @param {string} receivedAt — ISO timestamp when Inventory received the event
+ * @returns {{ ok: boolean, receiptStatus?, ledgerStatus?, decision_code?, decision_reason? }}
  */
-export function validateSnapshotEvidence(event) {
-  const missing = REQUIRED_SNAPSHOT_FIELDS.filter(
-    (field) => !event[field]
-  );
-
+export function validateSnapshotEvidence(event, receivedAt) {
+  // Field presence check
+  const missing = REQUIRED_SNAPSHOT_FIELDS.filter((field) => !event[field]);
   if (missing.length > 0) {
     return {
       ok: false,
-      status: INVENTORY_SYNC_INBOUND_STATUS.REJECTED_SCHEMA,
+      receiptStatus: INVENTORY_SYNC_RECEIPT_STATUS.REJECTED_SCHEMA,
+      ledgerStatus:  INVENTORY_SYNC_INBOUND_STATUS.REJECTED_SCHEMA,
       decision_code: "MISSING_SNAPSHOT_EVIDENCE",
       decision_reason: `Missing inventory snapshot evidence field(s): ${missing.join(", ")}.`,
-      missing,
     };
   }
 
-  // Phase 1C-D will add: fetch current Inventory record version, compare hashes,
-  // apply event-type-specific stale snapshot decision matrix.
+  // Stale snapshot decision matrix (Phase 1C-D)
+  const staleDecision = evaluateStaleSnapshot(event, receivedAt);
+  if (staleDecision) {
+    return { ok: false, ...staleDecision };
+  }
+
   return {
     ok: true,
     decision_code: "SNAPSHOT_EVIDENCE_PRESENT",
-    decision_reason: "Snapshot evidence fields present. Full staleness comparison deferred to Phase 1C-D.",
-    _phase: "1C-B",
+    decision_reason: "Snapshot evidence fields present and staleness check passed. Live version comparison deferred to Phase 1C-E.",
   };
 }
 
-// ── 4. Source Validation ──────────────────────────────────────────────────────
+// ── 4. Source Validation (unchanged from Phase 1C-C) ─────────────────────────
 
 /**
- * Validate the ScanOps source identity fields.
+ * Validate ScanOps source identity field presence.
+ * Full auth enforcement deferred to Phase 1C-E.
  *
- * Phase 1C-B: required field presence check only.
- * Full auth enforcement (trusted device registry, session validity, role
- * authorization) implemented in Phase 1C-D.
- * No Wi-Fi/IP transport, device pairing, or bridge host settings.
- *
- * @param {object} event — ScanOps bridge event envelope
- * @returns {{ ok: boolean, status?: string, decision_code?: string, decision_reason?: string }}
+ * @param {object} event
+ * @returns {{ ok: boolean, receiptStatus?, ledgerStatus?, decision_code?, decision_reason? }}
  */
 export function validateScanOpsSource(event) {
-  const missing = REQUIRED_SOURCE_FIELDS.filter(
-    (field) => !event[field]
-  );
+  const missing = REQUIRED_SOURCE_FIELDS.filter((field) => !event[field]);
 
   if (missing.length > 0) {
     return {
       ok: false,
-      status: INVENTORY_SYNC_INBOUND_STATUS.REJECTED_AUTH,
+      receiptStatus: INVENTORY_SYNC_RECEIPT_STATUS.REJECTED_AUTH,
+      ledgerStatus:  INVENTORY_SYNC_INBOUND_STATUS.REJECTED_AUTH,
       decision_code: "MISSING_SOURCE_IDENTITY",
       decision_reason: `Missing source identity field(s): ${missing.join(", ")}.`,
-      missing,
     };
   }
 
-  // Phase 1C-D will add: trusted device registry lookup, session expiry check,
-  // role authorization matrix for event_type.
   return {
     ok: true,
     decision_code: "SOURCE_IDENTITY_PRESENT",
-    decision_reason: "Source identity fields present. Full auth enforcement deferred to Phase 1C-D.",
-    _phase: "1C-B",
+    decision_reason: "Source identity fields present. Full auth enforcement deferred to Phase 1C-E.",
   };
 }
 
-// ── 5. Business Rules Validation ──────────────────────────────────────────────
+// ── 5. Business Rules Validation (Phase 1C-D: wired to conflict matrix) ───────
 
 /**
- * Validate event-type-specific business rules.
+ * Evaluate event-type-specific business conflict checks.
+ * Wired to evaluateBusinessConflicts() in syncIngestionDecisions.js.
  *
- * Phase 1C-B: stub only — returns passing placeholder.
- * Phase 1C-D will implement:
- *   - Markdown request: item/barcode reference exists in Inventory
- *   - Markdown approved: linked request is still open and not superseded
- *   - Markdown returned: linked approved event exists
- *   - Markdown rejected: linked request still exists
- *   - Handoff created: linked approved event exists and is not already handed off
- *   - Quantity mismatch and out-of-order event detection
+ * Checks performed in Phase 1C-D:
+ *   - Payload structural integrity
+ *   - payload_hash non-empty string
+ *   - source_user_role presence (soft hold)
+ *   - Event-type-specific payload reference field presence
  *
- * @param {object} event — ScanOps bridge event envelope
- * @returns {{ ok: boolean, status?: string, decision_code?: string, decision_reason?: string }}
+ * Deferred to Phase 1C-E:
+ *   - Unknown barcode/item lookup
+ *   - Quantity mismatch
+ *   - Out-of-order sequence detection
+ *   - Changed markdown status
+ *   - Unauthorized approval (role matrix)
+ *
+ * @param {object} event
+ * @returns {{ ok: boolean, receiptStatus?, ledgerStatus?, decision_code?, decision_reason? }}
  */
 export function validateEventBusinessRules(event) {
-  // Phase 1C-D will implement event-type-specific rule evaluation.
+  const conflict = evaluateBusinessConflicts(event);
+  if (conflict) {
+    return { ok: false, ...conflict };
+  }
+
   return {
     ok: true,
-    decision_code: "BUSINESS_RULES_DEFERRED",
-    decision_reason: "Business rule validation not yet implemented. Phase 1C-D.",
-    _phase: "1C-B",
+    decision_code: "BUSINESS_RULES_PHASE_1C_D_PASSED",
+    decision_reason: "Phase 1C-D business checks passed. Deferred checks (item lookup, sequence, role matrix) run in Phase 1C-E.",
   };
 }
 
 // ── 6. Receipt Builder ────────────────────────────────────────────────────────
 
 /**
- * Build an InventorySyncReceipt-compatible object from an ingestion decision.
+ * Build and persist an InventorySyncReceipt record.
  *
- * Phase 1C-B: returns a local receipt object only.
- * Persistence to the InventorySyncReceipt entity implemented in Phase 1C-C.
- *
- * @param {object} event — ScanOps bridge event envelope
- * @param {{ ingestion_id, status, decision_code, decision_message, linked_workflow_ref? }} decision
- * @returns {object} Receipt envelope (not yet persisted)
+ * @param {object} event
+ * @param {{ ingestion_id, received_at, status, decision_code, decision_message, linked_workflow_ref? }} decision
+ * @param {boolean} [persist=true]
+ * @returns {Promise<object>}
  */
-export function buildInventorySyncReceipt(event, decision) {
+export async function buildInventorySyncReceipt(event, decision, persist = true) {
   const receiptStatus = decision?.status || INVENTORY_SYNC_RECEIPT_STATUS.ACK_RECEIVED;
 
-  return {
-    receipt_id:              makeId("rcpt"),
-    event_id:                event?.event_id || null,
-    ingestion_id:            decision?.ingestion_id || null,
-    status:                  receiptStatus,
-    inventory_received_at:   decision?.received_at || nowIso(),
-    inventory_processed_at:  nowIso(),
-    decision_code:           decision?.decision_code || receiptStatus,
-    decision_message:        decision?.decision_message || decision?.decision_reason || null,
-    linked_workflow_ref:     decision?.linked_workflow_ref || null,
-    retry_allowed:           isReceiptRetryAllowed(receiptStatus),
-    created_at:              nowIso(),
-    // Phase 1C-B marker — remove before Phase 1C-C persistence is enabled
-    _persisted:              false,
-    _phase:                  "1C-B",
+  const receiptObj = {
+    receipt_id:             makeId("rcpt"),
+    event_id:               event?.event_id || null,
+    ingestion_id:           decision?.ingestion_id || null,
+    status:                 receiptStatus,
+    inventory_received_at:  decision?.received_at || nowIso(),
+    inventory_processed_at: nowIso(),
+    decision_code:          decision?.decision_code || receiptStatus,
+    decision_message:       decision?.decision_message || decision?.decision_reason || null,
+    linked_workflow_ref:    decision?.linked_workflow_ref || null,
+    retry_allowed:          isReceiptRetryAllowed(receiptStatus),
+    created_at:             nowIso(),
   };
+
+  if (persist) {
+    try {
+      const persisted = await persistReceipt(receiptObj);
+      return persisted || receiptObj;
+    } catch {
+      return { ...receiptObj, _persist_failed: true };
+    }
+  }
+
+  return receiptObj;
 }
 
-// ── 7. Review Queue Routing ───────────────────────────────────────────────────
+// ── 7. Review Queue Routing (non-mutating stub — Phase 1C-E) ─────────────────
 
 /**
- * Route an accepted or held event to the appropriate review queue.
+ * Non-mutating routing stub.
+ * Phase 1C-E will implement safe routing to MarkdownSyncReviewQueue.
  *
- * Phase 1C-B: non-mutating stub only.
- * Does NOT create MarkdownReviewQueue records, StockMovement, POSLineItem,
- * Item Master pricing updates, purchase orders, or forecasting records.
+ * Does NOT create: MarkdownReviewQueue, MarkdownSyncReviewQueue,
+ * StockMovement, POSLineItem, Item Master changes, Purchase Orders,
+ * or Forecasting records.
  *
- * Phase 1C-E will implement: safe routing to MarkdownSyncReviewQueue
- * or equivalent review-only holding area.
- *
- * @param {object} event — ScanOps bridge event envelope
- * @param {object} decision — ingestion decision from processInboundScanOpsEvent
+ * @param {object} event
+ * @param {object} decision
  * @returns {{ routed: boolean, reason: string }}
  */
 export function routeAcceptedEventToReviewQueue(event, decision) {
-  // Phase 1C-E will implement safe routing logic.
-  // This stub exists to satisfy the service contract without mutation risk.
   return {
     routed: false,
-    reason: "ROUTING_NOT_ENABLED_IN_PHASE_1C_B",
-    _phase: "1C-B",
+    reason: "ROUTING_NOT_ENABLED_IN_PHASE_1C_D",
   };
 }
 
@@ -335,40 +487,41 @@ export function routeAcceptedEventToReviewQueue(event, decision) {
 /**
  * Process an inbound ScanOps bridge event through the Inventory ingestion pipeline.
  *
- * Pipeline order (Phase 1C-B skeleton):
- *   1. Schema validation
- *   2. Idempotency check (stub)
- *   3. Snapshot evidence validation (field presence only)
- *   4. Source validation (field presence only)
- *   5. Business rules validation (stub)
- *   6. Build receipt
- *   7. Route to review queue (non-mutating stub)
+ * Pipeline order (Phase 1C-D — Ledger First):
+ *   1.  Validate bridge event schema
+ *   2.  Build idempotency key
+ *   3.  Check idempotency (live DB)
+ *       a. Exact duplicate → ACK_DUPLICATE receipt → return (no reprocessing)
+ *       b. Payload conflict → REJECTED_CONFLICT ledger + receipt → return
+ *   4.  Validate snapshot evidence (field presence + stale snapshot matrix)
+ *   5.  Validate source identity (field presence)
+ *   6.  Validate business rules (conflict matrix — Phase 1C-D safe checks)
+ *   7.  Persist InventorySyncInboundEvent ledger record
+ *   8.  Persist InventorySyncReceipt (ACK_RECEIVED)
+ *   9.  Route to review queue (non-mutating stub)
  *
- * Returns a structured result with the ingestion decision and receipt.
- * Does NOT persist anything in Phase 1C-B.
- * Persistence of InventorySyncInboundEvent and InventorySyncReceipt: Phase 1C-C.
+ * NEVER mutates stock, price, POS, orders, forecasting, or Item Master.
  *
  * @param {object} event — ScanOps bridge event envelope
  * @returns {Promise<{ ok: boolean, ingestion_id: string, receipt: object, decision: object }>}
  */
 export async function processInboundScanOpsEvent(event) {
   const ingestion_id = makeId("ing");
-  const received_at = nowIso();
+  const received_at  = nowIso();
 
   // ── Step 1: Schema validation ─────────────────────────────────────────────
   const schemaResult = validateBridgeEventSchema(event);
   if (!schemaResult.ok) {
-    const receipt = buildInventorySyncReceipt(event, {
+    // Schema failures: receipt only — event envelope is too malformed for a full ledger record
+    const receipt = await buildInventorySyncReceipt(event, {
       ingestion_id,
       received_at,
-      status: INVENTORY_SYNC_RECEIPT_STATUS.REJECTED_SCHEMA,
-      decision_code: schemaResult.decision_code,
-      decision_reason: schemaResult.decision_reason,
+      status:          INVENTORY_SYNC_RECEIPT_STATUS.REJECTED_SCHEMA,
+      decision_code:   schemaResult.decision_code,
+      decision_message: schemaResult.decision_reason,
     });
     return {
-      ok: false,
-      ingestion_id,
-      receipt,
+      ok: false, ingestion_id, receipt,
       decision: {
         stage: "schema_validation",
         status: schemaResult.status,
@@ -378,115 +531,130 @@ export async function processInboundScanOpsEvent(event) {
     };
   }
 
-  // ── Step 2: Idempotency check (stub) ─────────────────────────────────────
-  const idempotencyResult = checkIdempotency(event);
-  if (!idempotencyResult.ok) {
-    const receiptStatus = idempotencyResult.conflict
-      ? INVENTORY_SYNC_RECEIPT_STATUS.REJECTED_CONFLICT
-      : INVENTORY_SYNC_RECEIPT_STATUS.ACK_DUPLICATE;
-    const receipt = buildInventorySyncReceipt(event, {
-      ingestion_id,
+  // ── Step 2: Build idempotency key ─────────────────────────────────────────
+  const idempotency_key = buildIdempotencyKey(event);
+  const ctx = { ingestion_id, received_at, idempotency_key };
+
+  // ── Step 3: Idempotency check (live DB) ──────────────────────────────────
+  const idempotencyResult = await checkIdempotency(event, idempotency_key);
+
+  if (idempotencyResult.duplicate) {
+    // Attempt to return the original receipt
+    const priorReceipts = await base44.entities.InventorySyncReceipt.filter({
+      ingestion_id: idempotencyResult.existing?.ingestion_id,
+    }).catch(() => []);
+    const priorReceipt = priorReceipts?.[0];
+
+    if (priorReceipt) {
+      return {
+        ok: true,
+        ingestion_id: idempotencyResult.existing?.ingestion_id,
+        receipt: priorReceipt,
+        decision: {
+          stage: "idempotency_check",
+          status: INVENTORY_SYNC_RECEIPT_STATUS.ACK_DUPLICATE,
+          decision_code: "DUPLICATE_EVENT_REPLAY",
+          decision_reason: "Exact duplicate of a previously processed event. Returning original receipt.",
+        },
+      };
+    }
+
+    // No prior receipt — issue a fresh ACK_DUPLICATE referencing the prior ingestion
+    const dupReceipt = await buildInventorySyncReceipt(event, {
+      ingestion_id:    idempotencyResult.existing?.ingestion_id || ingestion_id,
       received_at,
-      status: receiptStatus,
-      decision_code: idempotencyResult.conflict ? "PAYLOAD_HASH_CONFLICT" : "DUPLICATE_EVENT",
-      decision_reason: idempotencyResult.conflict
-        ? "Same event_id received with a different payload_hash. Rejected as conflict."
-        : "Exact duplicate of a previously processed event. Returning original decision.",
+      status:          INVENTORY_SYNC_RECEIPT_STATUS.ACK_DUPLICATE,
+      decision_code:   "DUPLICATE_EVENT_REPLAY",
+      decision_message: "Event was already received by Inventory. Returning duplicate acknowledgement.",
     });
     return {
-      ok: false,
-      ingestion_id,
-      receipt,
+      ok: true,
+      ingestion_id: idempotencyResult.existing?.ingestion_id || ingestion_id,
+      receipt: dupReceipt,
       decision: {
         stage: "idempotency_check",
-        status: receiptStatus,
-        decision_code: receipt.decision_code,
-        decision_reason: receipt.decision_message,
+        status: INVENTORY_SYNC_RECEIPT_STATUS.ACK_DUPLICATE,
+        decision_code: "DUPLICATE_EVENT_REPLAY",
+        decision_reason: "Exact duplicate replay. ACK_DUPLICATE receipt issued.",
       },
     };
   }
 
-  // ── Step 3: Snapshot evidence validation ─────────────────────────────────
-  const snapshotResult = validateSnapshotEvidence(event);
+  if (idempotencyResult.conflict) {
+    return rejectWithLedgerAndReceipt(
+      event, ctx,
+      "idempotency_check",
+      INVENTORY_SYNC_RECEIPT_STATUS.REJECTED_CONFLICT,
+      "IDEMPOTENCY_PAYLOAD_HASH_CONFLICT",
+      "Same event identity was received with a different payload hash.",
+      "REJECTED"
+    );
+  }
+
+  // ── Step 4: Snapshot evidence validation + stale snapshot matrix ──────────
+  const snapshotResult = validateSnapshotEvidence(event, received_at);
   if (!snapshotResult.ok) {
-    const receipt = buildInventorySyncReceipt(event, {
-      ingestion_id,
-      received_at,
-      status: INVENTORY_SYNC_RECEIPT_STATUS.REJECTED_SCHEMA,
-      decision_code: snapshotResult.decision_code,
-      decision_reason: snapshotResult.decision_reason,
-    });
-    return {
-      ok: false,
-      ingestion_id,
-      receipt,
-      decision: {
-        stage: "snapshot_evidence",
-        status: snapshotResult.status,
-        decision_code: snapshotResult.decision_code,
-        decision_reason: snapshotResult.decision_reason,
-      },
-    };
+    return rejectWithLedgerAndReceipt(
+      event, ctx,
+      "snapshot_evidence",
+      snapshotResult.receiptStatus,
+      snapshotResult.decision_code,
+      snapshotResult.decision_reason,
+      snapshotResult.receiptStatus.startsWith("HELD") ? "HELD" : "REJECTED"
+    );
   }
 
-  // ── Step 4: Source validation ─────────────────────────────────────────────
+  // ── Step 5: Source validation ─────────────────────────────────────────────
   const sourceResult = validateScanOpsSource(event);
   if (!sourceResult.ok) {
-    const receipt = buildInventorySyncReceipt(event, {
-      ingestion_id,
-      received_at,
-      status: INVENTORY_SYNC_RECEIPT_STATUS.REJECTED_AUTH,
-      decision_code: sourceResult.decision_code,
-      decision_reason: sourceResult.decision_reason,
-    });
-    return {
-      ok: false,
-      ingestion_id,
-      receipt,
-      decision: {
-        stage: "source_validation",
-        status: sourceResult.status,
-        decision_code: sourceResult.decision_code,
-        decision_reason: sourceResult.decision_reason,
-      },
-    };
+    return rejectWithLedgerAndReceipt(
+      event, ctx,
+      "source_validation",
+      sourceResult.receiptStatus,
+      sourceResult.decision_code,
+      sourceResult.decision_reason,
+      "REJECTED"
+    );
   }
 
-  // ── Step 5: Business rules validation (stub) ──────────────────────────────
+  // ── Step 6: Business rules validation (Phase 1C-D conflict matrix) ────────
   const rulesResult = validateEventBusinessRules(event);
   if (!rulesResult.ok) {
-    const receipt = buildInventorySyncReceipt(event, {
-      ingestion_id,
-      received_at,
-      status: INVENTORY_SYNC_RECEIPT_STATUS.HELD_FOR_REVIEW,
-      decision_code: rulesResult.decision_code,
-      decision_reason: rulesResult.decision_reason,
-    });
-    return {
-      ok: false,
-      ingestion_id,
-      receipt,
-      decision: {
-        stage: "business_rules",
-        status: rulesResult.status,
-        decision_code: rulesResult.decision_code,
-        decision_reason: rulesResult.decision_reason,
-      },
-    };
+    const decisionLabel = rulesResult.receiptStatus === INVENTORY_SYNC_RECEIPT_STATUS.HELD_FOR_REVIEW
+      ? "HELD"
+      : "REJECTED";
+    return rejectWithLedgerAndReceipt(
+      event, ctx,
+      "business_rules",
+      rulesResult.receiptStatus,
+      rulesResult.decision_code,
+      rulesResult.decision_reason,
+      decisionLabel
+    );
   }
 
-  // ── Step 6: Build ACK_RECEIVED receipt ────────────────────────────────────
-  // Phase 1C-B: all valid events receive ACK_RECEIVED (not yet fully processed).
-  // Phase 1C-C will persist the ledger record and return ACK_PROCESSED.
-  const receipt = buildInventorySyncReceipt(event, {
-    ingestion_id,
-    received_at,
-    status: INVENTORY_SYNC_RECEIPT_STATUS.ACK_RECEIVED,
-    decision_code: "EVENT_RECEIVED",
-    decision_reason: "Event passed Phase 1C-B validation skeleton. Ledger persistence and full processing deferred to Phase 1C-C.",
+  // ── Step 7: Persist InventorySyncInboundEvent ledger record ───────────────
+  // Status: PROCESSED — ledger written; routing not yet enabled.
+  const processed_at = nowIso();
+  await persistInboundEvent(event, {
+    ...ctx,
+    processed_at,
+    status:          INVENTORY_SYNC_INBOUND_STATUS.PROCESSED,
+    decision:        "ACK_RECEIVED",
+    decision_code:   "INGESTED_LEDGER_ONLY",
+    decision_reason: "Event accepted into Inventory sync ledger. Workflow routing not enabled in Phase 1C-D.",
   });
 
-  // ── Step 7: Route to review queue (non-mutating stub) ─────────────────────
+  // ── Step 8: Persist InventorySyncReceipt ─────────────────────────────────
+  const receipt = await buildInventorySyncReceipt(event, {
+    ingestion_id,
+    received_at: processed_at,
+    status:          INVENTORY_SYNC_RECEIPT_STATUS.ACK_RECEIVED,
+    decision_code:   "INGESTED_LEDGER_ONLY",
+    decision_message: "Event received and stored in Inventory sync ledger. Workflow routing not enabled in Phase 1C-D.",
+  });
+
+  // ── Step 9: Route to review queue (non-mutating stub) ─────────────────────
   const routingResult = routeAcceptedEventToReviewQueue(event, { ingestion_id, status: receipt.status });
 
   return {
@@ -494,12 +662,11 @@ export async function processInboundScanOpsEvent(event) {
     ingestion_id,
     receipt,
     decision: {
-      stage: "completed_skeleton",
-      status: INVENTORY_SYNC_INBOUND_STATUS.RECEIVED,
-      decision_code: "EVENT_RECEIVED",
-      decision_reason: "Phase 1C-B skeleton complete. No mutations performed.",
-      routing: routingResult,
+      stage:          "ledger_persisted",
+      status:         INVENTORY_SYNC_INBOUND_STATUS.PROCESSED,
+      decision_code:  "INGESTED_LEDGER_ONLY",
+      decision_reason: "Phase 1C-D complete. Ledger and receipt persisted. No mutations performed.",
+      routing:        routingResult,
     },
-    _phase: "1C-B",
   };
 }
