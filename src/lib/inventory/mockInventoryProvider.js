@@ -47,6 +47,14 @@ export const MockInventoryProvider = {
     return results.map((item) => normalize(attachMatchToItem(item))).filter(Boolean);
   },
 
+  /**
+   * getCachedItems — returns up to `limit` dev fixture items.
+   * Mock/dev mode only. Must never be called in inventory_bridge mode.
+   */
+  async getCachedItems(limit = 100) {
+    return MOCK_INVENTORY_ITEMS.slice(0, limit).map(normalize).filter(Boolean);
+  },
+
   async resolveByBarcode(barcode) {
     const found = resolveProductIdentity(barcode, MOCK_INVENTORY_ITEMS);
     return found ? normalize(found) : null;

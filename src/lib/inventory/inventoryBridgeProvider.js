@@ -85,6 +85,15 @@ export const InventoryBridgeProvider = {
     return results.map((item) => normalize(attachMatchToItem(item))).filter(Boolean);
   },
 
+  /**
+   * getCachedItems — returns up to `limit` cached items without search scoring.
+   * Bridge mode only: pulls directly from IndexedDB. No mock fallback ever.
+   */
+  async getCachedItems(limit = 100) {
+    const items = await getOrWarmCache();
+    return items.slice(0, limit).map(normalize).filter(Boolean);
+  },
+
   async resolveByBarcode(barcode) {
     const items = await getOrWarmCache();
     const found = resolveProductIdentity(barcode, items);

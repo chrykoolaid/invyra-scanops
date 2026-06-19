@@ -12,6 +12,8 @@ import { writeMarkdownRecord, writeMarkdownApprovalAudit } from "./scanOpsRecord
 import { normalizeSelectedScanItem } from "./scanOpsWorkflowBatch";
 import { buildGovernanceSnapshot } from "./scanOpsGovernance";
 import { COLLABORATION_STATES, COLLABORATION_VERSION, TASK_TYPES, registerCollaborationTaskForRecord } from "./scanOpsCollaboration";
+import { buildItemSnapshotEvidence, buildMarkdownOutboxEvent } from "./inventory/inventorySnapshotEvidence";
+import { addOutboxEvent } from "./inventory/storageProvider";
 
 const REQUESTS_KEY = "invyra_scanops_markdown_approval_requests_v1";
 const EVENTS_KEY = "invyra_scanops_markdown_approval_events_v1";
@@ -144,6 +146,7 @@ function actorSnapshot() {
 }
 
 function appendMarkdownEvent(eventType, request, extra = {}) {
+  const snapshotEvidence = request?._snapshotEvidence || extra._snapshotEvidence || null;
   const event = {
     eventId: makeId("md_evt"),
     eventType,
@@ -153,10 +156,26 @@ function appendMarkdownEvent(eventType, request, extra = {}) {
     barcode: request?.barcode || extra.barcode || null,
     status: request?.status || extra.status || "recorded",
     ...actorSnapshot(),
+    // Inventory snapshot evidence (read-only attestation)
+    ...(snapshotEvidence ? {
+      inventory_snapshot_id: snapshotEvidence.inventory_snapshot_id,
+      inventory_snapshot_ref: snapshotEvidence.inventory_snapshot_ref,
+      inventory_snapshot_hash: snapshotEvidence.inventory_snapshot_hash,
+      inventory_record_version: snapshotEvidence.inventory_record_version,
+      last_inventory_sync_at: snapshotEvidence.last_inventory_sync_at,
+      schema_version: snapshotEvidence.schema_version,
+      source: snapshotEvidence.source,
+    } : {}),
     ...extra,
     createdAt: nowIso(),
   };
   safeWrite(EVENTS_KEY, [event, ...safeRead(EVENTS_KEY)]);
+
+  // Mirror into IndexedDB event_outbox (fire-and-forget)
+  addOutboxEvent(
+    buildMarkdownOutboxEvent(eventType, event, snapshotEvidence?.inventory_snapshot_ref || null)
+  ).catch(() => {});
+
   return event;
 }
 
@@ -359,10 +378,14 @@ export function saveMarkdownApprovalRequest(request) {
   return normalized;
 }
 
-export function createMarkdownApprovalRequest({ item, reasonCode, selectedMarkdownPercent, quantity, expiryDate, batchLot, notes, labelRequired, labelHandoffMethod, attributeSnapshot }) {
+export function createMarkdownApprovalRequest({ item, reasonCode, selectedMarkdownPercent, quantity, expiryDate, batchLot, notes, labelRequired, labelHandoffMethod, attributeSnapshot, snapshotEvidence }) {
   const selected = normalizeSelectedScanItem(item, "manual_search");
   const currentPrice = getCurrentPriceSnapshot(item);
   const ruleEvaluation = evaluateMarkdownRule({ expiryDate, reasonCode, selectedMarkdownPercent, currentPrice, quantity });
+
+  // Build snapshot evidence if not provided by caller
+  const evidence = snapshotEvidence || buildItemSnapshotEvidence(item);
+
   const request = saveMarkdownApprovalRequest({
     status: MARKDOWN_STATUSES.DRAFT,
     itemId: selected?.itemId,
@@ -394,6 +417,8 @@ export function createMarkdownApprovalRequest({ item, reasonCode, selectedMarkdo
     labelHandoffMethod,
     attributeSnapshot,
     rawItem: selected,
+    // Attach snapshot evidence for downstream event mirroring
+    _snapshotEvidence: evidence,
   });
 
   // Persist to DB (offline-safe) — links via syncStatus: `md_req:<requestId>`
@@ -411,6 +436,7 @@ export function createMarkdownApprovalRequest({ item, reasonCode, selectedMarkdo
     currency: getCurrencySymbol(item),
     approvalRoleRequired: ruleEvaluation.approvalRoleRequired,
     riskLevel: ruleEvaluation.riskLevel,
+    snapshotEvidence: evidence,
   });
 
   appendMarkdownEvent(SCANOPS_EVENT_TYPES.MARKDOWN_REQUEST_CREATED, request, {

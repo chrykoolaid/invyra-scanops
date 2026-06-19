@@ -55,7 +55,7 @@ export default function MarkdownSuggestionsPanel({ onSelectItem }) {
   useEffect(() => {
     let cancelled = false;
     getActiveInventoryProvider()
-      .searchItems("", 100) // Load all cached items for suggestion scoring
+      .getCachedItems(100) // Provider-backed: bridge uses IndexedDB, mock uses fixtures
       .then((rows) => { if (!cancelled) setItems(rows || []); })
       .catch(() => {});
     return () => { cancelled = true; };

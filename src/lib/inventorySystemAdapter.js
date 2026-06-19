@@ -13,7 +13,7 @@
 import { getActiveInventoryProvider } from "./inventory/activeInventoryProvider";
 import { fetchInventoryItems } from "./useInventoryItems";
 import { resolveProductIdentity } from "./productIdentityResolver";
-import { isMockMode } from "./inventory/inventoryConfig";
+import { isMockMode, getDataMode } from "./inventory/inventoryConfig";
 import { MOCK_INVENTORY_ITEMS } from "./dev/inventoryFixtures";
 
 // ── In-memory warm cache for synchronous resolveInventoryIdentity calls ──
@@ -21,34 +21,59 @@ import { MOCK_INVENTORY_ITEMS } from "./dev/inventoryFixtures";
 // legacy workflow components that call resolveInventoryIdentity() synchronously.
 let _syncCache = null;
 let _syncCacheAt = 0;
+let _syncCacheMode = null; // tracks which DATA_MODE populated the cache
 const SYNC_CACHE_TTL = 60_000;
 
+/**
+ * Leakage guard: if DATA_MODE has changed since the cache was warmed,
+ * discard the stale cache so mock data never bleeds into bridge mode.
+ */
+function isSyncCacheStillValid() {
+  if (!_syncCache) return false;
+  if (_syncCacheMode !== getDataMode()) return false; // mode changed — purge
+  if (Date.now() - _syncCacheAt >= SYNC_CACHE_TTL) return false;
+  return true;
+}
+
 export async function ensureInventoryLoaded() {
-  const now = Date.now();
-  if (_syncCache && now - _syncCacheAt < SYNC_CACHE_TTL) return;
+  if (isSyncCacheStillValid()) return;
+  // Clear cache if mode has changed to prevent mock leakage into bridge mode
+  if (_syncCacheMode !== null && _syncCacheMode !== getDataMode()) {
+    _syncCache = null;
+    _syncCacheAt = 0;
+  }
   try {
     const provider = getActiveInventoryProvider();
     await provider.refreshInventoryCache();
     // Populate sync cache from live DB for bridge mode, fixtures for mock mode
     const rows = await fetchInventoryItems();
+    const currentMode = getDataMode();
     if (rows && rows.length > 0) {
       _syncCache = rows;
-      _syncCacheAt = now;
+      _syncCacheAt = Date.now();
+      _syncCacheMode = currentMode;
     } else if (isMockMode()) {
+      // Only allowed to fall back to mock data when explicitly in mock mode
       _syncCache = MOCK_INVENTORY_ITEMS;
-      _syncCacheAt = now;
+      _syncCacheAt = Date.now();
+      _syncCacheMode = currentMode;
     }
+    // In bridge mode with no rows: leave cache null — callers get empty/null, not mock data
   } catch {}
 }
 
 /**
  * Synchronous item resolver — used by existing workflow scan handlers.
- * 
+ *
  * In bridge mode: resolves against live DB cache warmed by ensureInventoryLoaded().
  * Returns null (never mock) if item not found in bridge mode.
+ * Leakage guard: never uses a mock-warmed cache in bridge mode.
  */
 export function resolveInventoryIdentity(input) {
-  const items = _syncCache || (isMockMode() ? MOCK_INVENTORY_ITEMS : []);
+  // If cache was warmed in mock mode but we are now in bridge mode, do not use it
+  const safeMockFallback = isMockMode() ? MOCK_INVENTORY_ITEMS : [];
+  const cacheIsClean = _syncCacheMode === getDataMode();
+  const items = (cacheIsClean && _syncCache) ? _syncCache : safeMockFallback;
   return resolveProductIdentity(input, items);
 }
 

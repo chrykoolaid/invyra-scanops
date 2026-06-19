@@ -6,6 +6,10 @@
  *
  * CONTRACT:
  *   searchItems(query: string, limit?: number): Promise<InventorySnapshotItem[]>
+ *   getCachedItems(limit?: number): Promise<InventorySnapshotItem[]>
+ *     — Returns all cached items up to limit, without search scoring.
+ *       Bridge mode: only cached Inventory items. No mock fallback.
+ *       Mock mode: returns dev fixtures (mock/dev mode only).
  *   resolveByBarcode(barcode: string): Promise<InventorySnapshotItem | null>
  *   getItemSnapshot(itemIdOrSku: string): Promise<InventorySnapshotItem | null>
  *   refreshInventoryCache(): Promise<{ ok: boolean; error?: string }>

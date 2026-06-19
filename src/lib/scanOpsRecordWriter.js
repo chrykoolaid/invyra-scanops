@@ -43,7 +43,7 @@ export function writeExpiryCheckRecord({ item, expiryDate, condition, expiryStat
   });
 }
 
-export function writeMarkdownRecord({ item, reasonCode, selectedPercent, quantity, expiryDate, notes, status, requestId, currentPrice, selectedMarkdownPrice, currency, approvalRoleRequired, riskLevel }) {
+export function writeMarkdownRecord({ item, reasonCode, selectedPercent, quantity, expiryDate, notes, status, requestId, currentPrice, selectedMarkdownPrice, currency, approvalRoleRequired, riskLevel, snapshotEvidence }) {
   writeScanOpsRecord({
     recordType: "markdown",
     status: status || "pending_approval",
@@ -69,6 +69,14 @@ export function writeMarkdownRecord({ item, reasonCode, selectedPercent, quantit
       originalPrice: currentPrice ?? null,
       markdownPercent: Number(selectedPercent) || 0,
       newPrice: selectedMarkdownPrice ?? null,
+      // Inventory snapshot evidence (read-only — no price or stock mutation)
+      inventory_snapshot_id: snapshotEvidence?.inventory_snapshot_id || null,
+      inventory_snapshot_ref: snapshotEvidence?.inventory_snapshot_ref || null,
+      inventory_snapshot_hash: snapshotEvidence?.inventory_snapshot_hash || null,
+      inventory_record_version: snapshotEvidence?.inventory_record_version || null,
+      last_inventory_sync_at: snapshotEvidence?.last_inventory_sync_at || null,
+      source: snapshotEvidence?.source || null,
+      schema_version: snapshotEvidence?.schema_version || null,
     },
   });
 }
