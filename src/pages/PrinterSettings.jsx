@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Printer, Plus, Trash2, Wifi, CheckCircle2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import PageHeader from "../components/scanner/PageHeader";
-import { PageShell, WorkflowMain, SectionCard, MetricPill, StickyActions } from "../components/scanner/WorkflowPrimitives";
+import { PageShell, WorkflowMain, SectionCard, MetricPill } from "../components/scanner/WorkflowPrimitives";
 
 const DEFAULT_FORM = { name: "", ipAddress: "", port: 9100, labelFormat: "ZPL", labelWidth: 50, labelHeight: 30, isDefault: false, status: "active" };
 

@@ -151,7 +151,7 @@ export default function ShelfTickets() {
   useEffect(() => {
     refreshQueue(null);
     // Stage AC imports once on open and then remains local/explicit.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   const selectedRequest = useMemo(() => requests.find((request) => request.requestId === selectedId) || null, [requests, selectedId]);

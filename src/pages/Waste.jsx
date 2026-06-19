@@ -237,7 +237,7 @@ export default function Waste() {
     refreshReviews(null);
     const contracts = getAdjustmentContracts();
     setLatestContract(contracts[0] || null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   const scan = (value) => {
