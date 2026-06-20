@@ -22,6 +22,7 @@
     "validate:scanops-inventory-bridge-gate-acceptance": "node scripts/validate-scanops-inventory-bridge-gate-acceptance.mjs",
     "validate:scanops-inventory-bridge-gate-requirements-ack": "node scripts/validate-scanops-inventory-bridge-gate-requirements-ack.mjs",
     "validate:scanops-inventory-bridge-release-blocker-acceptance": "node scripts/validate-scanops-inventory-bridge-release-blocker-acceptance.mjs",
+    "validate:scanops-inventory-bridge-release-plan-draft-acceptance": "node scripts/validate-scanops-inventory-bridge-release-plan-draft-acceptance.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
