@@ -20,6 +20,7 @@
     "validate:scanops-inventory-bridge-relay-enforcement-candidate-acceptance": "node scripts/validate-scanops-inventory-bridge-relay-enforcement-candidate-acceptance.mjs",
     "validate:scanops-inventory-bridge-handshake-evidence-acceptance": "node scripts/validate-scanops-inventory-bridge-handshake-evidence-acceptance.mjs",
     "validate:scanops-inventory-bridge-gate-acceptance": "node scripts/validate-scanops-inventory-bridge-gate-acceptance.mjs",
+    "validate:scanops-inventory-bridge-gate-requirements-ack": "node scripts/validate-scanops-inventory-bridge-gate-requirements-ack.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
