@@ -17,6 +17,7 @@
     "validate:scanops-inventory-bridge-trusted-device-state-projection": "node scripts/validate-scanops-inventory-bridge-trusted-device-state-projection.mjs",
     "validate:scanops-inventory-bridge-relay-admission-evidence-acceptance": "node scripts/validate-scanops-inventory-bridge-relay-admission-evidence-acceptance.mjs",
     "validate:scanops-inventory-bridge-relay-readiness-preflight-projection": "node scripts/validate-scanops-inventory-bridge-relay-readiness-preflight-projection.mjs",
+    "validate:scanops-inventory-bridge-relay-enforcement-candidate-acceptance": "node scripts/validate-scanops-inventory-bridge-relay-enforcement-candidate-acceptance.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
