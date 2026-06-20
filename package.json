@@ -14,6 +14,7 @@
     "validate:scanops-inventory-bridge-pairing-request-derivation": "node scripts/validate-scanops-inventory-bridge-pairing-request-derivation.mjs",
     "validate:scanops-inventory-bridge-pending-receipt-acceptance": "node scripts/validate-scanops-inventory-bridge-pending-receipt-acceptance.mjs",
     "validate:scanops-inventory-bridge-approved-receipt-acceptance": "node scripts/validate-scanops-inventory-bridge-approved-receipt-acceptance.mjs",
+    "validate:scanops-inventory-bridge-trusted-device-state-projection": "node scripts/validate-scanops-inventory-bridge-trusted-device-state-projection.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
