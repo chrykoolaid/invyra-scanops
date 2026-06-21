@@ -152,9 +152,15 @@ function assertNoForbiddenOperationalCalls() {
 function project(overrides = {}) {
   return projectScanOpsInventoryBridgeRelayReadinessPreflight(
     {
-      local_trusted_state: overrides.local_trusted_state ?? localTrustedState,
-      relay_admission_evidence: overrides.relay_admission_evidence ?? relayAdmissionEvidence,
-      relay_enforcement_applied: overrides.relay_enforcement_applied ?? false,
+      local_trusted_state: Object.prototype.hasOwnProperty.call(overrides, 'local_trusted_state')
+        ? overrides.local_trusted_state
+        : localTrustedState,
+      relay_admission_evidence: Object.prototype.hasOwnProperty.call(overrides, 'relay_admission_evidence')
+        ? overrides.relay_admission_evidence
+        : relayAdmissionEvidence,
+      relay_enforcement_applied: Object.prototype.hasOwnProperty.call(overrides, 'relay_enforcement_applied')
+        ? overrides.relay_enforcement_applied
+        : false,
     },
     { projected_at: '2026-06-20T01:00:00.000Z' }
   );
