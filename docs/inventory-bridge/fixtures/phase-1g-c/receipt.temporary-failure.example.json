@@ -1,0 +1,17 @@
+{
+  "_fixture_notice": "Static Phase 1G-C receipt fixture only. Not live runtime data.",
+  "receipt_id": "inventory-receipt-fixture-0003",
+  "event_id": "scanops-event-fixture-0003",
+  "status": "TEMPORARY_FAILURE",
+  "reason_code": "TEMPORARY_PROCESSING_FAILURE",
+  "received_at": "2026-06-21T06:10:11.000Z",
+  "processed_at": "2026-06-21T06:10:12.000Z",
+  "inventory_instance_id": "inventory-fixture-001",
+  "ledger_reference": null,
+  "retry_allowed": true,
+  "operator_action_required": false,
+  "retry_after_ms": 300000,
+  "receipt_signature": "receipt-signature-fixture",
+  "outbox_status_after_receipt": "RETRY_SCHEDULED",
+  "safety_note": "Temporary failure fixture. Future retry policy must be explicit."
+}
