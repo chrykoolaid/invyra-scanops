@@ -1,0 +1,37 @@
+name: ScanOps Bridge Stack Readiness Review Validators
+
+on:
+  pull_request:
+    branches:
+      - phase-1d-d-ak-stack-evidence-acceptance
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bridge-stack-readiness-review-validators:
+    name: Bridge stack readiness review validators only
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run ScanOps bridge stack readiness review and write report
+        run: node scripts/write-scanops-inventory-bridge-stack-report.mjs
+
+      - name: Upload ScanOps bridge validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scanops-bridge-stack-readiness-review-report
+          path: bridge-validation-reports/scanops-bridge-stack-report.json
+          if-no-files-found: warn

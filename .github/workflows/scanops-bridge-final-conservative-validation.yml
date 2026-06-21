@@ -1,0 +1,73 @@
+name: ScanOps Bridge Final Conservative Validation
+
+on:
+  push:
+    branches:
+      - phase-1d-d-am-stack-readiness-review-acceptance
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scanops-bridge-validation-matrix:
+    name: ScanOps bridge validation matrix
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run ScanOps bridge validation matrix
+        run: |
+          npm run validate:scanops-inventory-bridge-relay-admission-evidence-acceptance
+          npm run validate:scanops-inventory-bridge-relay-readiness-preflight-projection
+          npm run validate:scanops-inventory-bridge-relay-enforcement-candidate-acceptance
+          npm run validate:scanops-inventory-bridge-handshake-evidence-acceptance
+          npm run validate:scanops-inventory-bridge-gate-acceptance
+          npm run validate:scanops-inventory-bridge-gate-requirements-ack
+          npm run validate:scanops-inventory-bridge-release-blocker-acceptance
+          npm run validate:scanops-inventory-bridge-release-plan-draft-acceptance
+          npm run validate:scanops-inventory-bridge-stack-evidence-acceptance
+          npm run validate:scanops-inventory-bridge-stack-readiness-review-acceptance
+
+      - name: Write ScanOps bridge validation report
+        run: node scripts/write-scanops-inventory-bridge-stack-report.mjs
+
+      - name: Upload ScanOps final bridge validation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scanops-bridge-final-conservative-validation-report
+          path: bridge-validation-reports/scanops-bridge-stack-report.json
+          if-no-files-found: warn
+
+  scanops-baseline-typecheck-build:
+    name: ScanOps baseline typecheck and build
+    runs-on: ubuntu-latest
+    needs: scanops-bridge-validation-matrix
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
