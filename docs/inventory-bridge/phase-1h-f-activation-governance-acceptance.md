@@ -66,7 +66,6 @@ credential_material_allowed=false
 inventory_write_allowed=false
 stock_mutation_allowed=false
 price_mutation_allowed=false
-price_mutation_allowed=false
 pos_mutation_allowed=false
 order_mutation_allowed=false
 forecasting_mutation_allowed=false
