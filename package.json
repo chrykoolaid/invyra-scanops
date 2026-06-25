@@ -28,6 +28,7 @@
     "validate:inventory-bridge-disabled-configuration": "node scripts/validate-inventory-bridge-disabled-configuration.mjs",
     "validate:scanops-bridge-runtime-foundation-disabled": "node scripts/validate-scanops-bridge-runtime-foundation-disabled.mjs",
     "validate:scanops-bridge-contract-adapter-disabled": "node scripts/validate-scanops-bridge-contract-adapter-disabled.mjs",
+    "validate:scanops-bridge-outbound-candidate-preview-disabled": "node scripts/validate-scanops-bridge-outbound-candidate-preview-disabled.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
