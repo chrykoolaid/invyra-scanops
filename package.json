@@ -29,6 +29,7 @@
     "validate:scanops-bridge-runtime-foundation-disabled": "node scripts/validate-scanops-bridge-runtime-foundation-disabled.mjs",
     "validate:scanops-bridge-contract-adapter-disabled": "node scripts/validate-scanops-bridge-contract-adapter-disabled.mjs",
     "validate:scanops-bridge-outbound-candidate-preview-disabled": "node scripts/validate-scanops-bridge-outbound-candidate-preview-disabled.mjs",
+    "validate:scanops-bridge-candidate-fixture-alignment-disabled": "node scripts/validate-scanops-bridge-candidate-fixture-alignment-disabled.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
