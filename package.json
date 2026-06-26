@@ -32,6 +32,7 @@
     "validate:scanops-bridge-candidate-fixture-alignment-disabled": "node scripts/validate-scanops-bridge-candidate-fixture-alignment-disabled.mjs",
     "validate:scanops-bridge-dry-run-handoff-disabled": "node scripts/validate-scanops-bridge-dry-run-handoff-disabled.mjs",
     "validate:scanops-bridge-local-transport-disabled": "node scripts/validate-scanops-bridge-local-transport-disabled.mjs",
+    "validate:scanops-bridge-training-handshake-preparation": "node scripts/validate-scanops-bridge-training-handshake-preparation.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
