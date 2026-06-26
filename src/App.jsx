@@ -30,6 +30,7 @@ import StoreOpsDashboard from './pages/StoreOpsDashboard';
 import PilotReadiness from './pages/PilotReadiness';
 import PrinterSettings from './pages/PrinterSettings';
 import UserManagement from './pages/UserManagement';
+import ScannerSettings from './pages/ScannerSettings';
 import RoleGate from './components/scanner/RoleGate';
 import AppEscapeHeader from './components/scanner/AppEscapeHeader';
 import OfflineBanner from './components/scanner/OfflineBanner';
@@ -79,10 +80,11 @@ const getAppEscapeMeta = (pathname) => {
     "/scanops-reporting": { title: "ScanOps Reporting", subtitle: "Review scanner operations" },
     "/device-governance": { title: "Device & Shift Governance", subtitle: "Review device readiness" },
     "/session-collaboration": { title: "Session Collaboration", subtitle: "Review multi-user work" },
-    "/sync-handoff": { title: "Sync & Handoff", subtitle: "Queue, setup, and contract review" },
+    "/sync-handoff": { title: "Sync & Handoff", subtitle: "Queue, status, setup, and review" },
     "/desktop-sync-contract": { title: "Desktop Sync Contract", subtitle: "Review integration contracts" },
     "/store-ops-dashboard": { title: "Store Ops Dashboard", subtitle: "Review store exceptions" },
     "/pilot-readiness": { title: "Pilot Readiness", subtitle: "Review UAT and release evidence" },
+    "/scanner-settings": { title: "Scanner Settings", subtitle: "Device controls, diagnostics, and access" },
   };
 
   if (exactRoutes[pathname]) return exactRoutes[pathname];
@@ -157,6 +159,7 @@ const AuthenticatedApp = () => {
             <Route path="/pilot-readiness" element={<PilotReadiness />} />
             <Route path="/printer-settings" element={roleGated(<PrinterSettings />, "Manager", "Printer Settings")} />
             <Route path="/user-management" element={roleGated(<UserManagement />, "Manager", "User Management")} />
+            <Route path="/scanner-settings" element={<ScannerSettings />} />
             <Route path="*" element={<PageNotFound />} />
           </Routes>
         </div>
