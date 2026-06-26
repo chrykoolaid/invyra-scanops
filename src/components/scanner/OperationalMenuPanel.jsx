@@ -19,7 +19,6 @@ import {
   RefreshCw,
   ScanLine,
   Search,
-  SendToBack,
   Settings,
   ShieldCheck,
   Tags,
@@ -67,7 +66,7 @@ const MENU_SECTIONS = [
     minRole: "Supervisor",
     items: [
       { label: "Store Exceptions", icon: ShieldCheck, description: "Needs action / blocked / reviewed", route: "/store-ops-dashboard", minRole: "Manager" },
-      { label: "Sync Review", icon: Database, description: "Review local sync evidence", route: "/sync-queue", minRole: "Supervisor" },
+      { label: "Sync & Handoff", icon: Database, description: "Queue, setup, contracts, and sync review", route: "/sync-handoff", minRole: "Manager" },
       { label: "Product Review", icon: GitPullRequest, description: "Unknown item and alias evidence", route: "/product-identity-review", minRole: "Supervisor" },
       { label: "Device / Shift Status", icon: MonitorSmartphone, description: "Device, user, and shift governance", route: "/device-governance", minRole: "Manager" },
       { label: "User Management", icon: Users, description: "Invite staff and manage ScanOps roles", route: "/user-management", minRole: "Manager" },
@@ -79,8 +78,6 @@ const MENU_SECTIONS = [
     minRole: "Manager",
     items: [
       { label: "Pilot Readiness", icon: ClipboardCheck, description: "UAT packs and local release gate", route: "/pilot-readiness", minRole: "Manager" },
-      { label: "Contract Preview", icon: SendToBack, description: "Desktop sync contract and payload preview", route: "/desktop-sync-contract", minRole: "Manager" },
-      { label: "Scanner Test", icon: ScanLine, description: "Test barcode / PLU input", panel: "scanner", minRole: "Manager" },
       { label: "Recent Audit", icon: Activity, description: "Trace IDs and role evidence", panel: "audit", minRole: "Manager" },
     ],
   },
@@ -88,7 +85,7 @@ const MENU_SECTIONS = [
     title: "Device & Help",
     helper: "Lightweight device controls.",
     items: [
-      { label: "Scanner Settings", icon: Settings, description: "Beep, vibration, touch settings", panel: "settings" },
+      { label: "Scanner Settings", icon: Settings, description: "Device behaviour and scanner diagnostics", panel: "settings" },
       { label: "Help", icon: BadgeHelp, description: "Quick operator guidance", panel: "help" },
       { label: "About ScanOps", icon: Info, description: "Product and stage details", panel: "about" },
       { label: "End Session", icon: LogOut, description: "Record session end event", action: "end" },
@@ -235,10 +232,13 @@ function SettingsPanel({ session, onMessage }) {
     onMessage(`Department context changed · ${event.traceId || event.trace_id}`);
   };
   return (
-    <Section title="Scanner Settings" helper="Comfort settings first; manager-only controls stay secondary.">
-      <div className="grid grid-cols-2 gap-2"><button className="rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-bold">Beep On</button><button className="rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-bold">Vibration On</button><button className="rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-bold">Large Targets</button><button className="rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-bold">Comfortable</button></div>
-      {hasRoleAtLeast(session.actorRole, "Manager") ? <><div className="mt-3 rounded-xl border border-border bg-card p-3"><p className="text-xs font-bold text-foreground">Offline Mode · {network}</p><div className="grid grid-cols-2 gap-2 mt-2"><button onClick={() => changeNetwork("online")} className="rounded-xl bg-secondary py-2 text-xs font-bold">Online</button><button onClick={() => changeNetwork("offline")} className="rounded-xl bg-secondary py-2 text-xs font-bold">Offline</button></div></div><div className="mt-3 rounded-xl border border-border bg-card p-3"><p className="text-xs font-bold text-foreground">Store / Department Context</p><p className="text-xs text-muted-foreground mb-2">{session.storeName} · {session.departmentName}</p><select value={session.departmentId || ""} onChange={(e) => changeContext(e.target.value)} className="w-full rounded-xl border border-input bg-secondary px-3 py-3 text-sm font-bold text-foreground outline-none focus:ring-2 focus:ring-ring">{DEPARTMENTS.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div></> : <p className="mt-3 rounded-xl border border-border bg-card p-3 text-xs font-bold text-muted-foreground">Manager required</p>}
-    </Section>
+    <div className="space-y-4">
+      <Section title="Scanner Settings" helper="Device behaviour first. Scanner Test now lives here as diagnostics.">
+        <div className="grid grid-cols-2 gap-2"><button className="rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-bold">Beep On</button><button className="rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-bold">Vibration On</button><button className="rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-bold">Large Targets</button><button className="rounded-xl border border-border bg-secondary px-3 py-2 text-xs font-bold">Comfortable</button></div>
+        {hasRoleAtLeast(session.actorRole, "Manager") ? <><div className="mt-3 rounded-xl border border-border bg-card p-3"><p className="text-xs font-bold text-foreground">Offline Mode · {network}</p><div className="grid grid-cols-2 gap-2 mt-2"><button onClick={() => changeNetwork("online")} className="rounded-xl bg-secondary py-2 text-xs font-bold">Online</button><button onClick={() => changeNetwork("offline")} className="rounded-xl bg-secondary py-2 text-xs font-bold">Offline</button></div></div><div className="mt-3 rounded-xl border border-border bg-card p-3"><p className="text-xs font-bold text-foreground">Store / Department Context</p><p className="text-xs text-muted-foreground mb-2">{session.storeName} · {session.departmentName}</p><select value={session.departmentId || ""} onChange={(e) => changeContext(e.target.value)} className="w-full rounded-xl border border-input bg-secondary px-3 py-3 text-sm font-bold text-foreground outline-none focus:ring-2 focus:ring-ring">{DEPARTMENTS.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select></div></> : <p className="mt-3 rounded-xl border border-border bg-card p-3 text-xs font-bold text-muted-foreground">Manager required</p>}
+      </Section>
+      <ScannerPanel onMessage={onMessage} />
+    </div>
   );
 }
 
