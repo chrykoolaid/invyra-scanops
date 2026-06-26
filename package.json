@@ -30,6 +30,7 @@
     "validate:scanops-bridge-contract-adapter-disabled": "node scripts/validate-scanops-bridge-contract-adapter-disabled.mjs",
     "validate:scanops-bridge-outbound-candidate-preview-disabled": "node scripts/validate-scanops-bridge-outbound-candidate-preview-disabled.mjs",
     "validate:scanops-bridge-candidate-fixture-alignment-disabled": "node scripts/validate-scanops-bridge-candidate-fixture-alignment-disabled.mjs",
+    "validate:scanops-bridge-dry-run-handoff-disabled": "node scripts/validate-scanops-bridge-dry-run-handoff-disabled.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
