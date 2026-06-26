@@ -1,14 +1,11 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  AlertTriangle,
   BadgeHelp,
   Bell,
-  GitPullRequest,
   Info,
   LogOut,
   Settings,
-  ShieldCheck,
   X,
 } from "lucide-react";
 import { createScanOpsAuditEvent } from "../../lib/scanOpsAudit";
@@ -22,20 +19,10 @@ const MENU_SECTIONS = [
     title: "Support",
     helper: "Help and device support only.",
     items: [
-      { label: "Report Issue", icon: AlertTriangle, description: "Report a problem or workflow issue", route: "/pilot-readiness" },
-      { label: "Scanner Settings", icon: Settings, description: "Device controls, diagnostics, and users", route: "/scanner-settings" },
+      { label: "Scanner Settings", icon: Settings, description: "Device controls, diagnostics, and access status", route: "/scanner-settings" },
       { label: "Help", icon: BadgeHelp, description: "Quick operator guidance", panel: "help" },
-      { label: "About ScanOps", icon: Info, description: "App info and version", panel: "about" },
+      { label: "About ScanOps", icon: Info, description: "App info and stage details", panel: "about" },
       { label: "End Session", icon: LogOut, description: "Record session end event", action: "end" },
-    ],
-  },
-  {
-    title: "Manager Tools",
-    helper: "Review tools that are not Home workflow tiles.",
-    minRole: "Supervisor",
-    items: [
-      { label: "Store Exceptions", icon: ShieldCheck, description: "View and resolve exceptions", route: "/store-ops-dashboard", minRole: "Manager" },
-      { label: "Product Review", icon: GitPullRequest, description: "Review unknown items and evidence", route: "/product-identity-review", minRole: "Supervisor" },
     ],
   },
 ];
@@ -94,8 +81,8 @@ export default function OperationalMenuPanel({ onClose }) {
   };
 
   const active = () => {
-    if (panel === "help") return <Section title="Help / Workflow Guide" helper="Home launches work. This drawer is for support."><p className="text-sm text-muted-foreground">Use the Home tiles for daily workflows. Use Scanner Settings for device behaviour, diagnostics, users, and shift context. Use Sync & Handoff from Home for queue, setup, contracts, and sync status.</p></Section>;
-    if (panel === "about") return <Section title="About ScanOps"><p className="text-sm font-semibold text-foreground">Invyra ScanOps</p><p className="text-xs text-muted-foreground">Support drawer only. No workflow shortcuts are duplicated here.</p></Section>;
+    if (panel === "help") return <Section title="Help / Workflow Guide" helper="Home launches work. This drawer is for support."><p className="text-sm text-muted-foreground">Use the Home tiles for daily workflows. Use Scanner Settings for device behaviour, diagnostics, and read-only access status. Use Sync & Handoff from Home for queue, setup, contracts, and sync status.</p></Section>;
+    if (panel === "about") return <Section title="About ScanOps"><p className="text-sm font-semibold text-foreground">Invyra ScanOps</p><p className="text-xs text-muted-foreground">Support drawer only. Experimental review and UAT pages are hidden from normal navigation.</p></Section>;
     return null;
   };
 

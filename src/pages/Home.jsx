@@ -16,32 +16,25 @@ import {
   ArrowLeftRight,
   Database,
   BarChart2,
-  Shield,
   LayoutDashboard,
-  CheckSquare,
 } from "lucide-react";
 
-// minRole: minimum role required to see the tile
+// Home is the operational workflow launcher. Experimental/UAT/admin-only surfaces stay routed but hidden from normal navigation.
 const ALL_TILES = [
-  { icon: Search,         label: "Product Lookup",   to: "/scan",                    minRole: "Staff" },
-  { icon: ClipboardList,  label: "Stock Count",       to: "/stock-count",             minRole: "Staff" },
-  { icon: PackageOpen,    label: "Receiving",          to: "/receiving",               minRole: "Staff" },
-  { icon: RefreshCw,      label: "Replenish",          to: "/replenish",               minRole: "Staff" },
-  { icon: ScanBarcode,    label: "Gap Scan",           to: "/gap-scan",                minRole: "Staff" },
-  { icon: ListChecks,     label: "Tasks",              to: "/tasks",                   minRole: "Staff" },
-  { icon: Tags,           label: "Markdowns",          to: "/markdowns",               minRole: "Staff" },
-  { icon: Trash2,         label: "Waste",              to: "/waste",                   minRole: "Staff" },
-  { icon: Clock,          label: "Expiry Check",       to: "/expiry-check",            minRole: "Staff" },
-  { icon: Printer,        label: "Shelf Tickets",      to: "/shelf-tickets",           minRole: "Staff" },
-  { icon: ArrowLeftRight, label: "Transfers",          to: "/transfers",               minRole: "Staff" },
-  { icon: BarChart2,      label: "Reporting",          to: "/scanops-reporting",       minRole: "Supervisor" },
-  { icon: Shield,         label: "Product Review",     to: "/product-identity-review", minRole: "Supervisor" },
-  { icon: LayoutDashboard,label: "Session Collab",     to: "/session-collaboration",   minRole: "Supervisor" },
-  { icon: Database,       label: "Sync & Handoff",     to: "/sync-handoff",            minRole: "Manager" },
-  { icon: LayoutDashboard,label: "Store Ops",          to: "/store-ops-dashboard",     minRole: "Manager" },
-  { icon: Shield,         label: "Device Governance",  to: "/device-governance",       minRole: "Manager" },
-  { icon: CheckSquare,    label: "Pilot Readiness",    to: "/pilot-readiness",         minRole: "Admin" },
-  { icon: Printer,        label: "Printer Settings",   to: "/printer-settings",        minRole: "Manager" },
+  { icon: Search,         label: "Product Lookup",    to: "/scan",                minRole: "Staff" },
+  { icon: ClipboardList,  label: "Stock Count",        to: "/stock-count",         minRole: "Staff" },
+  { icon: PackageOpen,    label: "Receiving",          to: "/receiving",           minRole: "Staff" },
+  { icon: RefreshCw,      label: "Replenish",          to: "/replenish",           minRole: "Staff" },
+  { icon: ScanBarcode,    label: "Gap Scan",           to: "/gap-scan",            minRole: "Staff" },
+  { icon: ListChecks,     label: "Tasks",              to: "/tasks",               minRole: "Staff" },
+  { icon: Tags,           label: "Markdowns",          to: "/markdowns",           minRole: "Staff" },
+  { icon: Trash2,         label: "Waste",              to: "/waste",               minRole: "Staff" },
+  { icon: Clock,          label: "Expiry Check",       to: "/expiry-check",        minRole: "Staff" },
+  { icon: Printer,        label: "Shelf Tickets",      to: "/shelf-tickets",       minRole: "Staff" },
+  { icon: ArrowLeftRight, label: "Transfers",          to: "/transfers",           minRole: "Staff" },
+  { icon: Database,       label: "Sync & Handoff",     to: "/sync-handoff",        minRole: "Manager" },
+  { icon: LayoutDashboard,label: "Store Exceptions",   to: "/store-ops-dashboard", minRole: "Manager" },
+  { icon: BarChart2,      label: "Reporting",          to: "/scanops-reporting",   minRole: "Supervisor" },
 ];
 
 const ROLE_LEVELS = { Staff: 1, Supervisor: 2, Manager: 3, Admin: 4 };
