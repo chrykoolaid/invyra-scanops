@@ -6,6 +6,8 @@ import {
   CheckCircle2,
   ClipboardList,
   HeartPulse,
+  Info,
+  KeyRound,
   LockKeyhole,
   MonitorSmartphone,
   ScanBarcode,
@@ -21,20 +23,12 @@ import {
 } from "lucide-react";
 import { createScanOpsAuditEvent } from "../lib/scanOpsAudit";
 import { SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
-import { hasRoleAtLeast, canChangeContext, canManageOffline } from "../lib/scanOpsPermissions";
-import { SCANOPS_ROLES, setScanOpsRolePreview, updateScanOpsSession, useScanOpsSession } from "../lib/scanOpsSession";
-import { getNetworkMode, setNetworkMode } from "../lib/scanOpsSync";
+import { useScanOpsSession } from "../lib/scanOpsSession";
+import { getNetworkMode } from "../lib/scanOpsSync";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 
 const CARD = "rounded-2xl border border-border bg-card p-4 shadow-sm";
 const TILE = "rounded-2xl border border-border bg-background/70 p-3 min-h-[92px] flex flex-col items-center justify-center text-center gap-2 active:scale-[0.98] transition-all";
-const DEPARTMENTS = Object.freeze([
-  { id: "grocery", name: "Grocery" },
-  { id: "dairy", name: "Dairy" },
-  { id: "deli", name: "Deli" },
-  { id: "produce", name: "Produce" },
-  { id: "meat", name: "Meat" },
-]);
 
 function SectionCard({ icon: Icon, title, helper, children }) {
   return (
@@ -56,13 +50,27 @@ function SectionCard({ icon: Icon, title, helper, children }) {
   );
 }
 
-function Tile({ icon: Icon, label, sublabel, onClick, disabled }) {
+function Tile({ icon: Icon, label, sublabel }) {
   return (
-    <button type="button" onClick={onClick} disabled={disabled} className={`${TILE} ${disabled ? "opacity-50" : ""}`}>
+    <div className={TILE}>
       <Icon className="w-7 h-7 text-primary" />
       <span className="text-xs font-black text-foreground leading-tight">{label}</span>
       {sublabel && <span className="text-[10px] font-semibold text-muted-foreground leading-tight">{sublabel}</span>}
-    </button>
+    </div>
+  );
+}
+
+function InfoRow({ icon: Icon, label, value }) {
+  return (
+    <div className="flex items-start gap-3 rounded-2xl border border-border bg-background/70 p-3">
+      <span className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+        <Icon className="w-4 h-4" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">{label}</p>
+        <p className="text-sm font-black text-foreground break-words">{value || "—"}</p>
+      </div>
+    </div>
   );
 }
 
@@ -104,34 +112,11 @@ function ScannerTest() {
 
 export default function ScannerSettings() {
   const session = useScanOpsSession();
-  const [network, setNetwork] = useState(getNetworkMode());
-  const isManager = hasRoleAtLeast(session.actorRole, "Manager");
-  const isAdmin = hasRoleAtLeast(session.actorRole, "Admin");
-
-  const changeNetwork = (mode) => {
-    if (!canManageOffline(session)) return;
-    setNetworkMode(mode);
-    setNetwork(mode);
-    createScanOpsAuditEvent(mode === "offline" ? SCANOPS_EVENT_TYPES.OFFLINE_MODE_ENTERED : SCANOPS_EVENT_TYPES.ONLINE_MODE_RESTORED, { status: "saved", network_mode: mode });
-  };
-
-  const changeDepartment = (departmentId) => {
-    if (!canChangeContext(session)) return;
-    const department = DEPARTMENTS.find((item) => item.id === departmentId);
-    if (!department) return;
-    updateScanOpsSession({ departmentId: department.id, departmentName: department.name });
-    createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.SCANOPS_SETTING_CHANGED, { status: "saved", setting_patch: { departmentId: department.id, departmentName: department.name } });
-  };
-
-  const changeRole = (role) => {
-    if (!isAdmin) return;
-    setScanOpsRolePreview(role);
-    createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.SESSION_ROLE_PREVIEW_CHANGED, { status: "role_preview_changed", preview_role: role });
-  };
+  const network = getNetworkMode();
 
   return (
     <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
-      <PageHeader title="Scanner Settings" subtitle="Device controls, diagnostics, users, and shift setup" />
+      <PageHeader title="Scanner Settings" subtitle="Device controls, diagnostics, and read-only access status" />
       <main className="flex-1 px-4 py-4 pb-8 space-y-4 overflow-y-auto overflow-x-hidden" data-scanops-scroll>
         <SectionCard icon={Settings} title="Device Behaviour" helper="Configure how the scanner feels during work.">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -152,54 +137,37 @@ export default function ScannerSettings() {
           <ScannerTest />
         </SectionCard>
 
-        <SectionCard icon={Smartphone} title="Shift & Device" helper="Status, context, and connectivity.">
+        <SectionCard icon={Smartphone} title="Shift & Device" helper="Read-only scanner, shift, and network context.">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-            <Tile icon={Users} label="Current User" sublabel={`${session.actorName} · ${session.actorRole}`} />
-            <Tile icon={MonitorSmartphone} label="Device Status" sublabel={session.deviceId} />
+            <Tile icon={Users} label="Current User" sublabel={session.actorName} />
+            <Tile icon={BadgeCheck} label="Current Role" sublabel={session.actorRole} />
+            <Tile icon={MonitorSmartphone} label="Device ID" sublabel={session.deviceId} />
             <Tile icon={Store} label="Store / Dept" sublabel={session.departmentName} />
-            <Tile icon={BadgeCheck} label="Shift Status" sublabel={session.shiftLabel || session.shiftId} />
             <Tile icon={Wifi} label="Network" sublabel={network} />
           </div>
-          {isManager && (
-            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <div className="rounded-2xl border border-border bg-background/70 p-3">
-                <p className="text-xs font-black text-foreground">Offline / Online Mode</p>
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <button type="button" onClick={() => changeNetwork("online")} className={`rounded-xl px-3 py-2 text-xs font-black border ${network === "online" ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border"}`}>Online</button>
-                  <button type="button" onClick={() => changeNetwork("offline")} className={`rounded-xl px-3 py-2 text-xs font-black border ${network === "offline" ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border"}`}>Offline</button>
-                </div>
-              </div>
-              <div className="rounded-2xl border border-border bg-background/70 p-3">
-                <p className="text-xs font-black text-foreground">Store / Department</p>
-                <select value={session.departmentId || ""} onChange={(e) => changeDepartment(e.target.value)} className="mt-2 w-full rounded-xl border border-input bg-card px-3 py-2.5 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20">
-                  {DEPARTMENTS.map((department) => <option key={department.id} value={department.id}>{department.name}</option>)}
-                </select>
-              </div>
-            </div>
-          )}
         </SectionCard>
 
-        <SectionCard icon={LockKeyhole} title="Access & Users" helper="Permissions, roles, device assignment, and approvals.">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Tile icon={Users} label="User Management" sublabel={isManager ? "Manager" : "Manager only"} disabled={!isManager} />
-            <Tile icon={BadgeCheck} label="Role Preview" sublabel={isAdmin ? "Admin" : "Admin only"} disabled={!isAdmin} />
-            <Tile icon={MonitorSmartphone} label="Device Assign" sublabel="Future" disabled />
-            <Tile icon={ShieldCheck} label="Admin Approval" sublabel="Controlled" disabled={!isAdmin} />
+        <SectionCard icon={LockKeyhole} title="Access & Identity" helper="Read-only login identity. Access is assigned outside the scanner app.">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <InfoRow icon={Users} label="Current User" value={session.actorName} />
+            <InfoRow icon={BadgeCheck} label="Current Role" value={session.actorRole} />
+            <InfoRow icon={KeyRound} label="Role Source" value="Assigned by login" />
+            <InfoRow icon={Store} label="Store / Department" value={session.departmentName} />
+            <InfoRow icon={MonitorSmartphone} label="Device" value={session.deviceId} />
+            <InfoRow icon={ShieldCheck} label="Access Managed By" value="Company Admin / Invyra Access" />
           </div>
-          {isAdmin && (
-            <div className="mt-3 rounded-2xl border border-border bg-background/70 p-3">
-              <p className="text-xs font-black text-foreground mb-2">Role Preview</p>
-              <div className="grid grid-cols-2 gap-2">
-                {SCANOPS_ROLES.map((role) => (
-                  <button key={role} type="button" onClick={() => changeRole(role)} className={`rounded-xl border px-3 py-2 text-xs font-black ${session.actorRole === role ? "bg-primary text-primary-foreground border-primary" : "bg-card border-border"}`}>{role}</button>
-                ))}
-              </div>
+          <div className="mt-3 rounded-2xl border border-border bg-secondary/60 px-4 py-3">
+            <div className="flex items-start gap-3">
+              <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+              <p className="text-xs font-bold leading-snug text-muted-foreground">
+                ScanOps applies permissions from login. This page does not assign users, roles, stores, departments, devices, or approvals.
+              </p>
             </div>
-          )}
+          </div>
         </SectionCard>
 
         <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
-          <p className="text-xs font-black leading-snug text-amber-800">Scanner Settings is configuration and diagnostics only. No stock, price, sync transport, or workflow mutation is triggered here.</p>
+          <p className="text-xs font-black leading-snug text-amber-800">Scanner Settings is diagnostics and read-only access status only. No stock, price, sync transport, role, store, department, permission, or workflow mutation is triggered here.</p>
         </div>
       </main>
     </div>
