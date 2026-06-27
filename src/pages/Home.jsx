@@ -14,27 +14,23 @@ import {
   ListChecks,
   Printer,
   ArrowLeftRight,
-  Database,
-  BarChart2,
-  LayoutDashboard,
+  Activity,
 } from "lucide-react";
 
-// Home is the operational workflow launcher. Experimental/UAT/admin-only surfaces stay routed but hidden from normal navigation.
+// Home is the operational workflow launcher. Management/admin surfaces live under More.
 const ALL_TILES = [
   { icon: Search,         label: "Product Lookup",    to: "/scan",                minRole: "Staff" },
-  { icon: ClipboardList,  label: "Stock Count",        to: "/stock-count",         minRole: "Staff" },
   { icon: PackageOpen,    label: "Receiving",          to: "/receiving",           minRole: "Staff" },
-  { icon: RefreshCw,      label: "Replenish",          to: "/replenish",           minRole: "Staff" },
+  { icon: ClipboardList,  label: "Stock Count",        to: "/stock-count",         minRole: "Staff" },
   { icon: ScanBarcode,    label: "Gap Scan",           to: "/gap-scan",            minRole: "Staff" },
+  { icon: RefreshCw,      label: "Replenish",          to: "/replenish",           minRole: "Staff" },
   { icon: ListChecks,     label: "Tasks",              to: "/tasks",               minRole: "Staff" },
+  { icon: Activity,       label: "Movements",          to: "/movements",           minRole: "Staff" },
   { icon: Tags,           label: "Markdowns",          to: "/markdowns",           minRole: "Staff" },
   { icon: Trash2,         label: "Waste",              to: "/waste",               minRole: "Staff" },
   { icon: Clock,          label: "Expiry Check",       to: "/expiry-check",        minRole: "Staff" },
   { icon: Printer,        label: "Shelf Tickets",      to: "/shelf-tickets",       minRole: "Staff" },
   { icon: ArrowLeftRight, label: "Transfers",          to: "/transfers",           minRole: "Staff" },
-  { icon: Database,       label: "Sync & Handoff",     to: "/sync-handoff",        minRole: "Manager" },
-  { icon: LayoutDashboard,label: "Store Exceptions",   to: "/store-ops-dashboard", minRole: "Manager" },
-  { icon: BarChart2,      label: "Reporting",          to: "/scanops-reporting",   minRole: "Supervisor" },
 ];
 
 const ROLE_LEVELS = { Staff: 1, Supervisor: 2, Manager: 3, Admin: 4 };
@@ -48,7 +44,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
       <AppHeader />
-      <main className="flex-1 overflow-y-auto overflow-x-hidden px-3.5 py-3 pb-14">
+      <main data-scanops-scroll className="flex-1 overflow-y-auto overflow-x-hidden px-3.5 py-3 pb-24">
         <div className="grid grid-cols-3 items-stretch gap-2.5">
           {tiles.map((tile) => (
             <ActionTile
