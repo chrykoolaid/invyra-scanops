@@ -17,6 +17,7 @@ import Markdowns from './pages/Markdowns';
 import Waste from './pages/Waste';
 import ExpiryCheck from './pages/ExpiryCheck';
 import Tasks from './pages/Tasks';
+import More from './pages/More';
 import SyncHandoff from './pages/SyncHandoff';
 import SyncQueue from './pages/SyncQueue';
 import ShelfTickets from './pages/ShelfTickets';
@@ -34,6 +35,7 @@ import ScannerSettings from './pages/ScannerSettings';
 import RoleGate from './components/scanner/RoleGate';
 import AppEscapeHeader from './components/scanner/AppEscapeHeader';
 import OfflineBanner from './components/scanner/OfflineBanner';
+import BottomNavigation from './components/scanner/BottomNavigation';
 
 
 const ScrollToTopOnRouteChange = () => {
@@ -62,13 +64,15 @@ const getAppEscapeMeta = (pathname) => {
   if (!pathname || pathname === "/") return null;
 
   const exactRoutes = {
-    "/scan": { title: "Product Lookup", subtitle: "Scan or search item details" },
+    "/scan": { title: "Item Lookup", subtitle: "Scan or search item details" },
     "/stock-count": { title: "Stock Count", subtitle: "Count stock and review variances" },
     "/receiving": { title: "Receiving", subtitle: "Receive stock and confirm delivery evidence" },
     "/replenish": { title: "Replenish", subtitle: "Move stock from backroom to shelf" },
     "/price-check": { title: "Price Check", subtitle: "Check price and promotion labels" },
     "/gap-scan": { title: "Gap Scan", subtitle: "Record shelf gaps and follow-up actions" },
     "/tasks": { title: "Tasks", subtitle: "Review assigned store work" },
+    "/alerts": { title: "Alerts", subtitle: "Review urgent operational issues" },
+    "/more": { title: "More", subtitle: "Secondary workflows and settings" },
     "/markdowns": { title: "Markdowns", subtitle: "Review markdown work safely" },
     "/waste": { title: "Waste", subtitle: "Capture waste and review shrink evidence" },
     "/expiry-check": { title: "Expiry Check", subtitle: "Review freshness and expiry" },
@@ -88,7 +92,7 @@ const getAppEscapeMeta = (pathname) => {
   };
 
   if (exactRoutes[pathname]) return exactRoutes[pathname];
-  if (pathname.startsWith("/product/")) return { title: "Product Lookup", subtitle: "Item details" };
+  if (pathname.startsWith("/product/")) return { title: "Item Lookup", subtitle: "Item details" };
 
   return { title: "ScanOps", subtitle: "ScanOps workflow" };
 };
@@ -97,14 +101,13 @@ const roleGated = (element, requiredRole, title) => (
   <RoleGate requiredRole={requiredRole} title={title}>
     {element}
   </RoleGate>
-);
+)
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
   const location = useLocation();
   const appEscapeMeta = getAppEscapeMeta(location.pathname);
 
-  // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
@@ -113,18 +116,15 @@ const AuthenticatedApp = () => {
     );
   }
 
-  // Handle authentication errors
   if (authError) {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
-      // Redirect to login automatically
       navigateToLogin();
       return null;
     }
   }
 
-  // Render the main app
   return (
     <div className="scanops-root-shell" data-scanops-app-escape-active={appEscapeMeta ? "true" : "false"}>
       <ScrollToTopOnRouteChange />
@@ -145,6 +145,8 @@ const AuthenticatedApp = () => {
             <Route path="/waste" element={<Waste />} />
             <Route path="/expiry-check" element={<ExpiryCheck />} />
             <Route path="/tasks" element={<Tasks />} />
+            <Route path="/alerts" element={<Tasks />} />
+            <Route path="/more" element={<More />} />
             <Route path="/sync-handoff" element={<SyncHandoff />} />
             <Route path="/inventory-sync" element={<SyncHandoff />} />
             <Route path="/sync-queue" element={<SyncQueue />} />
@@ -164,6 +166,7 @@ const AuthenticatedApp = () => {
           </Routes>
         </div>
       </div>
+      <BottomNavigation />
     </div>
   );
 };
