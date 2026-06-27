@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { CheckCircle2, PackagePlus, RefreshCw, Trash2 } from "lucide-react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
-import PageHeader from "../components/scanner/PageHeader";
 import GovernanceContextStrip from "../components/scanner/GovernanceContextStrip";
 import TouchSelect from "../components/scanner/TouchSelect";
 import {
@@ -19,8 +19,6 @@ import {
 import { resolveInventoryIdentity, ensureInventoryLoaded } from "../lib/inventorySystemAdapter";
 import { writeWasteRecord } from "../lib/scanOpsRecordWriter";
 import { getDefaultExpiryDate, getDefaultLotBatch } from "../lib/scanOpsItemAttributes";
-import { useScanOpsSession } from "../lib/scanOpsSession";
-import { restrictedActionReason } from "../lib/scanOpsPermissions";
 import {
   GOVERNED_ACTIONS,
   canPerformScanOpsAction,
@@ -28,349 +26,211 @@ import {
   useScanOpsGovernanceContext,
 } from "../lib/scanOpsGovernance";
 import {
-  canApproveWasteReview,
-  canCreateAdjustmentContract,
-  canSubmitWasteReview,
-  createAdjustmentContract,
   createWasteReviewDraft,
-  decideWasteReview,
   filterWasteReviews,
-  formatReorderImpact,
-  getAdjustmentContracts,
   getWasteReviews,
-  getWasteReviewOptionLabel,
   getWasteReviewReason,
   submitWasteReview,
-  WASTE_REVIEW_FILTERS,
   WASTE_REVIEW_REASON_OPTIONS,
-  WASTE_REVIEW_STATUSES,
-  WASTE_REVIEW_TYPE_OPTIONS,
 } from "../lib/scanOpsWasteReview";
+
+const STOCK_OUT_TYPES = [
+  {
+    id: "wastage",
+    label: "Wastage",
+    tone: "border-red-200 bg-red-50 text-red-800",
+    helper: "Permanent inventory loss",
+    examples: "Expired, damaged, spoiled",
+    defaultReason: "expired_out_of_date",
+    reasonIds: [
+      "expired_out_of_date",
+      "spoiled_rotten",
+      "damaged_in_handling",
+      "spillage",
+      "temperature_issue",
+      "packaging_broken",
+      "contamination_risk",
+      "unknown_loss",
+    ],
+  },
+  {
+    id: "store_use",
+    label: "Store Use",
+    tone: "border-blue-200 bg-blue-50 text-blue-800",
+    helper: "Business consumption",
+    examples: "Cleaning, office, staff, display",
+    defaultReason: "store_use",
+    reasonIds: ["store_use", "production_use", "sampling_promos", "training_use"],
+  },
+];
 
 function getUnit(item) {
   return item?.unitType || item?.unit_type || "each";
 }
 
-function currencyAmount(currency, value) {
-  if (value == null || value === "") return "—";
-  return `${currency || "₱"}${Number(value).toFixed(2)}`;
+function getAvailable(item) {
+  return item?.stockOnHand ?? item?.stock_on_hand ?? item?.available ?? item?.availableStock ?? item?.shelfStock ?? item?.shelf_stock ?? "—";
 }
 
-function statusTone(status) {
-  if ([WASTE_REVIEW_STATUSES.APPROVED, WASTE_REVIEW_STATUSES.ADJUSTMENT_CONTRACT_CREATED].includes(status)) return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if ([WASTE_REVIEW_STATUSES.REJECTED, WASTE_REVIEW_STATUSES.BLOCKED].includes(status)) return "bg-red-50 text-red-700 border-red-200";
-  if ([WASTE_REVIEW_STATUSES.RETURNED, WASTE_REVIEW_STATUSES.SHRINK_REVIEW_REQUIRED].includes(status)) return "bg-amber-50 text-amber-700 border-amber-200";
-  return "bg-secondary text-muted-foreground border-border";
+function StatusPill({ children }) {
+  return <span className="inline-flex rounded-full border border-border bg-secondary px-2 py-1 text-[10px] font-black uppercase tracking-wide text-muted-foreground">{children}</span>;
 }
 
-function StatusPill({ children, status }) {
-  return <span className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${statusTone(status)}`}>{children}</span>;
-}
-
-function MiniButton({ children, onClick, disabled = false, variant = "secondary" }) {
-  const classes = variant === "primary"
-    ? "bg-primary text-primary-foreground active:scale-[0.98]"
-    : variant === "danger"
-      ? "bg-red-50 text-red-700 active:bg-red-100"
-      : "bg-secondary text-secondary-foreground active:bg-border";
-  return (
-    <button type="button" onClick={onClick} disabled={disabled} className={`min-h-10 rounded-xl px-3 text-xs font-black disabled:opacity-40 ${classes}`}>
-      {children}
-    </button>
-  );
-}
-
-function ReviewQueueCard({ review, selected, onSelect }) {
+function TypeButton({ type, active, onClick }) {
   return (
     <button
       type="button"
-      onClick={() => onSelect(review.reviewId)}
-      className={`w-full min-w-0 rounded-2xl border p-3 text-left active:scale-[0.99] ${selected ? "border-primary bg-primary/5" : "border-border bg-card"}`}
+      onClick={onClick}
+      className={`min-h-24 rounded-3xl border p-3 text-left active:scale-[0.99] ${active ? type.tone : "border-border bg-card text-foreground"}`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="break-words text-sm font-black text-foreground">{review.itemName}</p>
-          <p className="mt-1 break-words text-xs font-bold text-muted-foreground">
-            {review.reasonLabel} · Qty {review.quantity} {review.unitOfMeasure}
-          </p>
-          <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">
-            Source: {review.sourceWorkflow === "MARKDOWN_BLOCK" ? "Markdown Block" : review.sourceWorkflow || "Waste Review"}
-          </p>
-        </div>
-        <StatusPill status={review.status}>{review.status}</StatusPill>
-      </div>
+      <p className="text-sm font-black">{type.label}</p>
+      <p className="mt-1 text-xs font-bold opacity-80">{type.helper}</p>
+      <p className="mt-2 text-[11px] font-bold opacity-70">{type.examples}</p>
     </button>
   );
 }
 
-function ReviewDetails({ review, session, onSubmit, onApprove, onReturn, onReject, onContract }) {
-  const submitAllowed = canSubmitWasteReview(review, session);
-  const approveAllowed = canApproveWasteReview(review, session);
-  const contractAllowed = canCreateAdjustmentContract(review, session);
-  const role = session?.actorRole || "Staff";
-  const needsSubmit = [WASTE_REVIEW_STATUSES.DRAFT, WASTE_REVIEW_STATUSES.RETURNED, WASTE_REVIEW_STATUSES.PENDING_REVIEW].includes(review.status);
-  const needsApproval = [
-    WASTE_REVIEW_STATUSES.PENDING_SUPERVISOR_APPROVAL,
-    WASTE_REVIEW_STATUSES.PENDING_MANAGER_APPROVAL,
-    WASTE_REVIEW_STATUSES.SHRINK_REVIEW_REQUIRED,
-  ].includes(review.status);
-  const needsContract = [WASTE_REVIEW_STATUSES.APPROVED, WASTE_REVIEW_STATUSES.ADJUSTMENT_CONTRACT_READY].includes(review.status) && !review.linkedAdjustmentContractId && review.adjustmentContractStatus !== "Created";
-  const approvalReason = review.approvalRoleRequired === "Manager" ? "Manager approval required" : restrictedActionReason("Supervisor");
-  const contractReason = restrictedActionReason("Manager");
-  const contractLabel = review?.linkedAdjustmentContractId ? "Contract Created" : "Create Adjustment Contract";
+function QueueCard({ review }) {
+  const type = review.reviewType === "operational_use" ? "Store Use" : "Wastage";
+  const tone = review.reviewType === "operational_use" ? "bg-blue-50 text-blue-800 border-blue-200" : "bg-red-50 text-red-800 border-red-200";
 
   return (
-    <SectionCard className="space-y-3">
+    <div className="rounded-2xl border border-border bg-card p-3">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Selected Review</p>
-          <h2 className="mt-1 break-words text-lg font-black text-foreground">{review.itemName}</h2>
-          <p className="mt-1 break-words text-xs font-bold text-muted-foreground">
-            SKU {review.sku || "—"} · Barcode {review.barcode || "—"}
-          </p>
+        <div className="min-w-0 flex-1">
+          <p className="break-words text-sm font-black text-foreground">{review.itemName}</p>
+          <p className="mt-1 text-xs font-bold text-muted-foreground">Qty {review.quantity} {review.unitOfMeasure} · {review.reasonLabel}</p>
+          <p className="mt-1 text-[11px] font-semibold text-muted-foreground">{review.syncStatus || "Sync deferred"}</p>
         </div>
-        <StatusPill status={review.status}>{review.status}</StatusPill>
+        <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${tone}`}>{type}</span>
       </div>
-
-      <div className="rounded-2xl bg-secondary/50 p-3 space-y-2">
-        <InfoLine label="Department" value={review.department || "—"} />
-        <InfoLine label="Location" value={review.shelfLocation || "—"} />
-        <InfoLine label="Type" value={getWasteReviewOptionLabel(WASTE_REVIEW_TYPE_OPTIONS, review.reviewType)} />
-        <InfoLine label="Reason" value={review.reasonLabel} />
-        <InfoLine label="Quantity" value={`${review.quantity} ${review.unitOfMeasure}`} />
-        <InfoLine label="Expiry" value={review.expiryDate || "—"} />
-        <InfoLine label="Batch/Lot" value={review.batchLot || "—"} />
-      </div>
-
-      <div className="rounded-2xl border border-border bg-card p-3 space-y-2">
-        <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Evidence</p>
-        <InfoLine label="Evidence note" value={review.evidenceNote || "Note required"} />
-        <InfoLine label="Photo/file" value="Deferred in this stage" />
-        <InfoLine label="Evidence status" value={review.evidenceStatus === "NOTE_CAPTURED_ATTACHMENT_DEFERRED" ? "Note captured" : "Note required"} />
-      </div>
-
-      <div className="rounded-2xl border border-border bg-card p-3 space-y-2">
-        <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Governance</p>
-        <InfoLine label="Impact" value={formatReorderImpact(review)} />
-        <InfoLine label="Approval required" value={review.approvalRoleRequired || "Supervisor"} />
-        <InfoLine label="Risk" value={review.riskLevel || "Normal"} />
-        <InfoLine label="Estimated total" value={currencyAmount(review.currency, review.estimatedTotalCost)} />
-        <InfoLine label="Adjustment contract" value={review.adjustmentContractStatus || "Pending"} />
-        <InfoLine label="Inventory sync" value="Deferred" />
-        <InfoLine label="Current role" value={role} />
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        {needsSubmit && <MiniButton onClick={onSubmit} disabled={!submitAllowed}>Submit Review</MiniButton>}
-        {needsSubmit && !submitAllowed && <p className="col-span-2 rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-black text-muted-foreground">Review required</p>}
-        {needsApproval && approveAllowed && (
-          <>
-            <MiniButton onClick={onApprove} variant="primary">Approve</MiniButton>
-            <MiniButton onClick={onReturn}>Return</MiniButton>
-            <MiniButton onClick={onReject} variant="danger">Reject</MiniButton>
-          </>
-        )}
-        {needsApproval && !approveAllowed && <p className="col-span-2 rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-black text-muted-foreground">{approvalReason}</p>}
-        {!needsSubmit && !needsApproval && !needsContract && <p className="col-span-2 rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-black text-muted-foreground">No review action available</p>}
-      </div>
-      {needsContract && contractAllowed && <MiniButton onClick={onContract} variant="primary">{contractLabel}</MiniButton>}
-      {needsContract && !contractAllowed && <p className="rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-black text-muted-foreground">{contractReason}</p>}
-      <p className="rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-bold leading-snug text-muted-foreground">
-        Review evidence only. Live inventory, prices, promos, and accounting stay unchanged.
-      </p>
-    </SectionCard>
-  );
-}
-
-function ContractCard({ contract }) {
-  if (!contract) return null;
-  return (
-    <SectionCard className="space-y-2">
-      <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Adjustment Contract</p>
-      <h2 className="break-words text-base font-black text-foreground">Adjustment contract created</h2>
-      <InfoLine label="Contract" value={contract.adjustmentId} />
-      <InfoLine label="Direction" value={contract.adjustmentDirection} />
-      <InfoLine label="Quantity" value={`${contract.quantity} ${contract.unitOfMeasure || "each"}`} />
-      <InfoLine label="Sync" value="Inventory sync deferred" />
-      <InfoLine label="Inventory mutation" value="Not implemented in handheld" />
-    </SectionCard>
+    </div>
   );
 }
 
 export default function Waste() {
-  const session = useScanOpsSession();
   const governance = useScanOpsGovernanceContext();
   const [scanValue, setScanValue] = useState("");
   const [item, setItem] = useState(null);
+  const [stockOutType, setStockOutType] = useState("wastage");
   const [quantity, setQuantity] = useState(1);
   const [reasonCode, setReasonCode] = useState("expired_out_of_date");
   const [expiryDate, setExpiryDate] = useState("");
   const [batchLot, setBatchLot] = useState("");
   const [shelfLocation, setShelfLocation] = useState("");
   const [evidenceNote, setEvidenceNote] = useState("");
-  const [filter, setFilter] = useState("all");
   const [reviews, setReviews] = useState([]);
-  const [selectedReviewId, setSelectedReviewId] = useState(null);
   const [inlineMessage, setInlineMessage] = useState("");
-  const [latestContract, setLatestContract] = useState(null);
   const [operatorError, setOperatorError] = useState(null);
-  const [continuousScan, setContinuousScan] = useState(false);
 
-  const selectedReview = useMemo(() => reviews.find((review) => review.reviewId === selectedReviewId) || reviews[0] || null, [reviews, selectedReviewId]);
-  const filteredReviews = useMemo(() => filterWasteReviews(reviews, filter), [reviews, filter]);
+  const currentType = STOCK_OUT_TYPES.find((type) => type.id === stockOutType) || STOCK_OUT_TYPES[0];
   const reason = getWasteReviewReason(reasonCode);
   const unit = getUnit(item);
+  const currentSession = useMemo(() => filterWasteReviews(reviews, "draft"), [reviews]);
+  const reasonOptions = useMemo(() => {
+    const allowed = new Set(currentType.reasonIds);
+    return WASTE_REVIEW_REASON_OPTIONS.filter((option) => allowed.has(option.id));
+  }, [currentType]);
 
-  const refreshReviews = (selectId = selectedReviewId) => {
-    const nextReviews = getWasteReviews();
-    setReviews(nextReviews);
-    if (selectId && nextReviews.some((review) => review.reviewId === selectId)) {
-      setSelectedReviewId(selectId);
-    } else {
-      setSelectedReviewId(nextReviews[0]?.reviewId || null);
-    }
-  };
-
-  useEffect(() => { ensureInventoryLoaded(); }, []);
+  const refreshReviews = () => setReviews(getWasteReviews());
 
   useEffect(() => {
-    refreshReviews(null);
-    const contracts = getAdjustmentContracts();
-    setLatestContract(contracts[0] || null);
-     
+    ensureInventoryLoaded();
+    refreshReviews();
   }, []);
+
+  const resetCurrentItem = () => {
+    setItem(null);
+    setScanValue("");
+    setQuantity(1);
+    setEvidenceNote("");
+    setInlineMessage("");
+    setOperatorError(null);
+  };
 
   const scan = (value) => {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
     if (!found) return;
-    setOperatorError(null);
     const rawScanValue = typeof value === "object" ? value?._searchMatch?.matchedValue || value?.barcode || value?.gtin || "" : String(value || "").trim();
+    const defaultType = found?.wasteReviewRequired || found?.expiry_status === "Expired" || found?.freshness_default === "needs_supervisor_review" ? "wastage" : stockOutType;
+    const nextType = STOCK_OUT_TYPES.find((type) => type.id === defaultType) || STOCK_OUT_TYPES[0];
+
+    setOperatorError(null);
     setItem(found);
     setScanValue(rawScanValue);
-    setQuantity((found?.unitType || found?.unit_type) === "kg" ? 1 : 1);
-    const defaultReason = found?.wasteReviewRequired || found?.expiry_status === "Expired" || found?.freshness_default === "needs_supervisor_review" ? "expired_out_of_date" : "damaged_in_handling";
-    setReasonCode(defaultReason);
+    setQuantity(1);
+    setStockOutType(nextType.id);
+    setReasonCode(nextType.defaultReason);
     setExpiryDate(getDefaultExpiryDate(found));
     setBatchLot(getDefaultLotBatch(found));
     setShelfLocation(found?.shelfLocation || found?.location || found?.aisle || found?.shelf || "");
     setEvidenceNote("");
     setInlineMessage("");
-    setLatestContract(null);
   };
 
-  const handleNewScanWhileActive = (nextItem) => {
-    // Auto-save draft then load new item (skip governance block in continuous mode)
-    if (item && reasonCode && quantity > 0) {
-      const permission = canPerformScanOpsAction(GOVERNED_ACTIONS.WASTE_SUBMIT, governance);
-      if (permission.allowed) {
-        recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", null, permission, { eventLabel: "Waste review draft saved" });
-        const review = createWasteReviewDraft({ item, reasonCode, quantity, expiryDate, batchLot, shelfLocation, evidenceNote });
-        refreshReviews(review.reviewId);
-      }
-    }
-    scan(nextItem);
+  const selectType = (type) => {
+    setStockOutType(type.id);
+    setReasonCode(type.defaultReason);
+    setOperatorError(null);
   };
 
-  const saveDraft = () => {
+  const addToQueue = () => {
     if (!item) {
-      setOperatorError({ title: "Item required", helper: "Scan or search an item before saving a waste review." });
+      setOperatorError({ title: "Item required", helper: "Scan or search an item before adding it to the session." });
       return;
     }
     if (quantity <= 0 || Number.isNaN(Number(quantity))) {
-      setOperatorError({ title: "Quantity missing", helper: "Enter a valid waste quantity before saving. Your item stays on screen." });
+      setOperatorError({ title: "Quantity missing", helper: "Enter a valid quantity before adding this item." });
       return;
     }
     if (!reasonCode) {
-      setOperatorError({ title: "Reason required", helper: "Choose a waste reason before saving. Your item stays on screen." });
+      setOperatorError({ title: "Reason required", helper: "Choose a reason before adding this item." });
       return;
     }
-    setOperatorError(null);
+
     const permission = canPerformScanOpsAction(GOVERNED_ACTIONS.WASTE_SUBMIT, governance);
     if (!permission.allowed) {
       recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", null, permission);
-      setOperatorError({ title: "Permission required", helper: permission.reason || "This waste action is blocked for the current role." });
-      setInlineMessage("");
+      setOperatorError({ title: "Permission required", helper: permission.reason || "This stock-out action is blocked for the current role." });
       return;
     }
-    recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", null, permission, { eventLabel: "Waste review draft saved" });
+
+    recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", null, permission, { eventLabel: "Stock-out item added to session" });
     const review = createWasteReviewDraft({ item, reasonCode, quantity, expiryDate, batchLot, shelfLocation, evidenceNote });
     writeWasteRecord({ item, reasonCode, quantity, expiryDate, batchLot, evidenceNote, status: "draft", reviewId: review.reviewId });
-    refreshReviews(review.reviewId);
-    setItem(null);
-    setScanValue("");
-    setQuantity(1);
-    setEvidenceNote("");
-    setInlineMessage("Waste review draft saved locally. Pending sync. No stock, price, promotion, or accounting mutation was posted.");
+    refreshReviews();
+    resetCurrentItem();
+    setInlineMessage("Added to queue. Ready for next scan.");
   };
 
-  const submitSelected = () => {
-    if (!selectedReview) return;
+  const submitSession = () => {
+    if (!currentSession.length) {
+      setOperatorError({ title: "Queue empty", helper: "Add at least one item before submitting the session." });
+      return;
+    }
+
     const permission = canPerformScanOpsAction(GOVERNED_ACTIONS.WASTE_SUBMIT, governance);
     if (!permission.allowed) {
-      recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", selectedReview.reviewId, permission);
-      setOperatorError({ title: "Permission required", helper: permission.reason || "This waste action is blocked for the current role." });
-      setInlineMessage("");
+      recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", null, permission);
+      setOperatorError({ title: "Permission required", helper: permission.reason || "This stock-out session is blocked for the current role." });
       return;
     }
-    const updated = submitWasteReview(selectedReview.reviewId);
-    refreshReviews(updated?.reviewId);
-    setInlineMessage(updated ? `${updated.status}. Saved locally. Pending sync. Review is role-gated.` : "Review was not submitted.");
-  };
 
-  const decideSelected = (action) => {
-    if (!selectedReview) return;
-    const actionKey = selectedReview.approvalRoleRequired === "Manager" ? GOVERNED_ACTIONS.SHRINK_APPROVE_HIGH_VALUE : GOVERNED_ACTIONS.WASTE_APPROVE_NORMAL;
-    const permission = canPerformScanOpsAction(actionKey, governance);
-    if (!permission.allowed) {
-      recordGovernedAction(actionKey, "Waste Review", selectedReview.reviewId, permission);
-      setOperatorError({ title: selectedReview?.approvalRoleRequired === "Manager" ? "Manager approval required" : "Supervisor required", helper: permission.reason || "This review is blocked until approved by an authorised role." });
-      setInlineMessage("");
-      return;
-    }
-    const updated = decideWasteReview(selectedReview.reviewId, action, action === "approve" ? "Approved from handheld governance review" : `${action} from handheld governance review`);
-    refreshReviews(updated?.reviewId);
-    setInlineMessage(updated ? `${updated.approvalDecision}. Product master stock, price, and promotion records were not changed.` : "Review decision was not saved.");
+    const submitted = currentSession.map((review) => submitWasteReview(review.reviewId)).filter(Boolean);
+    refreshReviews();
+    setInlineMessage(`${submitted.length} item${submitted.length === 1 ? "" : "s"} submitted. Queue cleared for the next session.`);
+    setOperatorError(null);
   };
-
-  const createContract = () => {
-    if (!selectedReview) return;
-    const permission = canPerformScanOpsAction(GOVERNED_ACTIONS.ADJUSTMENT_CONTRACT_CREATE, governance);
-    if (!permission.allowed) {
-      recordGovernedAction(GOVERNED_ACTIONS.ADJUSTMENT_CONTRACT_CREATE, "Waste Review", selectedReview.reviewId, permission);
-      setOperatorError({ title: "Manager required", helper: permission.reason || "Adjustment contracts require Manager/Admin approval." });
-      setInlineMessage("");
-      return;
-    }
-    const result = createAdjustmentContract(selectedReview.reviewId);
-    refreshReviews(result.review?.reviewId);
-    setLatestContract(result.contract || null);
-    setInlineMessage(result.duplicateBlocked ? "Duplicate adjustment contract blocked for this approved review." : "Adjustment contract created. Pending sync.");
-  };
-
-  const queueCounts = useMemo(() => ({
-    all: reviews.length,
-    draft: filterWasteReviews(reviews, "draft").length,
-    pending: filterWasteReviews(reviews, "pending").length,
-    approved: filterWasteReviews(reviews, "approved").length,
-    blocked: filterWasteReviews(reviews, "blocked").length,
-    shrink: filterWasteReviews(reviews, "shrink").length,
-  }), [reviews]);
 
   return (
     <PageShell>
-      <PageHeader title="Waste Review" subtitle="Waste, shrink, and adjustment review" />
       <WorkflowHeader
-        title="Waste Review"
-        subtitle="Waste, shrink, and adjustment review"
-        showHeaderChrome={false}
+        title="Stock-Out Session"
+        subtitle="Scan → qty → reason → add to queue"
         scanValue={scanValue}
         onScanValueChange={setScanValue}
         onScan={scan}
-        placeholder="Search / scan item, SKU, barcode..."
-        continuousScan={continuousScan}
-        onContinuousScanChange={setContinuousScan}
-        hasActiveItem={!!item}
-        onNewScanWhileItemActive={handleNewScanWhileActive}
+        placeholder="Scan item barcode or search..."
       />
       <WorkflowMain>
         <GovernanceContextStrip />
@@ -381,104 +241,76 @@ export default function Waste() {
           </div>
         )}
 
-        <SectionCard className="space-y-3">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Queue</p>
-              <h2 className="mt-1 text-xl font-black text-foreground">{reviews.length} review{reviews.length === 1 ? "" : "s"}</h2>
-            </div>
-            <StatusPill status="Local review">Local review</StatusPill>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {WASTE_REVIEW_FILTERS.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => setFilter(option.id)}
-                className={`min-h-10 rounded-xl px-2 text-xs font-black ${filter === option.id ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
-              >
-                {option.label} {queueCounts[option.id] != null ? queueCounts[option.id] : ""}
-              </button>
-            ))}
-          </div>
-          {filteredReviews.length ? (
-            <div className="space-y-2">
-              {filteredReviews.map((review) => (
-                <ReviewQueueCard key={review.reviewId} review={review} selected={selectedReview?.reviewId === review.reviewId} onSelect={setSelectedReviewId} />
-              ))}
-            </div>
-          ) : (
-            <EmptyState title="No reviews in this queue." helper="Scan an item to start a waste log. Blocked markdown records appear here when available." />
-          )}
-        </SectionCard>
-
         {item ? (
           <>
             <ItemSummaryCard item={item}>
-              <p className="text-xs font-bold text-muted-foreground">
-                Freshness: {item.freshnessStatus || item.expiry_status || "—"} · Use-by: {expiryDate || "—"}
-              </p>
+              <p className="text-xs font-bold text-muted-foreground">Available: {getAvailable(item)} {unit} · Location: {shelfLocation || "—"}</p>
             </ItemSummaryCard>
+
             <SectionCard className="space-y-3">
-              <div>
-                <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Create Review Draft</p>
-                <h2 className="mt-1 text-lg font-black text-foreground">Evidence and reason</h2>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Current Item</p>
+                  <h2 className="mt-1 text-lg font-black text-foreground">What happened?</h2>
+                </div>
+                <StatusPill>Step 2</StatusPill>
               </div>
-              <QuantityStepper label="Review qty" value={(quantity)} onChange={(value) => { setQuantity(value); if (operatorError?.title === "Quantity missing") setOperatorError(null); }} unit={unit} min={1} />
-              {(quantity <= 0 || Number.isNaN(Number(quantity))) && <FieldError title="Quantity missing" helper="Enter a valid quantity before saving." />}
-              <TouchSelect label="Reason" value={reasonCode} onChange={(value) => { setReasonCode(value); if (operatorError?.title === "Reason required") setOperatorError(null); }} options={WASTE_REVIEW_REASON_OPTIONS} helper={reason.helper} />
-              {!reasonCode && <FieldError title="Reason required" helper="Choose a waste reason before saving." />}
-              <div className="rounded-2xl bg-secondary/50 p-3 space-y-2">
-                <InfoLine label="Review type" value={getWasteReviewOptionLabel(WASTE_REVIEW_TYPE_OPTIONS, reason.reviewType)} />
-                <InfoLine label="Reorder impact" value={reason.reorderImpact === "INCLUDED_IN_REORDER_INTELLIGENCE" ? "Included in reorder intelligence" : "Excluded from reorder demand"} />
-                <InfoLine label="Photo/file" value="Deferred in this stage" />
+              <div className="grid grid-cols-2 gap-2">
+                {STOCK_OUT_TYPES.map((type) => <TypeButton key={type.id} type={type} active={stockOutType === type.id} onClick={() => selectType(type)} />)}
               </div>
-              <TextInputField label="Expiry date" value={expiryDate} onChange={setExpiryDate} type="date" />
-              <TextInputField label="Batch/Lot" value={batchLot} onChange={setBatchLot} placeholder="Optional batch or lot..." />
-              <TextInputField label="Shelf location" value={shelfLocation} onChange={setShelfLocation} placeholder="Aisle / bay / shelf..." />
-              <TextInputField label="Evidence note" value={evidenceNote} onChange={setEvidenceNote} placeholder="Example: expired on shelf, seal broken, missing from bay..." />
-              <p className="rounded-2xl bg-secondary/60 px-3 py-2 text-xs font-bold leading-snug text-muted-foreground">
-                Photo/file evidence deferred. Note evidence is saved now.
-              </p>
+              <QuantityStepper label="Quantity" value={quantity} onChange={(value) => { setQuantity(value); if (operatorError?.title === "Quantity missing") setOperatorError(null); }} unit={unit} min={1} />
+              {(quantity <= 0 || Number.isNaN(Number(quantity))) && <FieldError title="Quantity missing" helper="Enter a valid quantity before adding." />}
+              <TouchSelect label="Reason" value={reasonCode} onChange={(value) => { setReasonCode(value); if (operatorError?.title === "Reason required") setOperatorError(null); }} options={reasonOptions} helper={reason.helper} />
+              <TextInputField label="Note" value={evidenceNote} onChange={setEvidenceNote} placeholder="Optional note, for example: expired on shelf or opened packaging..." />
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={resetCurrentItem} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-secondary px-3 text-xs font-black text-secondary-foreground active:bg-border">
+                  <Trash2 className="h-4 w-4" /> Clear
+                </button>
+                <button type="button" onClick={addToQueue} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-primary px-3 text-xs font-black text-primary-foreground active:scale-[0.98]">
+                  <PackagePlus className="h-4 w-4" /> Add to Queue
+                </button>
+              </div>
             </SectionCard>
           </>
-        ) : null}
+        ) : (
+          <SectionCard className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Ready to Scan</p>
+                <h2 className="mt-1 text-lg font-black text-foreground">Scan an item to start</h2>
+              </div>
+              <StatusPill>Step 1</StatusPill>
+            </div>
+            <p className="rounded-2xl bg-secondary/60 px-3 py-2 text-sm font-bold leading-snug text-muted-foreground">
+              After adding an item, the form resets and the scanner is ready for the next item.
+            </p>
+          </SectionCard>
+        )}
 
-        {selectedReview ? (
-          <ReviewDetails
-            review={selectedReview}
-            session={session}
-            onSubmit={submitSelected}
-            onApprove={() => decideSelected("approve")}
-            onReturn={() => decideSelected("return")}
-            onReject={() => decideSelected("reject")}
-            onContract={createContract}
-          />
-        ) : null}
+        <SectionCard className="space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Current Session Queue</p>
+              <h2 className="mt-1 text-xl font-black text-foreground">{currentSession.length} item{currentSession.length === 1 ? "" : "s"}</h2>
+            </div>
+            <StatusPill>Draft</StatusPill>
+          </div>
 
-        <ContractCard contract={latestContract} />
-
-        {!item && !selectedReview ? (
-          <EmptyState title="Waste Review is ready." helper="Scan an item to start a waste log or select an existing review." />
-        ) : null}
+          {currentSession.length ? (
+            <div className="space-y-2">
+              {currentSession.map((review) => <QueueCard key={review.reviewId} review={review} />)}
+            </div>
+          ) : (
+            <EmptyState title="Queue is empty." helper="Scan an item, enter quantity, choose a reason, then add it to the queue." />
+          )}
+        </SectionCard>
       </WorkflowMain>
       <StickyActions
-        leftLabel={item ? "Clear Item" : "Refresh Queue"}
-        rightLabel="Save Draft"
-        onLeft={() => {
-          if (item) {
-            setItem(null);
-            setScanValue("");
-            setInlineMessage("");
-            setOperatorError(null);
-          } else {
-            refreshReviews(selectedReviewId);
-            setOperatorError(null);
-            setInlineMessage("Waste Review queue refreshed.");
-          }
-        }}
-        onRight={saveDraft}
-        rightDisabled={false}
+        leftLabel="Refresh Queue"
+        rightLabel={currentSession.length ? `Submit Session (${currentSession.length})` : "Submit Session"}
+        onLeft={() => { refreshReviews(); setInlineMessage("Session queue refreshed."); }}
+        onRight={submitSession}
+        rightDisabled={!currentSession.length}
       />
     </PageShell>
   );
