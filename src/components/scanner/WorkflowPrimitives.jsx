@@ -18,19 +18,12 @@ export function SectionCard({ children, className = "" }) {
 }
 
 export function ReadyCard() {
-  // Idle workflow bodies intentionally stay quiet. Header search is the instruction surface.
   return null;
 }
 
-export function EmptyState({ title = "No item selected.", helper = "" }) {
-  return (
-    <div className="rounded-2xl border border-dashed border-border bg-card/70 px-4 py-3 text-sm font-bold text-muted-foreground">
-      <p>{title}</p>
-      {helper && <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground/80">{helper}</p>}
-    </div>
-  );
+export function EmptyState({ title = "Waiting for scan…", helper = "" }) {
+  return <p className="px-1 py-1 text-xs font-bold leading-snug text-muted-foreground">{title}{helper ? ` · ${helper}` : ""}</p>;
 }
-
 
 export function OperatorAlert({ title, helper = "", tone = "warning", actions = [] }) {
   const toneMap = {
@@ -212,23 +205,8 @@ export function BatchList({ title = "Current batch", items = [], emptyText = "Ba
           })}
         </div>
       ) : (
-        <p className="mt-3 rounded-2xl bg-secondary/50 px-3 py-2 text-sm font-bold text-muted-foreground">{emptyText}</p>
+        <p className="mt-2 px-1 text-xs font-bold text-muted-foreground">{emptyText}</p>
       )}
     </SectionCard>
-  );
-}
-
-export function TextInputField({ label, value, onChange, placeholder = "", type = "text" }) {
-  return (
-    <label className="block min-w-0">
-      <span className="text-xs font-black uppercase tracking-wider text-muted-foreground">{label}</span>
-      <input
-        value={value || ""}
-        onChange={(event) => onChange?.(event.target.value)}
-        placeholder={placeholder}
-        type={type}
-        className="mt-2 h-12 w-full min-w-0 rounded-2xl border border-input bg-card px-4 text-sm font-bold text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/20"
-      />
-    </label>
   );
 }
