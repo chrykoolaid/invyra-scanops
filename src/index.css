@@ -224,7 +224,7 @@ body {
 
 /* Stage L handheld containment polish */
 .scanops-root-shell main {
-  padding-bottom: max(3.5rem, env(safe-area-inset-bottom)) !important;
+  padding-bottom: max(7.5rem, env(safe-area-inset-bottom)) !important;
 }
 
 .scanops-sticky-actions {
@@ -233,9 +233,9 @@ body {
   z-index: 20;
   margin-left: -1rem;
   margin-right: -1rem;
-  margin-bottom: -3.5rem;
+  margin-bottom: 0;
   border-top: 1px solid hsl(var(--border));
-  background: hsl(var(--background) / 0.96);
+  background: hsl(var(--background) / 0.98);
   padding: 0.75rem 1rem max(0.85rem, env(safe-area-inset-bottom));
   backdrop-filter: blur(10px);
 }
@@ -275,7 +275,7 @@ body {
 }
 
 .scanops-root-shell .scanops-sticky-actions {
-  margin-bottom: -3.5rem;
+  margin-bottom: 0;
 }
 
 /* Stage M.1.7 keyboard key sizing polish
