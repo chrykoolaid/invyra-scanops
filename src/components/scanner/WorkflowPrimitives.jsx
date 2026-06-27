@@ -70,6 +70,21 @@ export function FieldError({ title, helper }) {
   );
 }
 
+export function TextInputField({ label, value, onChange, placeholder = "", rows = 3 }) {
+  return (
+    <label className="block space-y-2">
+      {label && <span className="text-xs font-black uppercase tracking-wider text-muted-foreground">{label}</span>}
+      <textarea
+        value={value || ""}
+        onChange={(event) => onChange?.(event.target.value)}
+        placeholder={placeholder}
+        rows={rows}
+        className="min-h-20 w-full resize-none rounded-2xl border border-border bg-card px-3 py-3 text-sm font-bold text-foreground outline-none placeholder:text-muted-foreground/70 focus:border-primary focus:ring-2 focus:ring-primary/10"
+      />
+    </label>
+  );
+}
+
 export function ItemSummaryCard({ item, children = null }) {
   if (!item) return null;
   const unit = item.unitType || item.unit_type || "each";
