@@ -52,6 +52,22 @@
 
 .scanops-root-shell main {
   padding-bottom: max(5.25rem, env(safe-area-inset-bottom)) !important;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scanops-root-shell main::-webkit-scrollbar,
+.scanops-route-content::-webkit-scrollbar,
+[data-scanops-scroll]::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.scanops-route-content,
+[data-scanops-scroll] {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .scanops-keyboard-open .scanops-bottom-nav {
