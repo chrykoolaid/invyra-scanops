@@ -45,7 +45,7 @@ import {
   TRANSFER_EXCEPTION_OPTIONS_STAGEW,
   unitForItem,
 } from "../lib/scanOpsReceivingTransfers";
-import { ArrowLeftRight, CheckCircle2, ClipboardCheck, MapPin, PackageCheck, ScanLine } from "lucide-react";
+import { ArrowLeftRight, CheckCircle2 } from "lucide-react";
 
 const REVIEW_ACTIONS = [
   { id: "Accepted", label: "Accept Evidence" },
