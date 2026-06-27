@@ -39,7 +39,7 @@ const mockMovements = (product, unit) => [
 
 function TabButton({ tab, active, onClick }) {
   return (
-    <button type="button" onClick={onClick} className={`min-h-10 shrink-0 rounded-2xl px-3 text-[11px] font-black uppercase tracking-wide active:scale-[0.98] ${active ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>{tab}</button>
+    <button type="button" onClick={onClick} className={`min-h-12 rounded-2xl px-2 text-[11px] font-black uppercase tracking-wide active:scale-[0.98] ${active ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>{tab}</button>
   );
 }
 
@@ -116,7 +116,7 @@ export default function ProductLookup() {
         {product ? (
           <>
             <ItemSummaryCard item={product}><p className="break-all font-mono text-[11px] text-muted-foreground">{getIdentityDisplay(product)}</p><p className="mt-1 inline-flex rounded-full bg-secondary px-2 py-1 text-[10px] font-black uppercase tracking-wide text-muted-foreground">{getMatchReasonDisplay(product)}</p></ItemSummaryCard>
-            <div className="-mx-1 overflow-x-auto px-1 pb-1"><div className="flex gap-2">{ITEM_TABS.map((tab) => <TabButton key={tab} tab={tab} active={activeTab === tab} onClick={() => setActiveTab(tab)} />)}</div></div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="tablist" aria-label="Item lookup sections">{ITEM_TABS.map((tab) => <TabButton key={tab} tab={tab} active={activeTab === tab} onClick={() => setActiveTab(tab)} />)}</div>
             {activeTab === "Summary" && <SummaryTab product={product} price={price} unit={unit} workSummary={workSummary} setActiveTab={setActiveTab} onScanAgain={() => navigate("/scan")} />}
             {activeTab === "Inventory" && <InventoryTab product={product} unit={unit} scanValue={scanValue} />}
             {activeTab === "Movements" && <MovementsTab product={product} unit={unit} />}
