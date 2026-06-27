@@ -65,23 +65,23 @@ const getAppEscapeMeta = (pathname) => {
   if (!pathname || pathname === "/") return null;
 
   const exactRoutes = {
-    "/scan": { title: "Item Lookup", subtitle: "Scan or search item details" },
-    "/movements": { title: "Inventory Movements", subtitle: "Read-only stock activity timeline" },
-    "/stock-count": { title: "Stock Count", subtitle: "Count stock and review variances" },
-    "/receiving": { title: "Receiving", subtitle: "Receive stock and confirm delivery evidence" },
-    "/replenish": { title: "Replenish", subtitle: "Move stock from backroom to shelf" },
+    "/scan": { title: "Lookup Item", subtitle: "Scan or search item details" },
+    "/movements": { title: "Movement History", subtitle: "Read-only stock activity timeline" },
+    "/stock-count": { title: "Count Stock", subtitle: "Formal count and variance review" },
+    "/receiving": { title: "Receive Stock", subtitle: "Scan delivery and PO evidence" },
+    "/replenish": { title: "Replenish Stock", subtitle: "Move stock from backroom to shelf" },
     "/price-check": { title: "Price Check", subtitle: "Check price and promotion labels" },
-    "/gap-scan": { title: "Gap Scan", subtitle: "Record shelf gaps and follow-up actions" },
+    "/gap-scan": { title: "Report Shelf Issue", subtitle: "Evidence-only shelf observations" },
     "/tasks": { title: "Tasks", subtitle: "Review assigned store work" },
     "/alerts": { title: "Alerts", subtitle: "Review urgent operational issues" },
     "/more": { title: "More", subtitle: "Secondary workflows and settings" },
-    "/markdowns": { title: "Markdowns", subtitle: "Review markdown work safely" },
-    "/waste": { title: "Waste", subtitle: "Capture waste and review shrink evidence" },
+    "/markdowns": { title: "Markdown / Waste", subtitle: "Labels, expiry, and removals" },
+    "/waste": { title: "Report Stock-Out", subtitle: "Waste, theft, damage, and loss evidence" },
     "/expiry-check": { title: "Expiry Check", subtitle: "Review freshness and expiry" },
-    "/inventory-sync": { title: "Inventory Sync", subtitle: "Review sync state and issues" },
-    "/sync-queue": { title: "Sync Queue", subtitle: "Review pending sync work" },
+    "/inventory-sync": { title: "Sync Status", subtitle: "Queue, status, setup, and review" },
+    "/sync-queue": { title: "Sync Status", subtitle: "Device queue and errors" },
     "/shelf-tickets": { title: "Shelf Tickets", subtitle: "Prepare shelf ticket work" },
-    "/transfers": { title: "Transfers", subtitle: "Move stock between locations" },
+    "/transfers": { title: "Move Stock", subtitle: "Move stock between locations" },
     "/product-identity-review": { title: "Product Review", subtitle: "Resolve scanned item identity" },
     "/scanops-reporting": { title: "ScanOps Reporting", subtitle: "Review scanner operations" },
     "/device-governance": { title: "Device & Shift Governance", subtitle: "Review device readiness" },
@@ -94,7 +94,7 @@ const getAppEscapeMeta = (pathname) => {
   };
 
   if (exactRoutes[pathname]) return exactRoutes[pathname];
-  if (pathname.startsWith("/product/")) return { title: "Item Lookup", subtitle: "Item details" };
+  if (pathname.startsWith("/product/")) return { title: "Lookup Item", subtitle: "Item details" };
 
   return { title: "ScanOps", subtitle: "ScanOps workflow" };
 };
