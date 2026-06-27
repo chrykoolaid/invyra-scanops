@@ -3,6 +3,12 @@ import { Home } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import SyncStatusChip from "./SyncStatusChip";
 
+const SYNC_STATUS_GUIDE = {
+  label: "Sync Status",
+  steps: ["Saved locally", "Pending handoff", "Review issues", "Retry safely"],
+  helper: "Scanner work stays on the device until it can be handed off or reviewed. Retry does not post stock by itself.",
+};
+
 const CONTEXT_GUIDES = {
   Receiving: {
     label: "Receive Stock",
@@ -19,6 +25,8 @@ const CONTEXT_GUIDES = {
     steps: ["Session", "Scan item", "Count quantity", "Review"],
     helper: "Stock Count is formal count evidence. Variances go to review before inventory action.",
   },
+  "Inventory Handoff": SYNC_STATUS_GUIDE,
+  "Sync Status": SYNC_STATUS_GUIDE,
 };
 
 function HeaderContextGuide({ guide }) {
