@@ -1,12 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, PackagePlus, RefreshCw, Trash2 } from "lucide-react";
+import { PackagePlus, Trash2 } from "lucide-react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import GovernanceContextStrip from "../components/scanner/GovernanceContextStrip";
 import TouchSelect from "../components/scanner/TouchSelect";
 import {
   EmptyState,
   FieldError,
-  InfoLine,
   ItemSummaryCard,
   OperatorAlert,
   PageShell,
@@ -62,6 +61,16 @@ const STOCK_OUT_TYPES = [
     defaultReason: "store_use",
     reasonIds: ["store_use", "production_use", "sampling_promos", "training_use"],
   },
+  {
+    id: "theft",
+    label: "Theft / Suspected Theft",
+    tone: "border-amber-200 bg-amber-50 text-amber-800",
+    helper: "Shrink or security event",
+    examples: "Theft, missing stock, seal tampering",
+    defaultReason: "theft_suspected_theft",
+    noteRequired: true,
+    reasonIds: ["theft_suspected_theft", "missing_stock", "seal_tampering", "unknown_loss", "high_value_discrepancy"],
+  },
 ];
 
 function getUnit(item) {
@@ -91,8 +100,12 @@ function TypeButton({ type, active, onClick }) {
 }
 
 function QueueCard({ review }) {
-  const type = review.reviewType === "operational_use" ? "Store Use" : "Wastage";
-  const tone = review.reviewType === "operational_use" ? "bg-blue-50 text-blue-800 border-blue-200" : "bg-red-50 text-red-800 border-red-200";
+  const type = review.reviewType === "operational_use" ? "Store Use" : review.reviewType === "shrink" ? "Theft / Shrink" : "Wastage";
+  const tone = review.reviewType === "operational_use"
+    ? "bg-blue-50 text-blue-800 border-blue-200"
+    : review.reviewType === "shrink"
+      ? "bg-amber-50 text-amber-800 border-amber-200"
+      : "bg-red-50 text-red-800 border-red-200";
 
   return (
     <div className="rounded-2xl border border-border bg-card p-3">
@@ -187,6 +200,10 @@ export default function Waste() {
       setOperatorError({ title: "Reason required", helper: "Choose a reason before adding this item." });
       return;
     }
+    if (currentType.noteRequired && !evidenceNote.trim()) {
+      setOperatorError({ title: "Note required", helper: "Theft and suspected theft events require a note before adding to the queue." });
+      return;
+    }
 
     const permission = canPerformScanOpsAction(GOVERNED_ACTIONS.WASTE_SUBMIT, governance);
     if (!permission.allowed) {
@@ -255,13 +272,14 @@ export default function Waste() {
                 </div>
                 <StatusPill>Step 2</StatusPill>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 {STOCK_OUT_TYPES.map((type) => <TypeButton key={type.id} type={type} active={stockOutType === type.id} onClick={() => selectType(type)} />)}
               </div>
               <QuantityStepper label="Quantity" value={quantity} onChange={(value) => { setQuantity(value); if (operatorError?.title === "Quantity missing") setOperatorError(null); }} unit={unit} min={1} />
               {(quantity <= 0 || Number.isNaN(Number(quantity))) && <FieldError title="Quantity missing" helper="Enter a valid quantity before adding." />}
               <TouchSelect label="Reason" value={reasonCode} onChange={(value) => { setReasonCode(value); if (operatorError?.title === "Reason required") setOperatorError(null); }} options={reasonOptions} helper={reason.helper} />
-              <TextInputField label="Note" value={evidenceNote} onChange={setEvidenceNote} placeholder="Optional note, for example: expired on shelf or opened packaging..." />
+              <TextInputField label={currentType.noteRequired ? "Note required" : "Note"} value={evidenceNote} onChange={setEvidenceNote} placeholder={currentType.noteRequired ? "Required: describe what was observed..." : "Optional note, for example: expired on shelf or opened packaging..."} />
+              {currentType.noteRequired && !evidenceNote.trim() && <FieldError title="Note required" helper="Theft and suspected theft events need a note for manager review." />}
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={resetCurrentItem} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-secondary px-3 text-xs font-black text-secondary-foreground active:bg-border">
                   <Trash2 className="h-4 w-4" /> Clear
