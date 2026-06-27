@@ -35,22 +35,22 @@ import {
 
 const STOCK_OUT_TYPES = [
   {
-    id: "wastage",
-    label: "Wastage",
+    id: "wastage_damage",
+    label: "Wastage / Damage",
     tone: "border-red-200 bg-red-50 text-red-800",
-    helper: "Permanent inventory loss",
-    examples: "Expired, damaged, spoiled",
+    helper: "Unsaleable stock loss",
+    examples: "Damaged, broken, contaminated",
+    defaultReason: "damaged_in_handling",
+    reasonIds: ["damaged_in_handling", "packaging_broken", "spillage", "contamination_risk"],
+  },
+  {
+    id: "expired_spoiled",
+    label: "Expired / Spoiled",
+    tone: "border-orange-200 bg-orange-50 text-orange-800",
+    helper: "Expired or spoiled stock",
+    examples: "Expired, spoiled, temperature issue",
     defaultReason: "expired_out_of_date",
-    reasonIds: [
-      "expired_out_of_date",
-      "spoiled_rotten",
-      "damaged_in_handling",
-      "spillage",
-      "temperature_issue",
-      "packaging_broken",
-      "contamination_risk",
-      "unknown_loss",
-    ],
+    reasonIds: ["expired_out_of_date", "spoiled_rotten", "temperature_issue"],
   },
   {
     id: "store_use",
@@ -62,16 +62,46 @@ const STOCK_OUT_TYPES = [
     reasonIds: ["store_use", "production_use", "sampling_promos", "training_use"],
   },
   {
-    id: "theft",
-    label: "Theft / Suspected Theft",
+    id: "suspected_theft_loss",
+    label: "Suspected Theft / Loss",
     tone: "border-amber-200 bg-amber-50 text-amber-800",
-    helper: "Shrink or security event",
-    examples: "Theft, missing stock, seal tampering",
+    helper: "Controlled loss review",
+    examples: "Suspected theft, empty pack, tampering",
     defaultReason: "theft_suspected_theft",
     noteRequired: true,
-    reasonIds: ["theft_suspected_theft", "missing_stock", "seal_tampering", "unknown_loss", "high_value_discrepancy"],
+    reasonIds: ["theft_suspected_theft", "seal_tampering", "missing_stock"],
+  },
+  {
+    id: "unknown_shrinkage",
+    label: "Unknown Shrinkage",
+    tone: "border-slate-300 bg-slate-50 text-slate-800",
+    helper: "Unexplained stock loss",
+    examples: "Unknown loss, count discrepancy",
+    defaultReason: "unknown_loss",
+    noteRequired: true,
+    reasonIds: ["unknown_loss", "count_discrepancy", "high_value_discrepancy"],
   },
 ];
+
+const QUEUE_CLASS_META = {
+  expired_out_of_date: { label: "Expired / Spoiled", tone: "bg-orange-50 text-orange-800 border-orange-200" },
+  spoiled_rotten: { label: "Expired / Spoiled", tone: "bg-orange-50 text-orange-800 border-orange-200" },
+  temperature_issue: { label: "Expired / Spoiled", tone: "bg-orange-50 text-orange-800 border-orange-200" },
+  damaged_in_handling: { label: "Wastage / Damage", tone: "bg-red-50 text-red-800 border-red-200" },
+  packaging_broken: { label: "Wastage / Damage", tone: "bg-red-50 text-red-800 border-red-200" },
+  spillage: { label: "Wastage / Damage", tone: "bg-red-50 text-red-800 border-red-200" },
+  contamination_risk: { label: "Wastage / Damage", tone: "bg-red-50 text-red-800 border-red-200" },
+  store_use: { label: "Store Use", tone: "bg-blue-50 text-blue-800 border-blue-200" },
+  production_use: { label: "Store Use", tone: "bg-blue-50 text-blue-800 border-blue-200" },
+  sampling_promos: { label: "Store Use", tone: "bg-blue-50 text-blue-800 border-blue-200" },
+  training_use: { label: "Store Use", tone: "bg-blue-50 text-blue-800 border-blue-200" },
+  theft_suspected_theft: { label: "Suspected Theft / Loss", tone: "bg-amber-50 text-amber-800 border-amber-200" },
+  seal_tampering: { label: "Suspected Theft / Loss", tone: "bg-amber-50 text-amber-800 border-amber-200" },
+  missing_stock: { label: "Suspected Theft / Loss", tone: "bg-amber-50 text-amber-800 border-amber-200" },
+  unknown_loss: { label: "Unknown Shrinkage", tone: "bg-slate-50 text-slate-800 border-slate-300" },
+  count_discrepancy: { label: "Unknown Shrinkage", tone: "bg-slate-50 text-slate-800 border-slate-300" },
+  high_value_discrepancy: { label: "Unknown Shrinkage", tone: "bg-slate-50 text-slate-800 border-slate-300" },
+};
 
 function getUnit(item) {
   return item?.unitType || item?.unit_type || "each";
@@ -100,12 +130,7 @@ function TypeButton({ type, active, onClick }) {
 }
 
 function QueueCard({ review }) {
-  const type = review.reviewType === "operational_use" ? "Store Use" : review.reviewType === "shrink" ? "Theft / Shrink" : "Wastage";
-  const tone = review.reviewType === "operational_use"
-    ? "bg-blue-50 text-blue-800 border-blue-200"
-    : review.reviewType === "shrink"
-      ? "bg-amber-50 text-amber-800 border-amber-200"
-      : "bg-red-50 text-red-800 border-red-200";
+  const meta = QUEUE_CLASS_META[review.reasonCode] || { label: review.reviewType === "operational_use" ? "Store Use" : review.reviewType === "shrink" ? "Loss Review" : "Wastage / Damage", tone: "bg-secondary text-muted-foreground border-border" };
 
   return (
     <div className="rounded-2xl border border-border bg-card p-3">
@@ -115,7 +140,7 @@ function QueueCard({ review }) {
           <p className="mt-1 text-xs font-bold text-muted-foreground">Qty {review.quantity} {review.unitOfMeasure} · {review.reasonLabel}</p>
           <p className="mt-1 text-[11px] font-semibold text-muted-foreground">{review.syncStatus || "Sync deferred"}</p>
         </div>
-        <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${tone}`}>{type}</span>
+        <span className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-black uppercase tracking-wide ${meta.tone}`}>{meta.label}</span>
       </div>
     </div>
   );
@@ -125,9 +150,9 @@ export default function Waste() {
   const governance = useScanOpsGovernanceContext();
   const [scanValue, setScanValue] = useState("");
   const [item, setItem] = useState(null);
-  const [stockOutType, setStockOutType] = useState("wastage");
+  const [stockOutType, setStockOutType] = useState("wastage_damage");
   const [quantity, setQuantity] = useState(1);
-  const [reasonCode, setReasonCode] = useState("expired_out_of_date");
+  const [reasonCode, setReasonCode] = useState("damaged_in_handling");
   const [expiryDate, setExpiryDate] = useState("");
   const [batchLot, setBatchLot] = useState("");
   const [shelfLocation, setShelfLocation] = useState("");
@@ -165,7 +190,7 @@ export default function Waste() {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
     if (!found) return;
     const rawScanValue = typeof value === "object" ? value?._searchMatch?.matchedValue || value?.barcode || value?.gtin || "" : String(value || "").trim();
-    const defaultType = found?.wasteReviewRequired || found?.expiry_status === "Expired" || found?.freshness_default === "needs_supervisor_review" ? "wastage" : stockOutType;
+    const defaultType = found?.wasteReviewRequired || found?.expiry_status === "Expired" || found?.freshness_default === "needs_supervisor_review" ? "expired_spoiled" : stockOutType;
     const nextType = STOCK_OUT_TYPES.find((type) => type.id === defaultType) || STOCK_OUT_TYPES[0];
 
     setOperatorError(null);
@@ -201,7 +226,7 @@ export default function Waste() {
       return;
     }
     if (currentType.noteRequired && !evidenceNote.trim()) {
-      setOperatorError({ title: "Note required", helper: "Theft and suspected theft events require a note before adding to the queue." });
+      setOperatorError({ title: "Note required", helper: `${currentType.label} events require a note before adding to the queue.` });
       return;
     }
 
@@ -243,7 +268,7 @@ export default function Waste() {
     <PageShell>
       <WorkflowHeader
         title="Stock-Out Session"
-        subtitle="Scan → qty → reason → add to queue"
+        subtitle="Scan → qty → class → reason → add to queue"
         scanValue={scanValue}
         onScanValueChange={setScanValue}
         onScan={scan}
@@ -272,14 +297,14 @@ export default function Waste() {
                 </div>
                 <StatusPill>Step 2</StatusPill>
               </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {STOCK_OUT_TYPES.map((type) => <TypeButton key={type.id} type={type} active={stockOutType === type.id} onClick={() => selectType(type)} />)}
               </div>
               <QuantityStepper label="Quantity" value={quantity} onChange={(value) => { setQuantity(value); if (operatorError?.title === "Quantity missing") setOperatorError(null); }} unit={unit} min={1} />
               {(quantity <= 0 || Number.isNaN(Number(quantity))) && <FieldError title="Quantity missing" helper="Enter a valid quantity before adding." />}
               <TouchSelect label="Reason" value={reasonCode} onChange={(value) => { setReasonCode(value); if (operatorError?.title === "Reason required") setOperatorError(null); }} options={reasonOptions} helper={reason.helper} />
               <TextInputField label={currentType.noteRequired ? "Note required" : "Note"} value={evidenceNote} onChange={setEvidenceNote} placeholder={currentType.noteRequired ? "Required: describe what was observed..." : "Optional note, for example: expired on shelf or opened packaging..."} />
-              {currentType.noteRequired && !evidenceNote.trim() && <FieldError title="Note required" helper="Theft and suspected theft events need a note for manager review." />}
+              {currentType.noteRequired && !evidenceNote.trim() && <FieldError title="Note required" helper={`${currentType.label} needs a note for desktop review.`} />}
               <div className="grid grid-cols-2 gap-2">
                 <button type="button" onClick={resetCurrentItem} className="flex min-h-12 items-center justify-center gap-2 rounded-2xl bg-secondary px-3 text-xs font-black text-secondary-foreground active:bg-border">
                   <Trash2 className="h-4 w-4" /> Clear
@@ -319,7 +344,7 @@ export default function Waste() {
               {currentSession.map((review) => <QueueCard key={review.reviewId} review={review} />)}
             </div>
           ) : (
-            <EmptyState title="Queue is empty." helper="Scan an item, enter quantity, choose a reason, then add it to the queue." />
+            <EmptyState title="Queue is empty." helper="Scan an item, enter quantity, choose a class and reason, then add it to the queue." />
           )}
         </SectionCard>
       </WorkflowMain>
