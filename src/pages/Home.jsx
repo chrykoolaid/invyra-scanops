@@ -12,7 +12,7 @@ import {
   BarChart2,
   Clock,
   History,
-  MoreHorizontal,
+  BriefcaseBusiness,
 } from "lucide-react";
 
 const HERO_TILE = {
@@ -23,18 +23,18 @@ const HERO_TILE = {
   minRole: "Staff",
 };
 
-// Home is the operational workflow launcher. Management/admin surfaces live under More.
+// Home is the operational workflow launcher. Support and device settings live under Tools.
 // Keep this 3x3 grid fixed to protect scanner muscle memory.
 const ALL_TILES = [
-  { icon: PackageOpen,    label: "Receive",   description: "PO Delivery",   to: "/receiving",         minRole: "Staff", tone: "blue" },
-  { icon: ClipboardList,  label: "Count",     description: "Stocktake",     to: "/stock-count",       minRole: "Staff", tone: "blue" },
-  { icon: ArrowLeftRight, label: "Transfers", description: "Locations",     to: "/transfers",         minRole: "Staff", tone: "green" },
-  { icon: Trash2,         label: "Waste",     description: "Record loss",   to: "/waste",             minRole: "Staff", tone: "green" },
-  { icon: Tags,           label: "Markdown",  description: "Price labels",  to: "/markdowns",         minRole: "Staff", tone: "purple" },
-  { icon: Clock,          label: "Expiry",    description: "Freshness",     to: "/expiry-check",      minRole: "Staff", tone: "purple" },
-  { icon: BarChart2,      label: "Reporting", description: "Shift view",    to: "/scanops-reporting", minRole: "Staff", tone: "amber" },
-  { icon: History,        label: "Movements", description: "Stock history", to: "/movements",         minRole: "Staff", tone: "cyan" },
-  { icon: MoreHorizontal, label: "More",      description: "Tools",         to: "/more",              minRole: "Staff", tone: "grey" },
+  { icon: PackageOpen,       label: "Receive",   description: "PO Delivery",   to: "/receiving",         minRole: "Staff", tone: "blue" },
+  { icon: ClipboardList,     label: "Count",     description: "Stocktake",     to: "/stock-count",       minRole: "Staff", tone: "blue" },
+  { icon: ArrowLeftRight,    label: "Transfers", description: "Locations",     to: "/transfers",         minRole: "Staff", tone: "green" },
+  { icon: Trash2,            label: "Waste",     description: "Record loss",   to: "/waste",             minRole: "Staff", tone: "green" },
+  { icon: Tags,              label: "Markdown",  description: "Price labels",  to: "/markdowns",         minRole: "Staff", tone: "purple" },
+  { icon: Clock,             label: "Expiry",    description: "Freshness",     to: "/expiry-check",      minRole: "Staff", tone: "purple" },
+  { icon: BarChart2,         label: "Reporting", description: "Shift view",    to: "/scanops-reporting", minRole: "Staff", tone: "amber" },
+  { icon: History,           label: "Movements", description: "Stock history", to: "/movements",         minRole: "Staff", tone: "cyan" },
+  { icon: BriefcaseBusiness, label: "Tools",     description: "Support",       to: "/more",              minRole: "Staff", tone: "grey" },
 ];
 
 const ROLE_LEVELS = { Staff: 1, Supervisor: 2, Manager: 3, Admin: 4 };
