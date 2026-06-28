@@ -3,19 +3,13 @@ import {
   Accessibility,
   Activity,
   BellRing,
-  Camera,
-  CheckCircle2,
   Database,
   Info,
   LockKeyhole,
-  MonitorSmartphone,
   Printer,
   ScanBarcode,
   Smartphone,
   UserRound,
-  Vibrate,
-  Volume2,
-  Wifi,
 } from "lucide-react";
 import AppHeader from "../components/scanner/AppHeader";
 import { createScanOpsAuditEvent } from "../lib/scanOpsAudit";
