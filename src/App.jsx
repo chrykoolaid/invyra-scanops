@@ -66,7 +66,7 @@ const getAppEscapeMeta = (pathname) => {
 
   const exactRoutes = {
     "/scan": { title: "Lookup Item", subtitle: "Scan or search item details" },
-    "/movements": { title: "Movement History", subtitle: "Read-only stock activity timeline" },
+    "/movements": { title: "Movements", subtitle: "Read-only stock activity timeline" },
     "/stock-count": { title: "Count Stock", subtitle: "Formal count and variance review" },
     "/receiving": { title: "Receive Stock", subtitle: "Scan delivery and PO evidence" },
     "/replenish": { title: "Replenish Stock", subtitle: "Move stock from backroom to shelf" },
@@ -74,16 +74,16 @@ const getAppEscapeMeta = (pathname) => {
     "/gap-scan": { title: "Report Shelf Issue", subtitle: "Evidence-only shelf observations" },
     "/tasks": { title: "Tasks", subtitle: "Review assigned store work" },
     "/alerts": { title: "Alerts", subtitle: "Review urgent operational issues" },
-    "/more": { title: "More", subtitle: "Secondary workflows and settings" },
+    "/more": { title: "Tools & Support", subtitle: "Secondary ScanOps tools" },
     "/markdowns": { title: "Markdown", subtitle: "Labels, expiry, and removals" },
     "/waste": { title: "Record Waste", subtitle: "Waste, theft, damage, and loss evidence" },
     "/expiry-check": { title: "Expiry Check", subtitle: "Review freshness and expiry" },
     "/inventory-sync": { title: "Sync Status", subtitle: "Queue, status, setup, and review" },
     "/sync-queue": { title: "Sync Status", subtitle: "Device queue and errors" },
     "/shelf-tickets": { title: "Shelf Tickets", subtitle: "Prepare shelf ticket work" },
-    "/transfers": { title: "Move Stock", subtitle: "Move stock between locations" },
+    "/transfers": { title: "Transfers", subtitle: "Move stock between locations" },
     "/product-identity-review": { title: "Product Review", subtitle: "Resolve scanned item identity" },
-    "/scanops-reporting": { title: "ScanOps Reporting", subtitle: "Review scanner operations" },
+    "/scanops-reporting": { title: "Reporting", subtitle: "Review ScanOps activity" },
     "/device-governance": { title: "Device & Shift Governance", subtitle: "Review device readiness" },
     "/session-collaboration": { title: "Session Collaboration", subtitle: "Review multi-user work" },
     "/sync-handoff": { title: "Sync & Handoff", subtitle: "Queue, status, setup, and review" },
@@ -156,7 +156,7 @@ const AuthenticatedApp = () => {
             <Route path="/shelf-tickets" element={<ShelfTickets />} />
             <Route path="/transfers" element={<Transfers />} />
             <Route path="/product-identity-review" element={roleGated(<ProductIdentityReview />, "Supervisor", "Product Review")} />
-            <Route path="/scanops-reporting" element={roleGated(<ScanOpsReporting />, "Supervisor", "ScanOps Reporting")} />
+            <Route path="/scanops-reporting" element={roleGated(<ScanOpsReporting />, "Supervisor", "Reporting")} />
             <Route path="/device-governance" element={roleGated(<DeviceGovernance />, "Manager", "Device & Shift Governance")} />
             <Route path="/session-collaboration" element={<SessionCollaboration />} />
             <Route path="/desktop-sync-contract" element={roleGated(<DesktopSyncContract />, "Manager", "Desktop Sync Contract")} />

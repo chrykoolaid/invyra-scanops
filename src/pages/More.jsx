@@ -1,32 +1,61 @@
 import React from "react";
-import { Link } from "react-router-dom";
-import { BarChart2, Database, LayoutDashboard, Settings } from "lucide-react";
 import AppHeader from "../components/scanner/AppHeader";
+import ActionTile from "../components/scanner/ActionTile";
+import { useScanOpsSession } from "../lib/scanOpsSession";
+import {
+  ArrowLeft,
+  Database,
+  HelpCircle,
+  Info,
+  MonitorSmartphone,
+  Printer,
+  Settings,
+  Activity,
+  UserCog,
+} from "lucide-react";
 
-const MORE_ITEMS = [
-  { label: "Sync & Handoff", helper: "Queue, sync status, setup, and review.", to: "/sync-handoff", icon: Database },
-  { label: "Store Exceptions", helper: "Manager view for store-level operational exceptions.", to: "/store-ops-dashboard", icon: LayoutDashboard },
-  { label: "Reporting", helper: "Supervisor reporting and ScanOps performance review.", to: "/scanops-reporting", icon: BarChart2 },
-  { label: "Scanner Settings", helper: "Device controls, diagnostics, and access.", to: "/scanner-settings", icon: Settings },
+const MORE_TILES = [
+  { icon: Database,           label: "Sync",        description: "Handoff",  to: "/sync-handoff",     minRole: "Staff",   tone: "purple" },
+  { icon: MonitorSmartphone,  label: "Devices",     description: "Status",   to: "/device-governance", minRole: "Manager", tone: "blue" },
+  { icon: Printer,            label: "Printer",     description: "Labels",   to: "/printer-settings",  minRole: "Manager", tone: "blue" },
+  { icon: Settings,           label: "Settings",    description: "Scanner",  to: "/scanner-settings",  minRole: "Staff",   tone: "grey" },
+  { icon: HelpCircle,         label: "Help",        description: "Support",  to: "/pilot-readiness",   minRole: "Staff",   tone: "cyan" },
+  { icon: Info,               label: "About",       description: "ScanOps",  to: "/pilot-readiness",   minRole: "Staff",   tone: "grey" },
+  { icon: Activity,           label: "Diagnostics", description: "Device",   to: "/scanner-settings",  minRole: "Staff",   tone: "amber" },
+  { icon: UserCog,            label: "Admin",       description: "Tools",    to: "/user-management",   minRole: "Manager", tone: "green" },
+  { icon: ArrowLeft,          label: "Back",        description: "Home",     to: "/",                 minRole: "Staff",   tone: "grey" },
 ];
 
+const ROLE_LEVELS = { Staff: 1, Supervisor: 2, Manager: 3, Admin: 4 };
+const roleLevel = (r) => ROLE_LEVELS[r] || 1;
+
 export default function More() {
+  const session = useScanOpsSession();
+  const currentRole = session.actorRole || "Staff";
+  const tiles = MORE_TILES.filter((t) => roleLevel(currentRole) >= roleLevel(t.minRole));
+
   return (
-    <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
-      <AppHeader title="More" subtitle="Admin, reporting, and device tools" />
-      <main data-scanops-scroll className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 pb-24 space-y-2">
-        {MORE_ITEMS.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Link key={item.label} to={item.to} className="flex min-h-16 items-center gap-3 rounded-2xl border border-border bg-card p-3 active:bg-secondary">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-secondary text-foreground"><Icon className="h-5 w-5" /></div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-black text-foreground">{item.label}</p>
-                <p className="mt-1 text-xs font-bold text-muted-foreground">{item.helper}</p>
-              </div>
-            </Link>
-          );
-        })}
+    <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col overflow-x-hidden">
+      <AppHeader title="Tools & Support" subtitle="Secondary ScanOps tools" />
+      <main data-scanops-scroll className="scanops-console-screen flex-1 overflow-hidden bg-slate-950 px-4 py-3 pb-24">
+        <section className="rounded-2xl border border-white/10 bg-slate-900/80 px-3 py-2" aria-label="More screen summary">
+          <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Tools & Support</div>
+          <div className="mt-1 text-sm font-black text-slate-50">Device, sync, help, and admin tools</div>
+        </section>
+
+        <section className="mt-2 grid grid-cols-3 gap-1" aria-label="ScanOps tools control pad">
+          {tiles.map((tile) => (
+            <ActionTile
+              key={tile.label}
+              icon={tile.icon}
+              label={tile.label}
+              description={tile.description}
+              to={tile.to}
+              active={true}
+              tone={tile.tone}
+            />
+          ))}
+        </section>
       </main>
     </div>
   );
