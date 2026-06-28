@@ -9,7 +9,7 @@ import Home from './pages/Home';
 import Scan from './pages/Scan';
 import ProductLookup from './pages/ProductLookup';
 import Movements from './pages/Movements';
-import StockCount from './pages/StockCount';
+import StockCount from './pages/StockCountOperator';
 import Receiving from './pages/Receiving';
 import Replenish from './pages/Replenish';
 import PriceCheck from './pages/PriceCheck';
@@ -67,7 +67,7 @@ const getAppEscapeMeta = (pathname) => {
   const exactRoutes = {
     "/scan": { title: "Lookup Item", subtitle: "Scan or search item details" },
     "/movements": { title: "Movements", subtitle: "Read-only stock activity timeline" },
-    "/stock-count": { title: "Count Stock", subtitle: "Formal count and variance review" },
+    "/stock-count": { title: "Count Stock", subtitle: "Scan item, enter count, save, repeat" },
     "/receiving": { title: "Receive Stock", subtitle: "Scan delivery and PO evidence" },
     "/replenish": { title: "Replenish Stock", subtitle: "Move stock from backroom to shelf" },
     "/price-check": { title: "Price Check", subtitle: "Check price and promotion labels" },
