@@ -74,7 +74,7 @@ const getAppEscapeMeta = (pathname) => {
     "/gap-scan": { title: "Report Shelf Issue", subtitle: "Evidence-only shelf observations" },
     "/tasks": { title: "Tasks", subtitle: "Review assigned store work" },
     "/alerts": { title: "Alerts", subtitle: "Review urgent operational issues" },
-    "/more": { title: "Tools & Support", subtitle: "Secondary ScanOps tools" },
+    "/more": { title: "Tools", subtitle: "Support & device tools" },
     "/markdowns": { title: "Markdown", subtitle: "Labels, expiry, and removals" },
     "/waste": { title: "Record Waste", subtitle: "Waste, theft, damage, and loss evidence" },
     "/expiry-check": { title: "Expiry Check", subtitle: "Review freshness and expiry" },
@@ -90,7 +90,7 @@ const getAppEscapeMeta = (pathname) => {
     "/desktop-sync-contract": { title: "Desktop Sync Contract", subtitle: "Review integration contracts" },
     "/store-ops-dashboard": { title: "Store Ops Dashboard", subtitle: "Review store exceptions" },
     "/pilot-readiness": { title: "Pilot Readiness", subtitle: "Review UAT and release evidence" },
-    "/scanner-settings": { title: "Scanner Settings", subtitle: "Device controls, diagnostics, and access" },
+    "/scanner-settings": { title: "Settings", subtitle: "Configure the handheld, not the business" },
   };
 
   if (exactRoutes[pathname]) return exactRoutes[pathname];
