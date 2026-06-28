@@ -3,14 +3,18 @@
   box-sizing: border-box;
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.35rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
   width: 100%;
   border-top: 1px solid hsl(var(--border));
   background: hsl(var(--card) / 0.98);
   padding: 0.45rem 0.65rem max(0.55rem, env(safe-area-inset-bottom));
   backdrop-filter: blur(12px);
   z-index: 90;
+}
+
+.scanops-bottom-nav-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .scanops-bottom-nav-item {
@@ -54,6 +58,11 @@
   padding-bottom: max(5.25rem, env(safe-area-inset-bottom)) !important;
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+.scanops-root-shell .scanops-console-screen {
+  overflow-y: hidden !important;
+  padding-bottom: max(4.75rem, env(safe-area-inset-bottom)) !important;
 }
 
 .scanops-root-shell main::-webkit-scrollbar,
