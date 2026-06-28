@@ -8,7 +8,7 @@ import { getItemEntryPrimaryValue } from "../lib/scanOpsItemEntry";
 
 function LookupStep({ icon: Icon, title, helper }) {
   return (
-    <div className="flex min-h-[78px] items-start gap-3 rounded-2xl bg-secondary/60 px-3 py-3">
+    <div className="flex min-h-[76px] items-start gap-3 rounded-2xl bg-secondary/60 px-3 py-3">
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-card text-primary">
         <Icon className="h-5 w-5" />
       </span>
@@ -32,10 +32,10 @@ export default function Scan() {
 
   return (
     <PageShell>
-      <PageHeader title="Lookup Item" subtitle="Read-first item scan" />
+      <PageHeader title="Lookup Item" subtitle="Scan first, search second" />
       <WorkflowHeader
-        title="Lookup Item"
-        subtitle="Scan or search, then choose a controlled task."
+        title="Scan or Lookup Item"
+        subtitle="Identify an item, check stock, then choose the next task."
         placeholder="Scan barcode, PLU, SKU, or item name..."
         showHeaderChrome={false}
         scanValue={scanValue}
@@ -49,9 +49,9 @@ export default function Scan() {
               <ScanLine className="h-5 w-5" />
             </span>
             <div className="min-w-0">
-              <p className="text-lg font-black leading-tight text-foreground">Ready to lookup</p>
+              <p className="text-lg font-black leading-tight text-foreground">Ready for item lookup</p>
               <p className="mt-1 text-sm font-bold leading-snug text-muted-foreground">
-                Scan an item to identify it, find where it belongs, and choose the next safe task.
+                Scan an item to see what it is, where it is, and what you can do next.
               </p>
             </div>
           </div>
@@ -61,24 +61,24 @@ export default function Scan() {
           <LookupStep
             icon={CheckCircle2}
             title="1. What is this?"
-            helper="Confirm the product name, SKU, barcode, PLU, and match quality."
+            helper="Confirm product name, SKU, barcode, and item status."
           />
           <LookupStep
             icon={MapPin}
             title="2. Where is it?"
-            helper="Check shelf, backroom, department, and visible stock guidance."
+            helper="Check shelf, backroom, department, and primary location."
           />
           <LookupStep
             icon={ShieldCheck}
             title="3. What should I do next?"
-            helper="Move, count, report, or scan again from the proper workflow."
+            helper="Launch Receive, Count, Transfers, Waste, Markdown, or Expiry."
           />
         </div>
 
         <OperatorAlert
           tone="info"
-          title="Lookup is a viewing screen"
-          helper="Inventory quantities and desktop records stay controlled by the proper workflows."
+          title="Lookup is read-first"
+          helper="Inventory quantities are changed only inside controlled workflows."
         />
       </WorkflowMain>
     </PageShell>
