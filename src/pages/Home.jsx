@@ -10,24 +10,29 @@ import {
   Trash2,
   ArrowLeftRight,
   Activity,
+  Clock,
+  AlertTriangle,
 } from "lucide-react";
 
 const HERO_TILE = {
   icon: Search,
   label: "Lookup Item",
-  description: "Find item, location, stock",
+  description: "Find item • stock • location",
   to: "/scan",
   minRole: "Staff",
 };
 
 // Home is the operational workflow launcher. Management/admin surfaces live under More.
+// Keep this grid fixed to protect scanner muscle memory.
 const ALL_TILES = [
-  { icon: PackageOpen,    label: "Receive Stock",    description: "Scan delivery / PO items",       to: "/receiving",    minRole: "Staff" },
-  { icon: ClipboardList,  label: "Count Stock",      description: "Formal stock count",             to: "/stock-count",  minRole: "Staff" },
-  { icon: ArrowLeftRight, label: "Move Stock",       description: "Shelf, backroom, locations",      to: "/transfers",    minRole: "Staff" },
-  { icon: Trash2,         label: "Report Stock-Out", description: "Waste, theft, damage, loss",      to: "/waste",        minRole: "Staff" },
-  { icon: Tags,           label: "Markdown / Waste", description: "Labels, expiry, removals",        to: "/markdowns",    minRole: "Staff" },
-  { icon: Activity,       label: "Sync Status",      description: "Device queue and errors",         to: "/sync-queue",   minRole: "Staff" },
+  { icon: PackageOpen,    label: "Receive",  description: "PO Delivery",    to: "/receiving",    minRole: "Staff", tone: "blue" },
+  { icon: ClipboardList,  label: "Count",    description: "Stocktake",      to: "/stock-count",  minRole: "Staff", tone: "blue" },
+  { icon: ArrowLeftRight, label: "Move",     description: "Locations",      to: "/transfers",    minRole: "Staff", tone: "green" },
+  { icon: Trash2,         label: "Waste",    description: "Record loss",    to: "/waste",        minRole: "Staff", tone: "green" },
+  { icon: Tags,           label: "Markdown", description: "Price labels",   to: "/markdowns",    minRole: "Staff", tone: "purple" },
+  { icon: Clock,          label: "Expiry",   description: "Freshness",      to: "/expiry-check", minRole: "Staff", tone: "purple" },
+  { icon: Activity,       label: "Sync",     description: "Queue status",   to: "/sync-queue",   minRole: "Staff", tone: "grey" },
+  { icon: AlertTriangle,  label: "Alerts",   description: "Review issues",  to: "/alerts",       minRole: "Staff", tone: "amber" },
 ];
 
 const ROLE_LEVELS = { Staff: 1, Supervisor: 2, Manager: 3, Admin: 4 };
@@ -42,8 +47,8 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
       <AppHeader />
-      <main data-scanops-scroll className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 pb-24">
-        <section className="space-y-3" aria-label="Primary scan task">
+      <main data-scanops-scroll className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 pb-24">
+        <section aria-label="Primary scan task">
           <ActionTile
             icon={HERO_TILE.icon}
             label={HERO_TILE.label}
@@ -54,7 +59,7 @@ export default function Home() {
           />
         </section>
 
-        <section className="mt-3 grid grid-cols-2 gap-3" aria-label="ScanOps task launcher">
+        <section className="mt-2 grid grid-cols-2 gap-1" aria-label="ScanOps control pad">
           {tiles.map((tile) => (
             <ActionTile
               key={tile.label}
@@ -63,6 +68,7 @@ export default function Home() {
               description={tile.description}
               to={tile.to}
               active={true}
+              tone={tile.tone}
             />
           ))}
         </section>
