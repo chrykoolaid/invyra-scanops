@@ -45,9 +45,9 @@ export default function Home() {
   const heroEnabled = roleLevel(currentRole) >= roleLevel(HERO_TILE.minRole);
 
   return (
-    <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
+    <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col overflow-x-hidden">
       <AppHeader />
-      <main data-scanops-scroll className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 pb-24">
+      <main data-scanops-scroll className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-3 pb-24 bg-slate-950">
         <section aria-label="Primary scan task">
           <ActionTile
             icon={HERO_TILE.icon}
