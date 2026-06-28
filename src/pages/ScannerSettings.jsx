@@ -18,7 +18,6 @@ import {
   Wifi,
 } from "lucide-react";
 import AppHeader from "../components/scanner/AppHeader";
-import ActionTile from "../components/scanner/ActionTile";
 import { createScanOpsAuditEvent } from "../lib/scanOpsAudit";
 import { SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { useScanOpsSession } from "../lib/scanOpsSession";
@@ -36,6 +35,33 @@ const SETTINGS_TILES = [
   { key: "diagnostics", icon: Activity, label: "Diagnostics", description: "Tests", tone: "amber" },
   { key: "about", icon: Info, label: "About", description: "Version", tone: "grey" },
 ];
+
+const toneClasses = {
+  blue: "bg-blue-950/95 text-blue-50 active:bg-blue-900",
+  green: "bg-emerald-950/95 text-emerald-50 active:bg-emerald-900",
+  purple: "bg-purple-950/95 text-purple-50 active:bg-purple-900",
+  cyan: "bg-cyan-950/95 text-cyan-50 active:bg-cyan-900",
+  grey: "bg-slate-800 text-slate-50 active:bg-slate-700",
+  amber: "bg-amber-900/95 text-amber-50 active:bg-amber-800",
+};
+
+function SettingsTile({ icon: Icon, label, description, tone = "grey", selected, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex h-[92px] min-h-[92px] w-full flex-col items-center justify-center rounded-2xl border border-white/5 px-2 py-2.5 text-center transition-all duration-150 active:scale-[0.98] ${selected ? toneClasses[tone] || toneClasses.grey : toneClasses.grey}`}
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/10 text-current">
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="mt-1.5 min-w-0">
+        <span className="block text-[12px] font-black leading-tight text-current">{label}</span>
+        <span className="mt-0.5 block text-[9.5px] font-bold leading-snug text-current/70">{description}</span>
+      </span>
+    </button>
+  );
+}
 
 function DetailPanel({ activeKey, session, network, syncSummary }) {
   const sections = {
@@ -207,9 +233,15 @@ export default function ScannerSettings() {
 
         <section className="mt-2 grid grid-cols-3 gap-1" aria-label="Settings categories">
           {SETTINGS_TILES.map((tile) => (
-            <button key={tile.key} type="button" onClick={() => setActiveKey(tile.key)} className="text-left">
-              <ActionTile icon={tile.icon} label={tile.label} description={tile.description} active={true} tone={activeKey === tile.key ? tile.tone : "grey"} />
-            </button>
+            <SettingsTile
+              key={tile.key}
+              icon={tile.icon}
+              label={tile.label}
+              description={tile.description}
+              tone={tile.tone}
+              selected={activeKey === tile.key}
+              onClick={() => setActiveKey(tile.key)}
+            />
           ))}
         </section>
 
