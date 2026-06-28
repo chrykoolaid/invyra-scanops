@@ -1,19 +1,18 @@
 import React from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { Bell, Home, Menu, ScanLine } from "lucide-react";
+import { Bell, Home, ScanLine } from "lucide-react";
 
 const NAV_ITEMS = [
   { label: "Home", to: "/", icon: Home, matches: ["/"] },
   { label: "Scan", to: "/scan", icon: ScanLine, primary: true, matches: ["/scan", "/product"] },
   { label: "Alerts", to: "/alerts", icon: Bell, matches: ["/alerts", "/tasks"] },
-  { label: "More", to: "/more", icon: Menu, matches: ["/more"] },
 ];
 
 export default function BottomNavigation() {
   const { pathname } = useLocation();
 
   return (
-    <nav className="scanops-bottom-nav" aria-label="ScanOps primary navigation">
+    <nav className="scanops-bottom-nav scanops-bottom-nav-three" aria-label="ScanOps primary navigation">
       {NAV_ITEMS.map((item) => {
         const Icon = item.icon;
         const active = item.matches.some((match) => match === "/" ? pathname === "/" : pathname.startsWith(match));
