@@ -224,16 +224,20 @@ body {
 
 /* Stage L handheld containment polish */
 .scanops-root-shell main {
-  padding-bottom: max(7.5rem, env(safe-area-inset-bottom)) !important;
+  padding-bottom: max(4.25rem, env(safe-area-inset-bottom)) !important;
 }
 
+/* UI-2A.1 workflow footer dock
+ * This legacy class used to be sticky. Sticky positioning caused Receiving,
+ * Waste, and Stock Count cards to scroll under the action area. The class now
+ * behaves as a normal non-overlay dock so content and actions occupy separate
+ * vertical space.
+ */
 .scanops-sticky-actions {
-  position: sticky;
-  bottom: 0;
-  z-index: 20;
-  margin-left: -1rem;
-  margin-right: -1rem;
-  margin-bottom: 0;
+  flex: 0 0 auto;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0.75rem 0 0;
   border-top: 1px solid hsl(var(--border));
   background: hsl(var(--background) / 0.98);
   padding: 0.75rem 1rem max(0.85rem, env(safe-area-inset-bottom));
@@ -314,7 +318,7 @@ body {
 }
 
 .scanops-keyboard-open .scanops-root-shell .scanops-sticky-actions {
-  bottom: 17.5rem;
+  margin-bottom: 0;
 }
 
 /* Stage AS.3 single Home escape correction
