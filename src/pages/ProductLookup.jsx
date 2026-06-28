@@ -1,17 +1,30 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, ClipboardList, MapPin, PackageCheck, RotateCcw, ScanLine } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowLeftRight,
+  ClipboardList,
+  Clock,
+  MapPin,
+  PackageCheck,
+  PackageOpen,
+  ScanLine,
+  Tags,
+  Trash2,
+} from "lucide-react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
-import { EmptyState, ItemSummaryCard, MetricPill, OperatorAlert, PageShell, SectionCard, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
+import {
+  EmptyState,
+  ItemSummaryCard,
+  MetricPill,
+  OperatorAlert,
+  PageShell,
+  SectionCard,
+  WorkflowMain,
+} from "../components/scanner/WorkflowPrimitives";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { getItemEntryPrimaryValue } from "../lib/scanOpsItemEntry";
-import { getDefaultExpiryDate, getDefaultLotBatch, isWeightedItem, needsWeightedEvidence } from "../lib/scanOpsItemAttributes";
 import { getIdentityDisplay, getMatchReasonDisplay } from "../lib/productIdentityResolver";
-import { getInitialTaskQueue, getTaskStats } from "../lib/scanOpsTasks";
-import { getSyncSummary } from "../lib/scanOpsSync";
-import { useScanOpsSession } from "../lib/scanOpsSession";
-
-const ITEM_TABS = ["Summary", "Inventory", "Movements", "Location", "Sales"];
 
 const valueOf = (item, keys, fallback = "—") => {
   for (const key of keys) {
@@ -21,191 +34,130 @@ const valueOf = (item, keys, fallback = "—") => {
   return fallback;
 };
 
-const splitLocation = (location = "") => {
-  const parts = String(location || "").split(/[-•·,]/).map((part) => part.trim()).filter(Boolean);
-  return {
-    aisle: parts[0] || "Not mapped",
-    bay: parts[1] || "—",
-    shelf: parts[2] || "—",
-    position: parts[3] || "—",
-  };
-};
-
-const lookupKeyFor = (product) => getItemEntryPrimaryValue(product) || product?.barcode || product?.sku || product?.plu || product?.name || "";
 const hasValue = (value) => value !== undefined && value !== null && value !== "";
+const lookupKeyFor = (product) => getItemEntryPrimaryValue(product) || product?.barcode || product?.sku || product?.plu || product?.name || "";
 
-const lookupMovementRows = (product, unit) => {
-  const rows = [];
-  const lastReceivedQty = valueOf(product, ["lastReceivedQty", "last_received_qty"], null);
-  const lastReceivedDate = valueOf(product, ["lastReceived", "last_received", "lastReceivedDate"], null);
-  const soldQty = valueOf(product, ["soldToday", "todaySales", "salesToday"], null);
-  const lastSoldDate = valueOf(product, ["lastSold", "last_sold"], null);
-  const unavailableQty = valueOf(product, ["unavailable", "wasteQty"], null);
+function QuickAction({ icon: Icon, label, helper, tone = "default", onClick }) {
+  const tones = {
+    blue: "bg-blue-950/95 text-blue-50 active:bg-blue-900",
+    green: "bg-emerald-950/95 text-emerald-50 active:bg-emerald-900",
+    purple: "bg-purple-950/95 text-purple-50 active:bg-purple-900",
+    amber: "bg-amber-900/95 text-amber-50 active:bg-amber-800",
+    default: "bg-slate-800 text-slate-50 active:bg-slate-700",
+  };
 
-  if (hasValue(lastReceivedQty) || hasValue(lastReceivedDate)) {
-    rows.push({ type: "Stock In", qty: hasValue(lastReceivedQty) ? lastReceivedQty : "—", reason: "Receiving", date: lastReceivedDate || "Date not available", icon: ArrowDownLeft, unit });
-  }
-  if (hasValue(soldQty) || hasValue(lastSoldDate)) {
-    rows.push({ type: "Stock Out", qty: hasValue(soldQty) ? soldQty : "—", reason: "Sale", date: lastSoldDate || "Date not available", icon: ArrowUpRight, unit });
-  }
-  if (hasValue(unavailableQty)) {
-    rows.push({ type: "Unavailable", qty: unavailableQty, reason: "Unavailable stock", date: "Date not available", icon: RotateCcw, unit });
-  }
-  return rows;
-};
-
-function TabButton({ tab, active, onClick }) {
   return (
-    <button type="button" onClick={onClick} className={`min-h-12 rounded-2xl px-2 text-[11px] font-black uppercase tracking-wide active:scale-[0.98] ${active ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>{tab}</button>
-  );
-}
-
-function LookupAnswerCard({ icon: Icon, label, title, helper, children }) {
-  return (
-    <SectionCard>
-      <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-          <Icon className="h-5 w-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">{label}</p>
-          <h2 className="mt-1 text-base font-black leading-tight text-foreground">{title}</h2>
-          {helper && <p className="mt-1 text-xs font-bold leading-snug text-muted-foreground">{helper}</p>}
-        </div>
-      </div>
-      {children && <div className="mt-3">{children}</div>}
-    </SectionCard>
-  );
-}
-
-function NextAction({ icon: Icon, label, helper, onClick }) {
-  return (
-    <button type="button" onClick={onClick} className="flex min-h-[76px] items-center gap-3 rounded-2xl bg-secondary/70 px-3 py-3 text-left active:bg-border">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-card text-foreground"><Icon className="h-5 w-5" /></span>
-      <span className="min-w-0">
-        <span className="block text-sm font-black text-foreground">{label}</span>
-        <span className="mt-1 block text-xs font-bold leading-snug text-muted-foreground">{helper}</span>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex min-h-[82px] flex-col items-center justify-center rounded-2xl border border-white/5 px-2 py-2 text-center transition active:scale-[0.98] ${tones[tone] || tones.default}`}
+    >
+      <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/10">
+        <Icon className="h-4 w-4" />
       </span>
+      <span className="mt-1.5 text-[12px] font-black leading-tight">{label}</span>
+      {helper && <span className="mt-0.5 text-[9.5px] font-bold leading-snug text-current/70">{helper}</span>}
     </button>
   );
 }
 
-function SummaryTab({ product, price, unit, workSummary, setActiveTab, onScanAgain, onOpenWorkflow }) {
+function StockLocationCard({ product, unit, price }) {
   const shelfLocation = product.shelfLocation || product.location || "Not mapped";
   const backroomLocation = product.backroomLocation || product.backroom_location || product.backroomZone || product.backroom_zone || "Check backroom";
-  return (
-    <>
-      <LookupAnswerCard icon={MapPin} label="Where is it?" title={shelfLocation} helper="Use this as the first physical location to check.">
-        <div className="grid grid-cols-2 gap-2">
-          <MetricPill label="Shelf" value={valueOf(product, ["shelfStock", "shelf_stock"], "—")} suffix={unit} />
-          <MetricPill label="Backroom" value={valueOf(product, ["backroomStock", "backroom_stock"], "—")} suffix={unit} />
-          <MetricPill label="Department" value={product.department || "—"} />
-          <MetricPill label="Backroom area" value={backroomLocation} />
-        </div>
-      </LookupAnswerCard>
+  const lastMovement = valueOf(product, ["lastMovement", "last_movement", "lastReceived", "last_received", "lastReceivedDate"], "Not supplied");
 
-      <LookupAnswerCard icon={PackageCheck} label="What is the stock view?" title="Read-only stock snapshot" helper="Use this to decide the next workflow, not to change quantities here.">
-        <div className="grid grid-cols-3 gap-2">
-          <MetricPill label="SOH" value={valueOf(product, ["stockOnHand", "stock_on_hand", "shelfStock", "shelf_stock"])} suffix={unit} />
-          <MetricPill label="Status" value={valueOf(product, ["status"], "Active")} />
-          <MetricPill label="Price" value={price} />
-        </div>
-      </LookupAnswerCard>
-
-      <LookupAnswerCard icon={ClipboardList} label="What should I do next?" title="Choose a controlled task" helper="Each action opens the proper workflow for the job.">
-        <div className="grid grid-cols-1 gap-2">
-          <NextAction icon={ArrowLeftRight} label="Move Stock" helper="Shelf, backroom, or location movement." onClick={() => onOpenWorkflow("/transfers")} />
-          <NextAction icon={ClipboardList} label="Count This Item" helper="Start from the formal stock count workflow." onClick={() => onOpenWorkflow("/stock-count")} />
-          <NextAction icon={PackageCheck} label="Report Issue" helper="Use shelf issue or stock-out evidence workflow." onClick={() => onOpenWorkflow("/gap-scan")} />
-          <NextAction icon={ScanLine} label="Scan Again" helper="Clear this item and lookup another one." onClick={onScanAgain} />
-        </div>
-      </LookupAnswerCard>
-
-      <SectionCard>
-        <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">My work context</p>
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          <MetricPill label="Open tasks" value={workSummary.openTasks} />
-          <MetricPill label="Pending sync" value={workSummary.waitingSync} />
-          <MetricPill label="Blocked" value={workSummary.blocked} />
-        </div>
-      </SectionCard>
-
-      <OperatorAlert
-        tone="info"
-        title="Lookup stays read-first"
-        helper="Actions route into controlled workflows. Inventory Desktop remains the review and audit layer."
-        actions={[{ label: "Stock details", onClick: () => setActiveTab("Inventory") }, { label: "Location details", onClick: () => setActiveTab("Location") }]}
-      />
-    </>
-  );
-}
-
-function InventoryTab({ product, unit, scanValue }) {
-  return (
-    <>
-      <SectionCard><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Read-only inventory intelligence</p><div className="mt-3 grid grid-cols-2 gap-2"><MetricPill label="SOH" value={valueOf(product, ["stockOnHand", "stock_on_hand"])} suffix={unit} /><MetricPill label="Available" value={valueOf(product, ["available", "availableStock"], valueOf(product, ["shelfStock", "shelf_stock"]))} suffix={unit} /><MetricPill label="Reserved" value={valueOf(product, ["reserved", "reservedStock"])} suffix={unit} /><MetricPill label="In transit" value={valueOf(product, ["inTransit", "in_transit"])} suffix={unit} /><MetricPill label="Last received" value={valueOf(product, ["lastReceived", "last_received", "lastReceivedDate"])} /><MetricPill label="Unavailable" value={valueOf(product, ["unavailable", "wasteQty"])} suffix={unit} /><MetricPill label="Shelf cap" value={valueOf(product, ["shelfCapacity", "shelf_capacity"])} suffix={unit} /><MetricPill label="Carton cap" value={valueOf(product, ["cartonCapacity", "carton_capacity"])} suffix={unit} /></div></SectionCard>
-      <SectionCard><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Attribute capture available</p><div className="mt-3 grid grid-cols-3 gap-2"><MetricPill label="Expiry" value={getDefaultExpiryDate(product) || "Available"} /><MetricPill label="Lot / Batch" value={getDefaultLotBatch(product) || "Available"} /><MetricPill label="Weighted" value={needsWeightedEvidence(product, scanValue) || isWeightedItem(product) ? "Evidence" : "Optional"} /></div><p className="mt-2 text-xs font-semibold leading-snug text-muted-foreground">Capture happens inside controlled workflows such as Markdown, Receiving, or Stock Count.</p></SectionCard>
-    </>
-  );
-}
-
-function MovementsTab({ product, unit }) {
-  const movementRows = lookupMovementRows(product, unit);
   return (
     <SectionCard>
-      <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Movement history</p>
-      <p className="mt-1 text-xs font-bold leading-snug text-muted-foreground">Recent activity is shown only when supplied by the item record.</p>
-      {movementRows.length ? (
-        <div className="mt-3 space-y-2">
-          {movementRows.map((movement) => {
-            const Icon = movement.icon;
-            return (
-              <div key={`${movement.type}-${movement.reason}`} className="rounded-2xl border border-border bg-secondary/50 p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-card text-foreground"><Icon className="h-4 w-4" /></div>
-                    <div className="min-w-0"><p className="text-sm font-black text-foreground">{movement.type}</p><p className="mt-1 text-xs font-bold text-muted-foreground">Reason: {movement.reason}</p><p className="mt-1 text-xs font-semibold text-muted-foreground">{movement.date}</p></div>
-                  </div>
-                  <p className="shrink-0 text-lg font-black text-foreground">{movement.type === "Stock Out" ? "-" : movement.type === "Stock In" ? "+" : ""}{movement.qty}</p>
-                </div>
-              </div>
-            );
-          })}
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <MapPin className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">Stock & Location</p>
+          <h2 className="mt-1 text-base font-black leading-tight text-foreground">{shelfLocation}</h2>
+          <p className="mt-1 text-xs font-bold leading-snug text-muted-foreground">Backroom: {backroomLocation}</p>
         </div>
-      ) : (
-        <EmptyState title="No movement details on scanner." helper="Use Inventory Desktop for the full audited movement timeline." />
-      )}
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <MetricPill label="On Hand" value={valueOf(product, ["stockOnHand", "stock_on_hand", "shelfStock", "shelf_stock"])} suffix={unit} />
+        <MetricPill label="Available" value={valueOf(product, ["available", "availableStock", "available_stock", "shelfStock", "shelf_stock"])} suffix={unit} />
+        <MetricPill label="Shelf" value={valueOf(product, ["shelfStock", "shelf_stock"], "—")} suffix={unit} />
+        <MetricPill label="Backroom" value={valueOf(product, ["backroomStock", "backroom_stock"], "—")} suffix={unit} />
+        <MetricPill label="Last Move" value={lastMovement} />
+        <MetricPill label="Price" value={price} />
+      </div>
     </SectionCard>
   );
 }
 
-function LocationTab({ product, unit }) {
-  const shelf = splitLocation(product.shelfLocation || product.location);
-  const displayLocations = Array.isArray(product.displayLocations) ? product.displayLocations : [];
+function QuickActionsGrid({ product, onOpenWorkflow, onScanAgain }) {
+  const actions = [
+    { icon: PackageOpen, label: "Receive", helper: "Delivery", path: "/receiving", tone: "blue" },
+    { icon: ClipboardList, label: "Count", helper: "Stocktake", path: "/stock-count", tone: "blue" },
+    { icon: ArrowLeftRight, label: "Transfers", helper: "Locations", path: "/transfers", tone: "green" },
+    { icon: Trash2, label: "Waste", helper: "Record loss", path: "/waste", tone: "green" },
+    { icon: Tags, label: "Markdown", helper: "Labels", path: "/markdowns", tone: "purple" },
+    { icon: Clock, label: "Expiry", helper: "Freshness", path: "/expiry-check", tone: "purple" },
+  ];
+
   return (
-    <>
-      <SectionCard><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Shelf location</p><p className="mt-2 text-sm font-bold text-muted-foreground">Where staff should physically find or place this item.</p><div className="mt-3 grid grid-cols-2 gap-2"><MetricPill label="Aisle" value={valueOf(product, ["aisle"], shelf.aisle)} /><MetricPill label="Bay" value={valueOf(product, ["bay"], shelf.bay)} /><MetricPill label="Shelf" value={valueOf(product, ["shelf"], shelf.shelf)} /><MetricPill label="Position" value={valueOf(product, ["position"], shelf.position)} /><MetricPill label="Facing" value={valueOf(product, ["facing", "facings"], "—")} /><MetricPill label="Planogram" value={valueOf(product, ["planogram"], "—")} /></div></SectionCard>
-      <SectionCard><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Backroom</p><div className="mt-3 grid grid-cols-2 gap-2"><MetricPill label="Zone" value={valueOf(product, ["backroomZone", "backroom_zone"], "—")} /><MetricPill label="Rack / Bin" value={valueOf(product, ["backroomBin", "backroom_bin"], "—")} /><MetricPill label="Qty" value={valueOf(product, ["backroomStock", "backroom_stock"], "—")} suffix={unit} /><MetricPill label="Status" value={valueOf(product, ["backroomStatus"], "Check if needed")} /></div></SectionCard>
-      <SectionCard><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Display locations</p>{displayLocations.length ? <div className="mt-3 grid grid-cols-1 gap-2">{displayLocations.map((display) => <div key={display} className="rounded-2xl bg-secondary/60 px-3 py-2 text-sm font-black text-foreground">{display}</div>)}</div> : <p className="mt-2 rounded-2xl bg-secondary/60 px-3 py-2 text-sm font-bold text-muted-foreground">No display locations supplied to scanner.</p>}</SectionCard>
-      <SectionCard><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Other stores</p><p className="mt-2 rounded-2xl bg-secondary/60 px-3 py-2 text-sm font-bold text-muted-foreground">Shown only when multi-location stock visibility is enabled.</p></SectionCard>
-    </>
+    <SectionCard>
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <PackageCheck className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">Next Action</p>
+          <h2 className="mt-1 text-base font-black leading-tight text-foreground">Choose the controlled workflow</h2>
+          <p className="mt-1 text-xs font-bold leading-snug text-muted-foreground">The selected item is carried into the workflow where supported.</p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-1">
+        {actions.map((action) => (
+          <QuickAction
+            key={action.label}
+            icon={action.icon}
+            label={action.label}
+            helper={action.helper}
+            tone={action.tone}
+            onClick={() => onOpenWorkflow(action.path)}
+          />
+        ))}
+      </div>
+
+      <button
+        type="button"
+        onClick={onScanAgain}
+        className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl bg-secondary px-3 text-sm font-black text-secondary-foreground active:bg-border"
+      >
+        <ScanLine className="h-4 w-4" /> Scan another item
+      </button>
+    </SectionCard>
   );
 }
 
-function SalesTab({ product, unit }) {
-  return <SectionCard><p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Operational sales summary</p><p className="mt-1 text-xs font-bold leading-snug text-muted-foreground">Shown only when supplied by Inventory Desktop.</p><div className="mt-3 grid grid-cols-2 gap-2"><MetricPill label="Today" value={valueOf(product, ["salesToday", "todaySales"])} suffix={unit} /><MetricPill label="Last 7 days" value={valueOf(product, ["sales7d", "last7DaysSales"])} suffix={unit} /><MetricPill label="Last 30 days" value={valueOf(product, ["sales30d", "last30DaysSales"])} suffix={unit} /><MetricPill label="Daily avg" value={valueOf(product, ["dailyAverage", "daily_average"])} suffix={unit} /><MetricPill label="Last sold" value={valueOf(product, ["lastSold", "last_sold"])} /><MetricPill label="Trend" value={valueOf(product, ["salesTrend", "trend"])} /></div></SectionCard>;
+function LookupError({ query }) {
+  if (!query) return null;
+  return (
+    <OperatorAlert
+      tone="warning"
+      title="No item found"
+      helper="Scan again or enter a barcode, PLU, SKU, or item name."
+    />
+  );
 }
 
 export default function ProductLookup() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const session = useScanOpsSession();
   const initialQuery = id && id !== "demo" ? decodeURIComponent(id) : "";
   const [scanValue, setScanValue] = useState(initialQuery);
-  const [activeTab, setActiveTab] = useState("Summary");
+  const [lastQuery, setLastQuery] = useState(initialQuery);
   const [product, setProduct] = useState(() => initialQuery ? resolveInventoryIdentity(initialQuery) : null);
   const unit = product?.unitType || product?.unit_type || "each";
-  const workSummary = useMemo(() => { const taskStats = getTaskStats(getInitialTaskQueue(), session); const syncSummary = getSyncSummary(); return { openTasks: taskStats.mine, waitingSync: syncSummary.pending, blocked: taskStats.escalated + syncSummary.issue }; }, [session]);
+
   const price = useMemo(() => {
     if (!product) return "—";
     if (product.pricePerKg) return `${product.currency || "₱"}${product.pricePerKg}/kg`;
@@ -217,10 +169,9 @@ export default function ProductLookup() {
     const input = typeof value === "object" ? getItemEntryPrimaryValue(value) : String(value || "").trim();
     if (!input && typeof value !== "object") return;
     const found = typeof value === "object" ? value : resolveInventoryIdentity(input);
-    if (!found) return;
-    setProduct(found);
-    setScanValue(getItemEntryPrimaryValue(found));
-    setActiveTab("Summary");
+    setLastQuery(input || getItemEntryPrimaryValue(found));
+    setProduct(found || null);
+    if (found) setScanValue(getItemEntryPrimaryValue(found));
   };
 
   const openWorkflow = (path) => {
@@ -230,22 +181,52 @@ export default function ProductLookup() {
 
   return (
     <PageShell>
-      <WorkflowHeader title="Lookup Item" subtitle="Scan → identify → location → next task" scanValue={scanValue} onScanValueChange={setScanValue} onScan={handleScan} />
+      <WorkflowHeader
+        title="Scan or Lookup Item"
+        subtitle="Scan → item → stock/location → next action"
+        placeholder="Scan barcode, PLU, SKU, or item name..."
+        scanValue={scanValue}
+        onScanValueChange={setScanValue}
+        onScan={handleScan}
+      />
       <WorkflowMain>
         {product ? (
           <>
             <ItemSummaryCard item={product}>
-              <p className="break-all font-mono text-[11px] text-muted-foreground">{getIdentityDisplay(product)}</p>
+              <div className="grid grid-cols-2 gap-2">
+                <MetricPill label="Status" value={valueOf(product, ["status"], "Active")} />
+                <MetricPill label="Department" value={valueOf(product, ["department"], "—")} />
+              </div>
+              <p className="mt-3 break-all font-mono text-[11px] text-muted-foreground">{getIdentityDisplay(product)}</p>
               <p className="mt-1 inline-flex rounded-full bg-secondary px-2 py-1 text-[10px] font-black uppercase tracking-wide text-muted-foreground">{getMatchReasonDisplay(product)}</p>
             </ItemSummaryCard>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="tablist" aria-label="Item lookup sections">{ITEM_TABS.map((tab) => <TabButton key={tab} tab={tab} active={activeTab === tab} onClick={() => setActiveTab(tab)} />)}</div>
-            {activeTab === "Summary" && <SummaryTab product={product} price={price} unit={unit} workSummary={workSummary} setActiveTab={setActiveTab} onScanAgain={() => navigate("/scan")} onOpenWorkflow={openWorkflow} />}
-            {activeTab === "Inventory" && <InventoryTab product={product} unit={unit} scanValue={scanValue} />}
-            {activeTab === "Movements" && <MovementsTab product={product} unit={unit} />}
-            {activeTab === "Location" && <LocationTab product={product} unit={unit} />}
-            {activeTab === "Sales" && <SalesTab product={product} unit={unit} />}
+
+            <StockLocationCard product={product} unit={unit} price={price} />
+            <QuickActionsGrid product={product} onOpenWorkflow={openWorkflow} onScanAgain={() => navigate("/scan")} />
+
+            <OperatorAlert
+              tone="info"
+              title="Lookup stays read-only"
+              helper="Quantities and audited records are changed only inside controlled workflows."
+            />
           </>
-        ) : <EmptyState title="No item selected." helper="Scan an item to identify it, find its location, and choose the next task." />}
+        ) : (
+          <>
+            <SectionCard className="border-primary/20 bg-primary/5">
+              <div className="flex items-start gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
+                  <ScanLine className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-lg font-black leading-tight text-foreground">Ready for lookup</p>
+                  <p className="mt-1 text-sm font-bold leading-snug text-muted-foreground">Scan an item to show item summary, stock, location, and quick actions.</p>
+                </div>
+              </div>
+            </SectionCard>
+            <LookupError query={lastQuery} />
+            <EmptyState title="No item selected." helper="Scan an item or enter a barcode, SKU, PLU, or item name." />
+          </>
+        )}
       </WorkflowMain>
     </PageShell>
   );
