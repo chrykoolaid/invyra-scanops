@@ -16,7 +16,7 @@ import PriceCheck from './pages/PriceCheck';
 import GapScan from './pages/GapScan';
 import Markdowns from './pages/MarkdownsOperator';
 import Waste from './pages/WasteOperator';
-import ExpiryCheck from './pages/ExpiryCheck';
+import ExpiryCheck from './pages/ExpiryCheckOperator';
 import Tasks from './pages/Tasks';
 import More from './pages/More';
 import SyncHandoff from './pages/SyncHandoff';
@@ -77,7 +77,7 @@ const getAppEscapeMeta = (pathname) => {
     "/more": { title: "Tools & Support", subtitle: "Secondary ScanOps tools" },
     "/markdowns": { title: "Markdown", subtitle: "Scan item, choose markdown, request label" },
     "/waste": { title: "Waste", subtitle: "Scan item, classify loss, queue evidence" },
-    "/expiry-check": { title: "Expiry Check", subtitle: "Review freshness and expiry" },
+    "/expiry-check": { title: "Expiry Check", subtitle: "Scan item, confirm date, save freshness evidence" },
     "/inventory-sync": { title: "Sync Status", subtitle: "Queue, status, setup, and review" },
     "/sync-queue": { title: "Sync Status", subtitle: "Device queue and errors" },
     "/shelf-tickets": { title: "Shelf Tickets", subtitle: "Prepare shelf ticket work" },
