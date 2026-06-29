@@ -5,7 +5,7 @@ import { ArrowLeft, HelpCircle, Settings } from "lucide-react";
 
 const TOOL_TILES = [
   { icon: Settings,   label: "Settings", description: "Device setup", to: "/scanner-settings", tone: "grey" },
-  { icon: HelpCircle, label: "Help",     description: "Support",      to: "/pilot-readiness",  tone: "cyan" },
+  { icon: HelpCircle, label: "Help",     description: "Guidance",     to: "/help",             tone: "cyan" },
   { icon: ArrowLeft,  label: "Back",     description: "Home",         to: "/",                tone: "grey" },
 ];
 
