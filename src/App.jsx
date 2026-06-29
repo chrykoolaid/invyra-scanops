@@ -19,6 +19,7 @@ import Waste from './pages/WasteOperator';
 import ExpiryCheck from './pages/ExpiryCheckOperator';
 import Tasks from './pages/Tasks';
 import More from './pages/More';
+import ScanOpsHelp from './pages/ScanOpsHelp';
 import SyncHandoff from './pages/SyncHandoff';
 import SyncQueue from './pages/SyncQueue';
 import ShelfTickets from './pages/ShelfTickets';
@@ -31,7 +32,6 @@ import RecoveryGuidance from './pages/RecoveryGuidance';
 import SessionCollaboration from './pages/SessionCollaboration';
 import DesktopSyncContract from './pages/DesktopSyncContract';
 import StoreOpsDashboard from './pages/StoreOpsDashboard';
-import PilotReadiness from './pages/PilotReadiness';
 import PrinterSettings from './pages/PrinterSettings';
 import UserManagement from './pages/UserManagement';
 import ScannerSettings from './pages/ScannerSettings';
@@ -77,6 +77,7 @@ const getAppEscapeMeta = (pathname) => {
     "/tasks": { title: "Tasks", subtitle: "Review assigned store work" },
     "/alerts": { title: "Alerts", subtitle: "Review urgent operational issues" },
     "/more": { title: "Tools & Support", subtitle: "Secondary ScanOps tools" },
+    "/help": { title: "Help", subtitle: "Quick operator guidance" },
     "/markdowns": { title: "Markdown", subtitle: "Scan item, choose markdown, request label" },
     "/waste": { title: "Waste", subtitle: "Scan item, classify loss, queue evidence" },
     "/expiry-check": { title: "Expiry Check", subtitle: "Scan item, confirm date, save freshness evidence" },
@@ -93,7 +94,6 @@ const getAppEscapeMeta = (pathname) => {
     "/sync-handoff": { title: "Sync & Handoff", subtitle: "Queue, status, setup, and review" },
     "/desktop-sync-contract": { title: "Desktop Sync Contract", subtitle: "Review integration contracts" },
     "/store-ops-dashboard": { title: "Store Ops Dashboard", subtitle: "Review store exceptions" },
-    "/pilot-readiness": { title: "Pilot Readiness", subtitle: "Review UAT and release evidence" },
     "/scanner-settings": { title: "Settings", subtitle: "Device configuration and session controls" },
   };
 
@@ -155,6 +155,7 @@ const AuthenticatedApp = () => {
             <Route path="/tasks" element={<Tasks />} />
             <Route path="/alerts" element={<Tasks />} />
             <Route path="/more" element={<More />} />
+            <Route path="/help" element={<ScanOpsHelp />} />
             <Route path="/sync-handoff" element={<SyncHandoff />} />
             <Route path="/inventory-sync" element={<SyncHandoff />} />
             <Route path="/sync-queue" element={<SyncQueue />} />
@@ -168,7 +169,6 @@ const AuthenticatedApp = () => {
             <Route path="/session-collaboration" element={<SessionCollaboration />} />
             <Route path="/desktop-sync-contract" element={roleGated(<DesktopSyncContract />, "Manager", "Desktop Sync Contract")} />
             <Route path="/store-ops-dashboard" element={roleGated(<StoreOpsDashboard />, "Manager", "Store Ops Dashboard")} />
-            <Route path="/pilot-readiness" element={<PilotReadiness />} />
             <Route path="/printer-settings" element={roleGated(<PrinterSettings />, "Manager", "Printer Settings")} />
             <Route path="/user-management" element={roleGated(<UserManagement />, "Manager", "User Management")} />
             <Route path="/scanner-settings" element={<ScannerSettings />} />
