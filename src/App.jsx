@@ -15,7 +15,7 @@ import Replenish from './pages/Replenish';
 import PriceCheck from './pages/PriceCheck';
 import GapScan from './pages/GapScan';
 import Markdowns from './pages/Markdowns';
-import Waste from './pages/Waste';
+import Waste from './pages/WasteOperator';
 import ExpiryCheck from './pages/ExpiryCheck';
 import Tasks from './pages/Tasks';
 import More from './pages/More';
@@ -76,7 +76,7 @@ const getAppEscapeMeta = (pathname) => {
     "/alerts": { title: "Alerts", subtitle: "Review urgent operational issues" },
     "/more": { title: "Tools & Support", subtitle: "Secondary ScanOps tools" },
     "/markdowns": { title: "Markdown", subtitle: "Labels, expiry, and removals" },
-    "/waste": { title: "Record Waste", subtitle: "Waste, theft, damage, and loss evidence" },
+    "/waste": { title: "Waste", subtitle: "Scan item, classify loss, queue evidence" },
     "/expiry-check": { title: "Expiry Check", subtitle: "Review freshness and expiry" },
     "/inventory-sync": { title: "Sync Status", subtitle: "Queue, status, setup, and review" },
     "/sync-queue": { title: "Sync Status", subtitle: "Device queue and errors" },
