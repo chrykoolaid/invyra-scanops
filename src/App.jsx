@@ -14,7 +14,7 @@ import Receiving from './pages/Receiving';
 import Replenish from './pages/Replenish';
 import PriceCheck from './pages/PriceCheck';
 import GapScan from './pages/GapScan';
-import Markdowns from './pages/Markdowns';
+import Markdowns from './pages/MarkdownsOperator';
 import Waste from './pages/WasteOperator';
 import ExpiryCheck from './pages/ExpiryCheck';
 import Tasks from './pages/Tasks';
@@ -75,7 +75,7 @@ const getAppEscapeMeta = (pathname) => {
     "/tasks": { title: "Tasks", subtitle: "Review assigned store work" },
     "/alerts": { title: "Alerts", subtitle: "Review urgent operational issues" },
     "/more": { title: "Tools & Support", subtitle: "Secondary ScanOps tools" },
-    "/markdowns": { title: "Markdown", subtitle: "Labels, expiry, and removals" },
+    "/markdowns": { title: "Markdown", subtitle: "Scan item, choose markdown, request label" },
     "/waste": { title: "Waste", subtitle: "Scan item, classify loss, queue evidence" },
     "/expiry-check": { title: "Expiry Check", subtitle: "Review freshness and expiry" },
     "/inventory-sync": { title: "Sync Status", subtitle: "Queue, status, setup, and review" },
