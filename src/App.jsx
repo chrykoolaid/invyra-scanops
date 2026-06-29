@@ -24,7 +24,7 @@ import SyncQueue from './pages/SyncQueue';
 import ShelfTickets from './pages/ShelfTickets';
 import Transfers from './pages/TransfersOperator';
 import ProductIdentityReview from './pages/ProductIdentityReview';
-import ScanOpsReporting from './pages/ScanOpsReporting';
+import ScanOpsReporting from './pages/ScanOpsReportingOperator';
 import DeviceGovernance from './pages/DeviceGovernance';
 import SessionCollaboration from './pages/SessionCollaboration';
 import DesktopSyncContract from './pages/DesktopSyncContract';
@@ -83,7 +83,7 @@ const getAppEscapeMeta = (pathname) => {
     "/shelf-tickets": { title: "Shelf Tickets", subtitle: "Prepare shelf ticket work" },
     "/transfers": { title: "Transfers", subtitle: "Set route, scan item, move quantity, save" },
     "/product-identity-review": { title: "Product Review", subtitle: "Resolve scanned item identity" },
-    "/scanops-reporting": { title: "Reporting", subtitle: "Review ScanOps activity" },
+    "/scanops-reporting": { title: "Reporting", subtitle: "Read-only ScanOps activity" },
     "/device-governance": { title: "Device & Shift Governance", subtitle: "Review device readiness" },
     "/session-collaboration": { title: "Session Collaboration", subtitle: "Review multi-user work" },
     "/sync-handoff": { title: "Sync & Handoff", subtitle: "Queue, status, setup, and review" },
