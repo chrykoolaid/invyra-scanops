@@ -18,6 +18,7 @@ import Markdowns from './pages/MarkdownsOperator';
 import Waste from './pages/WasteOperator';
 import ExpiryCheck from './pages/ExpiryCheckOperator';
 import Tasks from './pages/Tasks';
+import Alerts from './pages/Alerts';
 import More from './pages/More';
 import ScanOpsHelp from './pages/ScanOpsHelp';
 import SyncHandoff from './pages/SyncHandoff';
@@ -153,7 +154,7 @@ const AuthenticatedApp = () => {
             <Route path="/waste" element={<Waste />} />
             <Route path="/expiry-check" element={<ExpiryCheck />} />
             <Route path="/tasks" element={<Tasks />} />
-            <Route path="/alerts" element={<Tasks />} />
+            <Route path="/alerts" element={<Alerts />} />
             <Route path="/more" element={<More />} />
             <Route path="/help" element={<ScanOpsHelp />} />
             <Route path="/sync-handoff" element={<SyncHandoff />} />
