@@ -8,7 +8,7 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Home from './pages/Home';
 import Scan from './pages/Scan';
 import ProductLookup from './pages/ProductLookup';
-import Movements from './pages/Movements';
+import Movements from './pages/MovementsOperator';
 import StockCount from './pages/StockCountOperator';
 import Receiving from './pages/Receiving';
 import Replenish from './pages/Replenish';
