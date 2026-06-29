@@ -90,10 +90,11 @@ const getAppEscapeMeta = (pathname) => {
     "/desktop-sync-contract": { title: "Desktop Sync Contract", subtitle: "Review integration contracts" },
     "/store-ops-dashboard": { title: "Store Ops Dashboard", subtitle: "Review store exceptions" },
     "/pilot-readiness": { title: "Pilot Readiness", subtitle: "Review UAT and release evidence" },
-    "/scanner-settings": { title: "Scanner Settings", subtitle: "Device controls, diagnostics, and access" },
+    "/scanner-settings": { title: "Settings", subtitle: "Device configuration and session controls" },
   };
 
   if (exactRoutes[pathname]) return exactRoutes[pathname];
+  if (pathname.startsWith("/scanner-settings/")) return { title: "Settings", subtitle: "Device configuration workspace" };
   if (pathname.startsWith("/product/")) return { title: "Lookup Item", subtitle: "Item details" };
 
   return { title: "ScanOps", subtitle: "ScanOps workflow" };
@@ -165,6 +166,7 @@ const AuthenticatedApp = () => {
             <Route path="/printer-settings" element={roleGated(<PrinterSettings />, "Manager", "Printer Settings")} />
             <Route path="/user-management" element={roleGated(<UserManagement />, "Manager", "User Management")} />
             <Route path="/scanner-settings" element={<ScannerSettings />} />
+            <Route path="/scanner-settings/:workspace" element={<ScannerSettings />} />
             <Route path="*" element={<PageNotFound />} />
           </Routes>
         </div>
