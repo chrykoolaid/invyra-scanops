@@ -29,6 +29,7 @@ import ScanOpsReporting from './pages/ScanOpsReportingOperator';
 import DeviceGovernance from './pages/DeviceGovernance';
 import DeviceHealth from './pages/DeviceHealth';
 import RecoveryGuidance from './pages/RecoveryGuidance';
+import SessionAwareness from './pages/SessionAwareness';
 import SessionCollaboration from './pages/SessionCollaboration';
 import DesktopSyncContract from './pages/DesktopSyncContract';
 import StoreOpsDashboard from './pages/StoreOpsDashboard';
@@ -90,6 +91,7 @@ const getAppEscapeMeta = (pathname) => {
     "/device-governance": { title: "Device & Shift Governance", subtitle: "Review device readiness" },
     "/device-health": { title: "Device Health", subtitle: "Scanner, network, printer, and queue readiness" },
     "/recovery-guidance": { title: "Recovery Guidance", subtitle: "What went wrong and what to do next" },
+    "/session-awareness": { title: "Session Awareness", subtitle: "User, store, shift, and device context" },
     "/session-collaboration": { title: "Session Collaboration", subtitle: "Review multi-user work" },
     "/sync-handoff": { title: "Sync & Handoff", subtitle: "Queue, status, setup, and review" },
     "/desktop-sync-contract": { title: "Desktop Sync Contract", subtitle: "Review integration contracts" },
@@ -166,6 +168,7 @@ const AuthenticatedApp = () => {
             <Route path="/device-governance" element={roleGated(<DeviceGovernance />, "Manager", "Device & Shift Governance")} />
             <Route path="/device-health" element={<DeviceHealth />} />
             <Route path="/recovery-guidance" element={<RecoveryGuidance />} />
+            <Route path="/session-awareness" element={<SessionAwareness />} />
             <Route path="/session-collaboration" element={<SessionCollaboration />} />
             <Route path="/desktop-sync-contract" element={roleGated(<DesktopSyncContract />, "Manager", "Desktop Sync Contract")} />
             <Route path="/store-ops-dashboard" element={roleGated(<StoreOpsDashboard />, "Manager", "Store Ops Dashboard")} />
