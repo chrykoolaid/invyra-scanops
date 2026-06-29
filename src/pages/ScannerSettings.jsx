@@ -3,15 +3,26 @@ import {
   Accessibility,
   Activity,
   BellRing,
+  Camera,
+  CheckCircle2,
+  ChevronRight,
   Database,
   Info,
+  Keyboard,
   LockKeyhole,
+  MonitorSmartphone,
+  PlugZap,
   Printer,
+  Radio,
+  RefreshCw,
   ScanBarcode,
+  ShieldCheck,
   Smartphone,
   UserRound,
+  Volume2,
   Wifi,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import AppHeader from "../components/scanner/AppHeader";
 import { createScanOpsAuditEvent } from "../lib/scanOpsAudit";
 import { SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
@@ -45,7 +56,7 @@ function SettingsTile({ icon: Icon, label, description, tone = "grey", selected,
     <button
       type="button"
       onClick={onClick}
-      className={`flex h-[92px] min-h-[92px] w-full flex-col items-center justify-center rounded-2xl border border-white/5 px-2 py-2.5 text-center transition-all duration-150 active:scale-[0.98] ${selected ? toneClasses[tone] || toneClasses.grey : toneClasses.grey}`}
+      className={`flex h-[92px] min-h-[92px] w-full flex-col items-center justify-center rounded-2xl border px-2 py-2.5 text-center transition-all duration-150 active:scale-[0.98] ${selected ? `${toneClasses[tone] || toneClasses.grey} border-white/20` : `${toneClasses.grey} border-white/5 opacity-75`}`}
     >
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/10 text-current">
         <Icon className="h-4 w-4" />
@@ -58,109 +69,98 @@ function SettingsTile({ icon: Icon, label, description, tone = "grey", selected,
   );
 }
 
-function DetailPanel({ activeKey, session, network, syncSummary }) {
-  const sections = {
-    device: {
-      icon: Smartphone,
-      title: "Device",
-      helper: "Physical handheld, operating system, Wi-Fi, and hardware status.",
-      current: [
-        ["Device ID", session.deviceId],
-        ["Store / Department", session.departmentName],
-        ["Network", network],
-        ["Wi-Fi", "Connected"],
-        ["Battery", "70%"],
-        ["App Version", "ScanOps Preview"],
-      ],
-      planned: ["Bluetooth", "NFC", "RFID reader", "Camera health", "USB", "GPS", "Docking station", "Charging cradle"],
-    },
-    scanner: {
-      icon: ScanBarcode,
-      title: "Scanner",
-      helper: "Barcode input behaviour. Scanning is the primary interaction.",
-      current: [["Hardware scanner", "Enabled"], ["Camera fallback", "Available"], ["Manual entry", "Available"], ["Test scan", "Available below"]],
-      planned: ["RFID trigger", "Batch scan", "Continuous scan", "GS1 profiles", "Custom barcode profiles", "Decode performance"],
-    },
-    printer: {
-      icon: Printer,
-      title: "Printer",
-      helper: "Portable and label printer configuration.",
-      current: [["Printer pairing", "Planned"], ["Test print", "Planned"], ["Paper status", "Planned"], ["Label mode", "Markdown labels"]],
-      planned: ["Multiple printers", "Bluetooth printer", "Network printer", "Print queue", "Label templates", "Print history"],
-    },
-    sync: {
-      icon: Database,
-      title: "Sync & Connectivity",
-      helper: "Inventory Desktop pairing, bridge status, and read-only queue visibility.",
-      current: [["Bridge status", syncSummary.issue ? "Attention" : "Ready"], ["Pending queue", syncSummary.pending], ["Network mode", network], ["Environment", "Training / Live aware"]],
-      planned: ["Multi-site sync", "Cloud backup status", "Conflict resolution", "Incremental sync", "Connection history", "Sync analytics"],
-    },
-    feedback: {
-      icon: BellRing,
-      title: "Feedback",
-      helper: "Local sound, vibration, and confirmation preferences.",
-      current: [["Success beep", "On"], ["Error beep", "On"], ["Vibration", "On"], ["Haptics", "On"]],
-      planned: ["Sound packs", "Silent shift mode", "Voice feedback", "Volume profiles", "Night mode"],
-    },
-    accessibility: {
-      icon: Accessibility,
-      title: "Accessibility",
-      helper: "Inclusive handheld usability settings.",
-      current: [["Large text", "Available"], ["High contrast", "Default"], ["Reduce motion", "Available"]],
-      planned: ["Left-hand mode", "Colour-blind themes", "Large touch mode", "Voice guidance", "ADHD Focus Mode", "ASD Low-Stimulation Mode"],
-    },
-    session: {
-      icon: UserRound,
-      title: "Session",
-      helper: "Current user, shift, timeout, and sign out controls.",
-      current: [["Current user", session.actorName], ["Role", session.actorRole], ["Store / Department", session.departmentName], ["Auto sign out", "30 min idle"], ["Session lock", "Planned"], ["Sign out", "Available from session controls"]],
-      planned: ["PIN unlock", "Biometric unlock", "Shift handover", "Device reservation", "SSO", "MFA"],
-    },
-    diagnostics: {
-      icon: Activity,
-      title: "Diagnostics",
-      helper: "Device, scanner, printer, network, and sync checks.",
-      current: [["Scanner test", "Available below"], ["Network test", "Read-only"], ["Sync test", "Read-only"], ["Device health", "Preview"]],
-      planned: ["Hardware diagnostics", "RFID diagnostics", "Camera diagnostics", "Battery report", "Export support bundle", "Remote support session"],
-    },
-    about: {
-      icon: Info,
-      title: "About",
-      helper: "Product version, build, environment, and support information.",
-      current: [["Product", "Invyra ScanOps"], ["Build", "Preview"], ["Environment", "Training / Live aware"], ["Support", "Invyra support"]],
-      planned: ["Release notes", "Component versions", "Bridge version", "Firmware compatibility", "Database compatibility", "Licensing"],
-    },
-  };
-
-  const section = sections[activeKey] || sections.device;
-  const Icon = section.icon;
+function WorkspaceShell({ icon: Icon, label, title, helper, children }) {
   return (
-    <section className="mt-2 rounded-2xl border border-white/10 bg-slate-900/80 p-3" aria-label={`${section.title} settings details`}>
+    <section className="mt-2 rounded-2xl border border-white/10 bg-slate-900/80 p-3" aria-label={`${title} settings workspace`}>
       <div className="flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-slate-100">
           <Icon className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Settings Category</p>
-          <h2 className="mt-1 text-base font-black text-slate-50">{section.title}</h2>
-          <p className="mt-1 text-xs font-bold leading-snug text-slate-400">{section.helper}</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{label}</p>
+          <h2 className="mt-1 text-base font-black text-slate-50">{title}</h2>
+          <p className="mt-1 text-xs font-bold leading-snug text-slate-400">{helper}</p>
         </div>
       </div>
+      <div className="mt-3 space-y-3">{children}</div>
+    </section>
+  );
+}
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        {section.current.map(([label, value]) => (
-          <div key={label} className="min-w-0 rounded-2xl bg-slate-800/80 px-3 py-2">
-            <p className="truncate text-[9px] font-black uppercase tracking-wide text-slate-400">{label}</p>
-            <p className="mt-0.5 truncate text-xs font-black text-slate-50">{value || "—"}</p>
-          </div>
+function WorkspaceSection({ title, helper, children }) {
+  return (
+    <div className="rounded-2xl bg-slate-800/70 p-3">
+      <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{title}</p>
+      {helper && <p className="mt-1 text-xs font-bold leading-snug text-slate-300">{helper}</p>}
+      <div className="mt-3 space-y-2">{children}</div>
+    </div>
+  );
+}
+
+function InfoGrid({ rows }) {
+  return (
+    <div className="grid grid-cols-2 gap-2">
+      {rows.map(([label, value]) => (
+        <div key={label} className="min-w-0 rounded-2xl bg-slate-900/80 px-3 py-2">
+          <p className="truncate text-[9px] font-black uppercase tracking-wide text-slate-500">{label}</p>
+          <p className="mt-0.5 truncate text-xs font-black text-slate-50">{value || "—"}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SettingRow({ icon: Icon = ChevronRight, title, helper, value, action, onClick, disabled = false }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || !onClick}
+      className={`flex min-h-12 w-full items-center gap-3 rounded-2xl bg-slate-900/80 px-3 py-2 text-left ${onClick ? "active:bg-slate-700" : "cursor-default"} disabled:opacity-60`}
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/10 text-slate-100">
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-black text-slate-50">{title}</span>
+        {helper && <span className="mt-0.5 block text-[10.5px] font-bold leading-snug text-slate-400">{helper}</span>}
+      </span>
+      {value && <span className="shrink-0 rounded-full bg-slate-800 px-2 py-1 text-[10px] font-black text-slate-200">{value}</span>}
+      {action && <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" />}
+    </button>
+  );
+}
+
+function ToggleRow({ icon: Icon, title, helper, checked, onToggle }) {
+  return <SettingRow icon={Icon} title={title} helper={helper} value={checked ? "On" : "Off"} onClick={onToggle} />;
+}
+
+function ChoiceRow({ title, choices, value, onChange }) {
+  return (
+    <div className="rounded-2xl bg-slate-900/80 p-3">
+      <p className="text-xs font-black text-slate-50">{title}</p>
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        {choices.map((choice) => (
+          <button
+            key={choice}
+            type="button"
+            onClick={() => onChange(choice)}
+            className={`min-h-10 rounded-xl px-2 text-[11px] font-black active:scale-[0.98] ${value === choice ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-300"}`}
+          >
+            {choice}
+          </button>
         ))}
       </div>
+    </div>
+  );
+}
 
-      <div className="mt-3 rounded-2xl bg-slate-800/70 px-3 py-2">
-        <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Planned</p>
-        <p className="mt-1 text-xs font-bold leading-snug text-slate-300">{section.planned.join(" · ")}</p>
-      </div>
-    </section>
+function PlannedList({ items }) {
+  return (
+    <div className="rounded-2xl bg-slate-800/70 px-3 py-2">
+      <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Planned</p>
+      <p className="mt-1 text-xs font-bold leading-snug text-slate-300">{items.join(" · ")}</p>
+    </div>
   );
 }
 
@@ -184,38 +184,189 @@ function ScannerTest() {
   };
 
   return (
-    <section className="mt-2 rounded-2xl border border-white/10 bg-slate-900/80 p-3" aria-label="Scanner test">
-      <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-slate-100">
-          <ScanBarcode className="h-5 w-5" />
-        </span>
-        <div className="min-w-0">
-          <h2 className="text-base font-black text-slate-50">Scanner Test</h2>
-          <p className="mt-1 text-xs font-bold text-slate-400">Test input only. No stock or price mutation.</p>
-        </div>
+    <form onSubmit={runTest} className="space-y-2">
+      <div className="flex gap-2">
+        <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Scan or enter barcode / PLU" className="min-w-0 flex-1 h-11 rounded-xl border border-white/10 bg-slate-900 px-3 text-sm font-bold text-slate-50 outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-blue-300/20" />
+        <button type="submit" className="flex w-12 items-center justify-center rounded-xl bg-blue-600 text-white"><ScanBarcode className="h-5 w-5" /></button>
       </div>
-      <form onSubmit={runTest} className="mt-3 space-y-2">
-        <div className="flex gap-2">
-          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Scan or enter barcode / PLU" className="min-w-0 flex-1 h-11 rounded-xl border border-white/10 bg-slate-800 px-3 text-sm font-bold text-slate-50 outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-blue-300/20" />
-          <button type="submit" className="flex w-12 items-center justify-center rounded-xl bg-blue-600 text-white"><ScanBarcode className="h-5 w-5" /></button>
+      {result && (
+        <div className="rounded-xl bg-slate-900/80 px-3 py-2 text-xs font-semibold text-slate-400">
+          <p className="font-black text-slate-50">Input accepted · no stock mutation</p>
+          <p className="truncate">Trace: {result.traceId}</p>
+          <p className="truncate">{result.resolved ? `${result.resolved.name} · ${result.resolved.sku || "SKU not set"}` : "No item resolved"}</p>
         </div>
-        {result && (
-          <div className="rounded-xl bg-slate-800/80 px-3 py-2 text-xs font-semibold text-slate-400">
-            <p className="font-black text-slate-50">Input accepted · no stock mutation</p>
-            <p className="truncate">Trace: {result.traceId}</p>
-            <p className="truncate">{result.resolved ? `${result.resolved.name} · ${result.resolved.sku || "SKU not set"}` : "No item resolved"}</p>
-          </div>
-        )}
-      </form>
-    </section>
+      )}
+    </form>
+  );
+}
+
+function DeviceWorkspace({ session, network }) {
+  return (
+    <WorkspaceShell icon={Smartphone} label="Device Workspace" title="Device" helper="Physical handheld, Wi-Fi, battery, storage, and hardware status.">
+      <WorkspaceSection title="Current Device" helper="Read-only hardware and operating context.">
+        <InfoGrid rows={[["Device ID", session.deviceId], ["Store / Dept", session.departmentName], ["App Version", "ScanOps Preview"], ["Uptime", "Active shift"]]} />
+      </WorkspaceSection>
+      <WorkspaceSection title="Wi-Fi" helper="Network status lives here. Inventory bridge status lives under Sync.">
+        <InfoGrid rows={[["Status", "Connected"], ["Network", network], ["Signal", "Strong"], ["IP Address", "Auto assigned"]]} />
+        <SettingRow icon={Wifi} title="Wi-Fi Details" helper="SSID, IP, MAC, and signal strength." value="Ready" />
+      </WorkspaceSection>
+      <WorkspaceSection title="Power & Storage">
+        <InfoGrid rows={[["Battery", "70%"], ["Charging", "No"], ["Storage", "Healthy"], ["Memory", "Healthy"]]} />
+      </WorkspaceSection>
+      <PlannedList items={["Bluetooth", "NFC", "RFID reader", "Camera health", "USB", "GPS", "Docking station", "Charging cradle"]} />
+    </WorkspaceShell>
+  );
+}
+
+function ScannerWorkspace() {
+  return (
+    <WorkspaceShell icon={ScanBarcode} label="Scanner Workspace" title="Scanner" helper="Barcode input behaviour, fallback entry, and scanner testing.">
+      <WorkspaceSection title="Input Methods" helper="Scan first. Typing remains a fallback.">
+        <SettingRow icon={ScanBarcode} title="Hardware Scanner" helper="Primary barcode input." value="Enabled" />
+        <SettingRow icon={Camera} title="Camera Scanner" helper="Fallback scanning when hardware input is unavailable." value="Available" />
+        <SettingRow icon={Keyboard} title="Manual Entry" helper="Barcode, SKU, PLU, or item name fallback." value="Available" />
+      </WorkspaceSection>
+      <WorkspaceSection title="Scanner Test" helper="Test input only. No stock or price mutation.">
+        <ScannerTest />
+      </WorkspaceSection>
+      <PlannedList items={["RFID trigger", "Batch scan", "Continuous scan", "GS1 profiles", "Custom barcode profiles", "Decode performance"]} />
+    </WorkspaceShell>
+  );
+}
+
+function PrinterWorkspace() {
+  return (
+    <WorkspaceShell icon={Printer} label="Printer Workspace" title="Printer" helper="Label printer pairing, status, test print, and templates.">
+      <WorkspaceSection title="Printer Status" helper="Printing stays local to labels and does not change stock.">
+        <InfoGrid rows={[["Paired Printer", "Not paired"], ["Connection", "Pending setup"], ["Paper", "Unknown"], ["Density", "Default"]]} />
+      </WorkspaceSection>
+      <WorkspaceSection title="Actions">
+        <SettingRow icon={Printer} title="Pair Printer" helper="Connect a handheld or label printer." value="Planned" disabled />
+        <SettingRow icon={CheckCircle2} title="Test Print" helper="Print a test label when paired." value="Planned" disabled />
+        <SettingRow icon={Info} title="Label Templates" helper="Markdown and shelf-ticket templates." value="Planned" disabled />
+      </WorkspaceSection>
+      <PlannedList items={["Multiple printers", "Bluetooth printer", "Network printer", "Print queue", "Label templates", "Print history"]} />
+    </WorkspaceShell>
+  );
+}
+
+function SyncWorkspace({ network, syncSummary, navigate }) {
+  return (
+    <WorkspaceShell icon={Database} label="Sync Workspace" title="Sync & Connectivity" helper="Inventory Desktop pairing, bridge status, and queue visibility.">
+      <WorkspaceSection title="Bridge Status" helper="Wi-Fi status belongs under Device. Inventory bridge status belongs here.">
+        <InfoGrid rows={[["Bridge", syncSummary.issue ? "Attention" : "Ready"], ["Pending Queue", syncSummary.pending], ["Network", network], ["Environment", "Training / Live aware"]]} />
+      </WorkspaceSection>
+      <WorkspaceSection title="Actions">
+        <SettingRow icon={MonitorSmartphone} title="Desktop Pairing" helper="Pair this scanner with the Inventory Desktop bridge." value="Open" action onClick={() => navigate("/sync-handoff")} />
+        <SettingRow icon={RefreshCw} title="Retry Sync" helper="Retry queued handoff records from the sync workspace." value="Open" action onClick={() => navigate("/sync-queue")} />
+        <SettingRow icon={ShieldCheck} title="Environment" helper="Live / Training status is shown, not changed here." value="Read-only" />
+      </WorkspaceSection>
+      <PlannedList items={["Multi-site sync", "Cloud backup status", "Conflict resolution", "Incremental sync", "Connection history", "Sync analytics"]} />
+    </WorkspaceShell>
+  );
+}
+
+function FeedbackWorkspace({ feedback, setFeedback }) {
+  const toggle = (key) => setFeedback((current) => ({ ...current, [key]: !current[key] }));
+  return (
+    <WorkspaceShell icon={BellRing} label="Feedback Workspace" title="Feedback" helper="Local scan feedback preferences for sound, vibration, and haptics.">
+      <WorkspaceSection title="Scan Feedback" helper="These settings affect the operator experience only.">
+        <ToggleRow icon={Volume2} title="Success Beep" helper="Play a sound when a scan succeeds." checked={feedback.successBeep} onToggle={() => toggle("successBeep")} />
+        <ToggleRow icon={Volume2} title="Error Beep" helper="Play a sound when a scan fails." checked={feedback.errorBeep} onToggle={() => toggle("errorBeep")} />
+        <ToggleRow icon={Radio} title="Vibration" helper="Vibrate on scan confirmation." checked={feedback.vibration} onToggle={() => toggle("vibration")} />
+        <ToggleRow icon={BellRing} title="Haptic Feedback" helper="Use touch feedback on buttons." checked={feedback.haptics} onToggle={() => toggle("haptics")} />
+      </WorkspaceSection>
+      <PlannedList items={["Sound packs", "Silent shift mode", "Voice feedback", "Volume profiles", "Night mode"]} />
+    </WorkspaceShell>
+  );
+}
+
+function AccessibilityWorkspace({ access, setAccess }) {
+  const toggle = (key) => setAccess((current) => ({ ...current, [key]: !current[key] }));
+  return (
+    <WorkspaceShell icon={Accessibility} label="Accessibility Workspace" title="Accessibility" helper="Inclusive handheld usability settings.">
+      <WorkspaceSection title="Available Today" helper="Neurodiverse-friendly defaults without changing business rules.">
+        <ToggleRow icon={Accessibility} title="Large Text" helper="Increase text size for operational screens." checked={access.largeText} onToggle={() => toggle("largeText")} />
+        <ToggleRow icon={Accessibility} title="High Contrast" helper="Use stronger contrast for low-light warehouse use." checked={access.highContrast} onToggle={() => toggle("highContrast")} />
+        <ToggleRow icon={Accessibility} title="Reduce Motion" helper="Reduce unnecessary animation." checked={access.reduceMotion} onToggle={() => toggle("reduceMotion")} />
+      </WorkspaceSection>
+      <PlannedList items={["Left-hand mode", "Colour-blind themes", "Large touch mode", "Voice guidance", "ADHD Focus Mode", "ASD Low-Stimulation Mode"]} />
+    </WorkspaceShell>
+  );
+}
+
+function SessionWorkspace({ session, timeout, setTimeoutValue }) {
+  return (
+    <WorkspaceShell icon={LockKeyhole} label="Session Workspace" title="Session" helper="Current user, shift, timeout, lock, and sign out controls.">
+      <WorkspaceSection title="Current Session">
+        <InfoGrid rows={[["User", session.actorName], ["Role", session.actorRole], ["Store / Dept", session.departmentName], ["Device", session.deviceId]]} />
+      </WorkspaceSection>
+      <WorkspaceSection title="Idle Timeout" helper="Auto sign-out protects shared handheld devices.">
+        <ChoiceRow title="Auto Sign Out" choices={["Off", "15 min", "30 min"]} value={timeout} onChange={setTimeoutValue} />
+        <SettingRow icon={LockKeyhole} title="Session Lock" helper="Lock scanner after idle timeout." value={timeout === "Off" ? "Off" : "On"} />
+        <SettingRow icon={UserRound} title="Sign Out" helper="End this scanner user session." value="Planned" disabled />
+      </WorkspaceSection>
+      <PlannedList items={["PIN unlock", "Biometric unlock", "Shift handover", "Device reservation", "SSO", "MFA"]} />
+    </WorkspaceShell>
+  );
+}
+
+function DiagnosticsWorkspace({ network, syncSummary }) {
+  return (
+    <WorkspaceShell icon={Activity} label="Diagnostics Workspace" title="Diagnostics" helper="Device, scanner, printer, network, and sync tests.">
+      <WorkspaceSection title="Health Checks">
+        <InfoGrid rows={[["Device", "Healthy"], ["Network", network], ["Sync", syncSummary.issue ? "Attention" : "Ready"], ["Printer", "Not paired"]]} />
+      </WorkspaceSection>
+      <WorkspaceSection title="Scanner Test" helper="Use this to confirm scan input without changing inventory.">
+        <ScannerTest />
+      </WorkspaceSection>
+      <WorkspaceSection title="Support Actions">
+        <SettingRow icon={Activity} title="Export Support Bundle" helper="Package logs for support review." value="Planned" disabled />
+        <SettingRow icon={PlugZap} title="Remote Support Session" helper="Start support session with permission." value="Planned" disabled />
+      </WorkspaceSection>
+      <PlannedList items={["Hardware diagnostics", "RFID diagnostics", "Camera diagnostics", "Battery report", "Export support bundle", "Remote support session"]} />
+    </WorkspaceShell>
+  );
+}
+
+function AboutWorkspace() {
+  return (
+    <WorkspaceShell icon={Info} label="About Workspace" title="About ScanOps" helper="Version, build, environment, support, and compatibility information.">
+      <WorkspaceSection title="Product">
+        <InfoGrid rows={[["Product", "Invyra ScanOps"], ["Build", "Preview"], ["Environment", "Training / Live aware"], ["Support", "Invyra support"]]} />
+      </WorkspaceSection>
+      <WorkspaceSection title="Compatibility">
+        <InfoGrid rows={[["Bridge", "Compatible"], ["Database", "Desktop owned"], ["Firmware", "Device managed"], ["License", "Pilot"]]} />
+      </WorkspaceSection>
+      <PlannedList items={["Release notes", "Component versions", "Bridge version", "Firmware compatibility", "Database compatibility", "Licensing"]} />
+    </WorkspaceShell>
   );
 }
 
 export default function ScannerSettings() {
   const session = useScanOpsSession();
+  const navigate = useNavigate();
   const network = getNetworkMode();
   const syncSummary = getSyncSummary();
   const [activeKey, setActiveKey] = useState("device");
+  const [feedback, setFeedback] = useState({ successBeep: true, errorBeep: true, vibration: true, haptics: true });
+  const [access, setAccess] = useState({ largeText: true, highContrast: true, reduceMotion: false });
+  const [timeout, setTimeoutValue] = useState("30 min");
+
+  const renderWorkspace = () => {
+    switch (activeKey) {
+      case "device": return <DeviceWorkspace session={session} network={network} />;
+      case "scanner": return <ScannerWorkspace />;
+      case "printer": return <PrinterWorkspace />;
+      case "sync": return <SyncWorkspace network={network} syncSummary={syncSummary} navigate={navigate} />;
+      case "feedback": return <FeedbackWorkspace feedback={feedback} setFeedback={setFeedback} />;
+      case "accessibility": return <AccessibilityWorkspace access={access} setAccess={setAccess} />;
+      case "session": return <SessionWorkspace session={session} timeout={timeout} setTimeoutValue={setTimeoutValue} />;
+      case "diagnostics": return <DiagnosticsWorkspace network={network} syncSummary={syncSummary} />;
+      case "about": return <AboutWorkspace />;
+      default: return <DeviceWorkspace session={session} network={network} />;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col overflow-x-hidden">
@@ -240,8 +391,7 @@ export default function ScannerSettings() {
           ))}
         </section>
 
-        <DetailPanel activeKey={activeKey} session={session} network={network} syncSummary={syncSummary} />
-        {(activeKey === "scanner" || activeKey === "diagnostics") && <ScannerTest />}
+        {renderWorkspace()}
 
         <section className="mt-2 rounded-2xl border border-amber-300/20 bg-amber-900/20 px-3 py-2">
           <p className="text-xs font-black leading-snug text-amber-100">Settings configures the scanner and session only. Inventory rules, roles, pricing, ledger, audit, and business configuration remain owned by Inventory Desktop.</p>
