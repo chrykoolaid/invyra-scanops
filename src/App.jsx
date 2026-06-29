@@ -22,7 +22,7 @@ import More from './pages/More';
 import SyncHandoff from './pages/SyncHandoff';
 import SyncQueue from './pages/SyncQueue';
 import ShelfTickets from './pages/ShelfTickets';
-import Transfers from './pages/Transfers';
+import Transfers from './pages/TransfersOperator';
 import ProductIdentityReview from './pages/ProductIdentityReview';
 import ScanOpsReporting from './pages/ScanOpsReporting';
 import DeviceGovernance from './pages/DeviceGovernance';
@@ -81,7 +81,7 @@ const getAppEscapeMeta = (pathname) => {
     "/inventory-sync": { title: "Sync Status", subtitle: "Queue, status, setup, and review" },
     "/sync-queue": { title: "Sync Status", subtitle: "Device queue and errors" },
     "/shelf-tickets": { title: "Shelf Tickets", subtitle: "Prepare shelf ticket work" },
-    "/transfers": { title: "Transfers", subtitle: "Move stock between locations" },
+    "/transfers": { title: "Transfers", subtitle: "Set route, scan item, move quantity, save" },
     "/product-identity-review": { title: "Product Review", subtitle: "Resolve scanned item identity" },
     "/scanops-reporting": { title: "Reporting", subtitle: "Review ScanOps activity" },
     "/device-governance": { title: "Device & Shift Governance", subtitle: "Review device readiness" },
