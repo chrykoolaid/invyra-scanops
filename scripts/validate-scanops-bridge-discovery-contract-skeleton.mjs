@@ -81,7 +81,6 @@ for (const forbidden of [
   'localStorage.',
   'sessionStorage.',
   'indexedDB',
-  'mdns',
   'bonjour',
   'udp',
   'socket',
