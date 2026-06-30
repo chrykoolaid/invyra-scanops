@@ -35,6 +35,7 @@
     "validate:scanops-bridge-training-handshake-preparation": "node scripts/validate-scanops-bridge-training-handshake-preparation.mjs",
     "validate:scanops-bridge-handshake-candidate": "node scripts/validate-scanops-bridge-handshake-candidate.mjs",
     "validate:scanops-bridge-transport-client-foundation": "node scripts/validate-scanops-bridge-transport-client-foundation.mjs",
+    "validate:scanops-bridge-queue-sync-receipts": "node scripts/validate-scanops-bridge-queue-sync-receipts.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -80,7 +81,6 @@
     "embla-carousel-react": "^8.5.2",
     "framer-motion": "^11.16.4",
     "html2canvas": "^1.4.1",
-    "input-otp": "^1.4.2",
     "jspdf": "^4.2.1",
     "lodash": "^4.17.21",
     "lucide-react": "^0.475.0",
