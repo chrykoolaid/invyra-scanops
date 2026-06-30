@@ -1,10 +1,18 @@
-// Phase 32-A1: readiness always reports inactive communication, persistence, and mutation.
+// Phase 32-A4: readiness always reports inactive communication, persistence, mutation, and operational capability.
 import type {
   BridgeRuntimeEnvironment,
   BridgeRuntimeGuardrailStatus,
   BridgeRuntimeLifecycleState,
   BridgeRuntimeReadiness,
 } from "./bridgeRuntimeTypes";
+
+import type {
+  BridgeFeatureGateRegistry,
+} from "./bridgeFeatureGateTypes";
+
+import type {
+  BridgeRuntimeConfig,
+} from "./bridgeRuntimeConfigTypes";
 
 export const createBridgeRuntimeGuardrailStatus = (): BridgeRuntimeGuardrailStatus => ({
   liveActivationBlocked: true,
@@ -30,10 +38,14 @@ export const buildBridgeRuntimeReadiness = ({
   environment,
   lifecycleState,
   reason,
+  runtimeConfig,
+  featureGates,
 }: {
   environment: BridgeRuntimeEnvironment;
   lifecycleState: BridgeRuntimeLifecycleState;
   reason: string;
+  runtimeConfig: BridgeRuntimeConfig;
+  featureGates: BridgeFeatureGateRegistry;
 }): BridgeRuntimeReadiness => ({
   ready: lifecycleState === "READY_TEST_IDLE",
   environment,
@@ -42,18 +54,27 @@ export const buildBridgeRuntimeReadiness = ({
   communicationActive: false,
   persistenceActive: false,
   mutationActive: false,
+  operationalCapabilityActive: false,
+  runtimeConfig,
+  featureGates,
   guardrails: createBridgeRuntimeGuardrailStatus(),
 });
 
 export const buildFaultedBridgeRuntimeReadiness = ({
   environment,
   reason,
+  runtimeConfig,
+  featureGates,
 }: {
   environment: BridgeRuntimeEnvironment;
   reason: string;
+  runtimeConfig: BridgeRuntimeConfig;
+  featureGates: BridgeFeatureGateRegistry;
 }): BridgeRuntimeReadiness =>
   buildBridgeRuntimeReadiness({
     environment,
     lifecycleState: "FAULTED",
     reason,
+    runtimeConfig,
+    featureGates,
   });
