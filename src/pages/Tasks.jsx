@@ -7,6 +7,7 @@ import {
   ClipboardCheck,
   Clock3,
   Flag,
+  Info,
   Link2,
   ListChecks,
   Lock,
@@ -43,7 +44,6 @@ import {
   TASK_DUE_STATES,
   TASK_PRIORITIES,
   TASK_STATUSES,
-  TASK_TABS,
   updateTaskStatus,
 } from "../lib/scanOpsTasks";
 
@@ -52,38 +52,11 @@ const BUTTON_SECONDARY = "w-full min-h-12 rounded-2xl bg-secondary px-3 text-sm 
 const BUTTON_MUTED = "w-full min-h-12 rounded-2xl border border-border bg-card px-3 text-sm font-black text-foreground active:bg-secondary disabled:opacity-40 flex items-center justify-center gap-2";
 const CHIP_BUTTON = "min-h-11 rounded-2xl px-3 text-xs font-black border transition-all active:scale-[0.98] whitespace-nowrap";
 
-const PRIORITY_OPTIONS = [
-  { id: "all", label: "All" },
-  { id: TASK_PRIORITIES.CRITICAL, label: "Critical" },
-  { id: TASK_PRIORITIES.HIGH, label: "High" },
-  { id: TASK_PRIORITIES.MEDIUM, label: "Medium" },
-  { id: TASK_PRIORITIES.LOW, label: "Low" },
-];
-
-const DUE_OPTIONS = [
-  { id: "all", label: "All" },
-  { id: TASK_DUE_STATES.OVERDUE, label: "Overdue" },
-  { id: TASK_DUE_STATES.NOW, label: "Due now" },
-  { id: TASK_DUE_STATES.TODAY, label: "Due today" },
-  { id: TASK_DUE_STATES.LATER, label: "Due later" },
-  { id: TASK_DUE_STATES.NONE, label: "No due date" },
-];
-
-const STATUS_OPTIONS = [
-  { id: "all", label: "All" },
-  { id: TASK_STATUSES.OPEN, label: "Open" },
-  { id: TASK_STATUSES.IN_PROGRESS, label: "In Progress" },
-  { id: TASK_STATUSES.BLOCKED, label: "Blocked" },
-  { id: TASK_STATUSES.ESCALATED, label: "Escalated" },
-  { id: TASK_STATUSES.DONE, label: "Done" },
-];
-
-const ASSIGNED_OPTIONS = [
-  { id: "all", label: "All" },
-  { id: "mine", label: "My scope" },
-  { id: "department", label: "My department" },
-  { id: "unassigned", label: "Unassigned" },
-  ...TASK_DEPARTMENTS.map((department) => ({ id: department, label: department })),
+const TASK_FILTER_TABS = [
+  { id: "mine", label: "Mine" },
+  { id: "team", label: "Team" },
+  { id: "escalated", label: "Escalated" },
+  { id: "done", label: "Done" },
 ];
 
 function priorityClass(priority) {
@@ -91,47 +64,51 @@ function priorityClass(priority) {
     case TASK_PRIORITIES.CRITICAL:
       return "border-destructive/25 bg-destructive/10 text-destructive";
     case TASK_PRIORITIES.HIGH:
-      return "border-amber-500/25 bg-amber-500/10 text-amber-700";
+      return "border-destructive/25 bg-destructive/10 text-destructive";
     case TASK_PRIORITIES.LOW:
       return "border-border bg-muted text-muted-foreground";
     default:
-      return "border-primary/20 bg-primary/10 text-primary";
+      return "border-amber-500/25 bg-amber-500/10 text-amber-700";
   }
 }
 
 function dueClass(dueState) {
   switch (dueState) {
     case TASK_DUE_STATES.OVERDUE:
-      return "border-destructive/25 bg-destructive/10 text-destructive";
+      return "text-destructive";
     case TASK_DUE_STATES.NOW:
-      return "border-amber-500/25 bg-amber-500/10 text-amber-700";
     case TASK_DUE_STATES.TODAY:
-      return "border-primary/20 bg-primary/10 text-primary";
+      return "text-amber-700";
     default:
-      return "border-border bg-secondary text-secondary-foreground";
+      return "text-primary";
   }
 }
 
 function statusClass(status) {
   switch (status) {
     case TASK_STATUSES.DONE:
-      return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700";
+      return "text-emerald-700";
     case TASK_STATUSES.IN_PROGRESS:
-      return "border-primary/20 bg-primary/10 text-primary";
+      return "text-primary";
     case TASK_STATUSES.BLOCKED:
-      return "border-amber-500/25 bg-amber-500/10 text-amber-700";
+      return "text-amber-700";
     case TASK_STATUSES.ESCALATED:
-      return "border-destructive/25 bg-destructive/10 text-destructive";
+      return "text-violet-700";
     default:
-      return "border-border bg-secondary text-secondary-foreground";
+      return "text-muted-foreground";
   }
 }
 
+function detailBadgeClass(status) {
+  if (status === TASK_STATUSES.ESCALATED) return "border-violet-500/25 bg-violet-500/10 text-violet-700";
+  return "border-primary/20 bg-primary/10 text-primary";
+}
+
 function dueDateLabel(value) {
-  if (!value) return "—";
+  if (!value) return "â€”";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} · ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  return `${date.toLocaleDateString([], { month: "short", day: "numeric" })} Â· ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 function sourceSnapshotText(task) {
@@ -146,7 +123,22 @@ function sourceSnapshotText(task) {
     snap.difference_quantity != null && `Diff ${snap.difference_quantity > 0 ? "+" : ""}${snap.difference_quantity}`,
     snap.variance_quantity != null && `Variance ${snap.variance_quantity > 0 ? "+" : ""}${snap.variance_quantity}`,
     snap.item_count != null && `${snap.item_count} items`,
-  ].filter(Boolean).join(" · ");
+  ].filter(Boolean).join(" Â· ");
+}
+
+function taskListStatus(task) {
+  if (task.status === TASK_STATUSES.ESCALATED) return "Needs review";
+  if ([TASK_DUE_STATES.OVERDUE, TASK_DUE_STATES.NOW, TASK_DUE_STATES.TODAY].includes(task.due_state)) {
+    return getTaskDueStateLabel(task.due_state);
+  }
+  return getTaskStatusLabel(task.status);
+}
+
+function taskListStatusClass(task) {
+  if ([TASK_DUE_STATES.OVERDUE, TASK_DUE_STATES.NOW, TASK_DUE_STATES.TODAY].includes(task.due_state)) {
+    return dueClass(task.due_state);
+  }
+  return statusClass(task.status);
 }
 
 export default function Tasks() {
@@ -165,7 +157,7 @@ export default function Tasks() {
   const taskFilters = { tab: activeTab };
   const visibleTasks = useMemo(() => sortTasksByOperationalPriority(filterTasks(tasks, taskFilters, session)), [tasks, activeTab, session]);
   const stats = useMemo(() => getTaskStats(tasks, session), [tasks, session]);
-
+  const doneCount = useMemo(() => tasks.map(normalizeTask).filter((task) => task.status === TASK_STATUSES.DONE).length, [tasks]);
 
   const recordAndSet = (task, nextStatus, eventType, extra = {}) => {
     const updated = updateTaskStatus(tasks, task.taskId, nextStatus, extra, session);
@@ -269,8 +261,8 @@ export default function Tasks() {
             </div>
             <div className="grid grid-cols-3 gap-2">
               <Badge label={getTaskPriority(selectedTask)} className={priorityClass(selectedTask.priority)} />
-              <Badge label={getTaskDueStateLabel(selectedTask.due_state)} className={dueClass(selectedTask.due_state)} />
-              <Badge label={getTaskStatusLabel(selectedTask.status)} className={statusClass(selectedTask.status)} />
+              <Badge label={getTaskDueStateLabel(selectedTask.due_state)} className="border-border bg-secondary text-secondary-foreground" />
+              <Badge label={getTaskStatusLabel(selectedTask.status)} className={detailBadgeClass(selectedTask.status)} />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <InfoBlock label="Assigned" value={selectedTask.assigned_user_name || selectedTask.assigned_department || "Unassigned"} />
@@ -287,7 +279,7 @@ export default function Tasks() {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Source</p>
-                <h3 className="mt-1 break-words text-base font-black text-foreground">{selectedTask.source_module} · {selectedTask.source_ref}</h3>
+                <h3 className="mt-1 break-words text-base font-black text-foreground">{selectedTask.source_module} Â· {selectedTask.source_ref}</h3>
                 <p className="mt-1 break-words text-xs font-bold text-muted-foreground">{sourceSnapshotText(selectedTask) || selectedTask.source_status_snapshot || "Source evidence linked."}</p>
               </div>
             </div>
@@ -308,8 +300,8 @@ export default function Tasks() {
           {selectedTask.status === TASK_STATUSES.ESCALATED && (
             <Notice icon={AlertTriangle} title="Escalated" helper={selectedTask.escalation_reason || "Supervisor, Manager, or Admin review required."} danger />
           )}
-          {selectedTask.started_at && <InfoBlock label="Started" value={`${selectedTask.started_by || "Operator"} · ${dueDateLabel(selectedTask.started_at)}`} />}
-          {selectedTask.completed_at && <InfoBlock label="Completed" value={`${selectedTask.completed_by || "Operator"} · ${dueDateLabel(selectedTask.completed_at)}`} />}
+          {selectedTask.started_at && <InfoBlock label="Started" value={`${selectedTask.started_by || "Operator"} Â· ${dueDateLabel(selectedTask.started_at)}`} />}
+          {selectedTask.completed_at && <InfoBlock label="Completed" value={`${selectedTask.completed_by || "Operator"} Â· ${dueDateLabel(selectedTask.completed_at)}`} />}
 
           {lastEvent && <EventProof event={lastEvent} />}
 
@@ -364,29 +356,28 @@ export default function Tasks() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
-      <PageHeader title="Tasks" subtitle="Priority work queue" />
+      <PageHeader title="Tasks" subtitle="Assigned frontline work" />
       <main data-scanops-scroll className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 pb-8 space-y-3">
         <SectionCard className="space-y-3">
-          <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-              <ListChecks className="h-5 w-5" />
+          <div className="flex items-start gap-3 min-w-0">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <ListChecks className="h-6 w-6" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-black uppercase tracking-wider text-primary">Stage X</p>
-              <h2 className="mt-1 text-lg font-black text-foreground">Task Intelligence</h2>
-              <p className="mt-1 break-words text-sm font-semibold text-muted-foreground">Simple status sections for source-linked frontline work.</p>
+              <h2 className="text-xl font-black leading-tight text-foreground">Tasks</h2>
+              <p className="mt-1 break-words text-sm font-semibold text-muted-foreground">Assigned frontline work</p>
             </div>
           </div>
           <div className="grid grid-cols-4 gap-2">
             <StatCard label="Mine" value={stats.mine} />
             <StatCard label="Due" value={stats.dueNow} />
             <StatCard label="Esc." value={stats.escalated} />
-            <StatCard label="Active" value={stats.active} />
+            <StatCard label="Done" value={doneCount} />
           </div>
         </SectionCard>
 
-        <section className="grid grid-cols-4 gap-2 min-w-0">
-          {TASK_TABS.map((tab) => (
+        <section className="grid grid-cols-4 gap-2 min-w-0" aria-label="Task filters">
+          {TASK_FILTER_TABS.map((tab) => (
             <button
               key={tab.id}
               type="button"
@@ -398,9 +389,13 @@ export default function Tasks() {
           ))}
         </section>
 
-        <SectionCard className="space-y-2">
-          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Task Sections</p>
-          <p className="text-sm font-semibold text-muted-foreground">Use the buttons above: My Tasks, Team Tasks, Escalated, and Done. Advanced task filtering belongs on desktop/admin surfaces.</p>
+        <SectionCard>
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <Info className="h-5 w-5" />
+            </div>
+            <p className="break-words text-sm font-semibold text-muted-foreground">Focus on the next action.</p>
+          </div>
         </SectionCard>
 
         <section className="space-y-3 min-w-0">
@@ -408,7 +403,7 @@ export default function Tasks() {
             <div className="rounded-2xl border border-border bg-card p-5 text-center">
               <Clock3 className="mx-auto h-8 w-8 text-muted-foreground" />
               <p className="mt-3 font-black text-foreground">No tasks here</p>
-              <p className="mt-1 text-sm font-semibold text-muted-foreground">Tasks will appear here after a workflow creates real local evidence.</p>
+              <p className="mt-1 text-sm font-semibold text-muted-foreground">Assigned work will appear here when workflows create local evidence.</p>
             </div>
           ) : (
             visibleTasks.map((task) => <TaskCard key={task.taskId} task={task} onOpen={() => setSelectedTaskId(task.taskId)} />)
@@ -438,35 +433,32 @@ export default function Tasks() {
 
 function TaskCard({ task, onOpen }) {
   const normalized = normalizeTask(task);
-  const sourceText = `${normalized.source_module} · ${normalized.source_ref}`;
+  const statusText = taskListStatus(normalized);
+  const statusTextClass = taskListStatusClass(normalized);
+  const priorityLabel = normalized.status === TASK_STATUSES.ESCALATED ? "Escalated" : getTaskPriority(normalized);
+
   return (
-    <article className="rounded-2xl border border-border bg-card p-4 space-y-3 min-w-0">
-      <div className="flex items-start justify-between gap-3 min-w-0">
-        <div className="min-w-0 flex-1">
-          <div className="mb-2 flex flex-wrap gap-2">
-            <Badge label={getTaskPriority(normalized)} className={priorityClass(normalized.priority)} />
-            <Badge label={getTaskDueStateLabel(normalized.due_state)} className={dueClass(normalized.due_state)} />
-            <Badge label={getTaskStatusLabel(normalized.status)} className={statusClass(normalized.status)} />
-          </div>
+    <button type="button" onClick={onOpen} className="w-full rounded-2xl border border-border bg-card p-4 text-left transition active:scale-[0.99] active:bg-secondary/60">
+      <div className="grid grid-cols-[auto,1fr,auto] items-center gap-3 min-w-0">
+        <Badge label={priorityLabel} className={normalized.status === TASK_STATUSES.ESCALATED ? "border-violet-500/25 bg-violet-500/10 text-violet-700" : priorityClass(normalized.priority)} />
+        <div className="min-w-0">
           <h3 className="break-words text-base font-black leading-tight text-foreground">{normalized.title}</h3>
-          <p className="mt-1 break-words text-xs font-bold text-muted-foreground">Source: {sourceText}</p>
-          <p className="mt-1 break-words text-xs font-bold text-muted-foreground">Assigned: {normalized.assigned_user_name || normalized.assigned_department || "Unassigned"}</p>
+          <p className="mt-1 break-words text-sm font-semibold text-muted-foreground">Source: {normalized.source_module}</p>
+          <p className={`mt-2 flex items-center gap-2 break-words text-sm font-black ${statusTextClass}`}>
+            <span className="h-2 w-2 shrink-0 rounded-full bg-current" />
+            {statusText}
+          </p>
         </div>
-        <ClipboardCheck className="h-5 w-5 shrink-0 text-primary" />
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border bg-background text-primary">
+          <ArrowRight className="h-5 w-5" />
+        </div>
       </div>
-      <div className="rounded-2xl bg-secondary/60 px-3 py-2">
-        <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Next action</p>
-        <p className="mt-1 break-words text-sm font-bold text-foreground">{normalized.action_needed}</p>
-      </div>
-      <button type="button" onClick={onOpen} className={BUTTON_PRIMARY}>
-        Open Task <ArrowRight className="h-4 w-4" />
-      </button>
-    </article>
+    </button>
   );
 }
 
 function Badge({ label, className }) {
-  return <span className={`inline-flex min-h-7 items-center rounded-full border px-2.5 text-[10px] font-black uppercase tracking-wide ${className}`}>{label}</span>;
+  return <span className={`inline-flex min-h-8 shrink-0 items-center rounded-full border px-3 text-[10px] font-black uppercase tracking-wide ${className}`}>{label}</span>;
 }
 
 function StatCard({ label, value }) {
@@ -482,7 +474,7 @@ function InfoBlock({ label, value }) {
   return (
     <div className="min-w-0 rounded-2xl bg-secondary/60 px-3 py-2">
       <p className="truncate text-[10px] font-black uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="mt-1 break-words text-sm font-black text-foreground">{value || "—"}</p>
+      <p className="mt-1 break-words text-sm font-black text-foreground">{value || "â€”"}</p>
     </div>
   );
 }

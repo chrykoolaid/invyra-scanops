@@ -5,7 +5,7 @@ import { Bell, Home, ScanLine } from "lucide-react";
 const NAV_ITEMS = [
   { label: "Home", to: "/", icon: Home, matches: ["/"] },
   { label: "Scan", to: "/scan", icon: ScanLine, primary: true, matches: ["/scan", "/product"] },
-  { label: "Alerts", to: "/alerts", icon: Bell, matches: ["/alerts", "/tasks"] },
+  { label: "Alerts", to: "/alerts", icon: Bell, matches: ["/alerts"] },
 ];
 
 export default function BottomNavigation() {
