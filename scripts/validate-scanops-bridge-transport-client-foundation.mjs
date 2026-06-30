@@ -111,7 +111,7 @@ const invalidReceiptClient = createScanOpsBridgeTransportClient({
   dispatch: async () => Object.freeze({ receiptId: '', envelopeId: 'wrong-envelope', status: 'ACCEPTED' }),
 });
 const invalidReceipt = await invalidReceiptClient.sendHandoff({ ...envelope, envelopeId: 'scanops-env-phase6-invalid-receipt' });
-
+const httpEnvelope = { ...envelope, envelopeId: 'scanops-env-phase6-http-adapter' };
 let httpAdapterCalled = false;
 const httpAdapter = createScanOpsBridgeHttpDispatchAdapter(async (url, request) => {
   httpAdapterCalled = true;
@@ -119,7 +119,7 @@ const httpAdapter = createScanOpsBridgeHttpDispatchAdapter(async (url, request) 
   assert(request.method === 'POST', 'HTTP adapter must use POST');
   assert(request.headers['Content-Type'] === 'application/json', 'HTTP adapter must send JSON');
   const body = JSON.parse(request.body);
-  assert(body.envelope.envelopeId === envelope.envelopeId, 'HTTP adapter body must include envelope');
+  assert(body.envelope.envelopeId === httpEnvelope.envelopeId, 'HTTP adapter body must include submitted envelope');
   return Object.freeze({
     ok: true,
     status: 200,
@@ -139,7 +139,7 @@ const httpAdapter = createScanOpsBridgeHttpDispatchAdapter(async (url, request) 
   });
 });
 const httpClient = createScanOpsBridgeTransportClient({ endpoint, now: stableNow, dispatch: httpAdapter });
-const httpAccepted = await httpClient.sendHandoff({ ...envelope, envelopeId: 'scanops-env-phase6-http-adapter' });
+const httpAccepted = await httpClient.sendHandoff(httpEnvelope);
 
 assert(readiness.ready === true, 'client with endpoint and dispatch must be ready');
 assert(accepted.status === SCANOPS_BRIDGE_TRANSPORT_CLIENT_STATUSES.RECEIPT_ACCEPTED, 'accepted desktop receipt must produce RECEIPT_ACCEPTED');
