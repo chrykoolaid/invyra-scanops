@@ -5,6 +5,7 @@ import {
   SCANOPS_BRIDGE_TRANSPORT_CLIENT_STATUSES,
   SCANOPS_BRIDGE_TRANSPORT_OPERATION_TYPES,
   buildScanOpsBridgeTransportEnvelope,
+  createScanOpsBridgeHttpDispatchAdapter,
   createScanOpsBridgeTransportClient,
   getScanOpsBridgeTransportClientDiagnostics,
 } from '../src/inventory-bridge/transportClient/index.js';
@@ -111,6 +112,35 @@ const invalidReceiptClient = createScanOpsBridgeTransportClient({
 });
 const invalidReceipt = await invalidReceiptClient.sendHandoff({ ...envelope, envelopeId: 'scanops-env-phase6-invalid-receipt' });
 
+let httpAdapterCalled = false;
+const httpAdapter = createScanOpsBridgeHttpDispatchAdapter(async (url, request) => {
+  httpAdapterCalled = true;
+  assert(url === 'http://127.0.0.1:8787/scanops/handoff', 'HTTP adapter must target endpoint URL');
+  assert(request.method === 'POST', 'HTTP adapter must use POST');
+  assert(request.headers['Content-Type'] === 'application/json', 'HTTP adapter must send JSON');
+  const body = JSON.parse(request.body);
+  assert(body.envelope.envelopeId === envelope.envelopeId, 'HTTP adapter body must include envelope');
+  return Object.freeze({
+    ok: true,
+    status: 200,
+    json: async () => Object.freeze({
+      receiptId: `receipt:http:${body.envelope.envelopeId}`,
+      envelopeId: body.envelope.envelopeId,
+      status: 'ACCEPTED',
+      receivedAt: stableNow(),
+      processedAt: stableNow(),
+      desktopId: endpoint.desktopId,
+      environment: endpoint.environment,
+      operationType: body.envelope.operationType,
+      message: 'Accepted by injected HTTP adapter.',
+      errors: [],
+      warnings: [],
+    }),
+  });
+});
+const httpClient = createScanOpsBridgeTransportClient({ endpoint, now: stableNow, dispatch: httpAdapter });
+const httpAccepted = await httpClient.sendHandoff({ ...envelope, envelopeId: 'scanops-env-phase6-http-adapter' });
+
 assert(readiness.ready === true, 'client with endpoint and dispatch must be ready');
 assert(accepted.status === SCANOPS_BRIDGE_TRANSPORT_CLIENT_STATUSES.RECEIPT_ACCEPTED, 'accepted desktop receipt must produce RECEIPT_ACCEPTED');
 assert(duplicate.status === SCANOPS_BRIDGE_TRANSPORT_CLIENT_STATUSES.RECEIPT_DUPLICATE, 'duplicate desktop receipt must produce RECEIPT_DUPLICATE');
@@ -120,9 +150,11 @@ assert(missingPayload.status === SCANOPS_BRIDGE_TRANSPORT_CLIENT_STATUSES.BLOCKE
 assert(missingPayload.dispatchAttempted === false, 'missing payload must not dispatch');
 assert(transportError.status === SCANOPS_BRIDGE_TRANSPORT_CLIENT_STATUSES.TRANSPORT_ERROR, 'dispatch adapter errors must become transport errors');
 assert(invalidReceipt.status === SCANOPS_BRIDGE_TRANSPORT_CLIENT_STATUSES.RECEIPT_INVALID, 'invalid desktop receipt must be rejected');
+assert(httpAdapterCalled === true, 'HTTP adapter must be invoked through transport client');
+assert(httpAccepted.status === SCANOPS_BRIDGE_TRANSPORT_CLIENT_STATUSES.RECEIPT_ACCEPTED, 'HTTP adapter receipt must be processed');
 assert(dispatchCalls === 2, 'valid accepted and duplicate handoffs should dispatch exactly twice');
 
-for (const result of [blockedSend, accepted, duplicate, unsupported, missingPayload, transportError, invalidReceipt]) {
+for (const result of [blockedSend, accepted, duplicate, unsupported, missingPayload, transportError, invalidReceipt, httpAccepted]) {
   assert(result.inventoryMutationAttempted === false, `${result.status} must not attempt Inventory mutation`);
   assert(result.scanOpsMutationAttempted === false, `${result.status} must not attempt ScanOps mutation`);
   assert(result.stockMutationAttempted === false, `${result.status} must not attempt stock mutation`);
@@ -137,6 +169,7 @@ for (const check of diagnostics.checks) {
 const currentFile = fileURLToPath(import.meta.url);
 const repoRoot = path.resolve(path.dirname(currentFile), '..');
 const scannedFiles = Object.freeze([
+  'src/inventory-bridge/transportClient/httpDispatchAdapter.js',
   'src/inventory-bridge/transportClient/scanOpsTransportClient.js',
   'src/inventory-bridge/transportClient/index.js',
 ]);
@@ -166,4 +199,4 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log('ScanOps bridge Phase 6 transport client foundation validates envelope building, guarded dispatch, desktop receipt processing, transport errors, duplicate receipts, and no Inventory/ScanOps/stock mutation.');
+console.log('ScanOps bridge Phase 6 transport client foundation validates envelope building, guarded dispatch, injected HTTP dispatch, desktop receipt processing, transport errors, duplicate receipts, and no Inventory/ScanOps/stock mutation.');
