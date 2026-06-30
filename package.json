@@ -34,6 +34,7 @@
     "validate:scanops-bridge-local-transport-disabled": "node scripts/validate-scanops-bridge-local-transport-disabled.mjs",
     "validate:scanops-bridge-training-handshake-preparation": "node scripts/validate-scanops-bridge-training-handshake-preparation.mjs",
     "validate:scanops-bridge-handshake-candidate": "node scripts/validate-scanops-bridge-handshake-candidate.mjs",
+    "validate:scanops-bridge-transport-client-foundation": "node scripts/validate-scanops-bridge-transport-client-foundation.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
