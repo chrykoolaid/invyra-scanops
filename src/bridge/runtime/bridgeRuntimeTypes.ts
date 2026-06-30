@@ -1,3 +1,4 @@
+// Phase 32-A1: TEST-only bridge runtime type contract.
 export const BRIDGE_RUNTIME_VERSION = "32.A1.0";
 
 export const BRIDGE_ALLOWED_ENVIRONMENTS = ["TEST"] as const;
