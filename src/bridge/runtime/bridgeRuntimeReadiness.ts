@@ -1,3 +1,4 @@
+// Phase 32-A1: readiness always reports inactive communication, persistence, and mutation.
 import type {
   BridgeRuntimeEnvironment,
   BridgeRuntimeGuardrailStatus,
