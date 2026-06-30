@@ -13,6 +13,12 @@ import {
   buildFaultedBridgeRuntimeReadiness,
   createBridgeRuntimeGuardrailStatus,
 } from "./bridgeRuntimeReadiness";
+import {
+  createBridgeRuntimeConfig,
+} from "./bridgeRuntimeConfig";
+import {
+  createBridgeFeatureGateRegistry,
+} from "./bridgeFeatureGates";
 
 const TEST_ENVIRONMENT: BridgeRuntimeEnvironment = "TEST";
 
@@ -31,7 +37,7 @@ export class BridgeRuntime {
       runtimeVersion: BRIDGE_RUNTIME_VERSION,
       systemOfRecord: "Inventory Desktop",
       operationalLayer: "ScanOps",
-      phase: "32-A1",
+      phase: "32-A4",
     };
   }
 
@@ -47,7 +53,7 @@ export class BridgeRuntime {
     if (!this.isTestOnlyEnvironment()) {
       this.lifecycleState = "FAULTED";
       this.readinessReason =
-        "Bridge runtime refused startup because only TEST mode is allowed in Phase 32-A1.";
+        "Bridge runtime refused startup because only TEST mode is allowed in Phase 32-A4.";
       return this.getReadiness();
     }
 
@@ -56,7 +62,7 @@ export class BridgeRuntime {
 
     this.lifecycleState = "READY_TEST_IDLE";
     this.readinessReason =
-      "Bridge runtime is ready in TEST idle mode. Communication, persistence, and mutation remain disabled.";
+      "Bridge runtime is ready in TEST idle mode. Communication, persistence, mutation, and operational feature gates remain disabled.";
 
     return this.getReadiness();
   }
@@ -82,10 +88,15 @@ export class BridgeRuntime {
   }
 
   getReadiness(): BridgeRuntimeReadiness {
+    const runtimeConfig = createBridgeRuntimeConfig();
+    const featureGates = createBridgeFeatureGateRegistry();
+
     if (this.lifecycleState === "FAULTED") {
       return buildFaultedBridgeRuntimeReadiness({
         environment: this.environment,
         reason: this.readinessReason,
+        runtimeConfig,
+        featureGates,
       });
     }
 
@@ -93,15 +104,22 @@ export class BridgeRuntime {
       environment: this.environment,
       lifecycleState: this.lifecycleState,
       reason: this.readinessReason,
+      runtimeConfig,
+      featureGates,
     });
   }
 
   getSnapshot(): BridgeRuntimeSnapshot {
+    const runtimeConfig = createBridgeRuntimeConfig();
+    const featureGates = createBridgeFeatureGateRegistry();
+
     return {
       identity: this.getIdentity(),
       environment: this.environment,
       lifecycleState: this.lifecycleState,
       readiness: this.getReadiness(),
+      runtimeConfig,
+      featureGates,
     };
   }
 
