@@ -1,5 +1,13 @@
-// Phase 32-A1: TEST-only bridge runtime type contract.
-export const BRIDGE_RUNTIME_VERSION = "32.A1.0";
+import type {
+  BridgeFeatureGateRegistry,
+} from "./bridgeFeatureGateTypes";
+
+import type {
+  BridgeRuntimeConfig,
+} from "./bridgeRuntimeConfigTypes";
+
+// Phase 32-A4: TEST-only bridge runtime type contract with inactive gate snapshot.
+export const BRIDGE_RUNTIME_VERSION = "32.A4.0";
 
 export const BRIDGE_ALLOWED_ENVIRONMENTS = ["TEST"] as const;
 
@@ -50,7 +58,7 @@ export interface BridgeRuntimeIdentity {
   runtimeVersion: typeof BRIDGE_RUNTIME_VERSION;
   systemOfRecord: "Inventory Desktop";
   operationalLayer: "ScanOps";
-  phase: "32-A1";
+  phase: "32-A4";
 }
 
 export interface BridgeRuntimeReadiness {
@@ -61,6 +69,9 @@ export interface BridgeRuntimeReadiness {
   communicationActive: false;
   persistenceActive: false;
   mutationActive: false;
+  operationalCapabilityActive: false;
+  runtimeConfig: BridgeRuntimeConfig;
+  featureGates: BridgeFeatureGateRegistry;
   guardrails: BridgeRuntimeGuardrailStatus;
 }
 
@@ -69,6 +80,8 @@ export interface BridgeRuntimeSnapshot {
   environment: BridgeRuntimeEnvironment;
   lifecycleState: BridgeRuntimeLifecycleState;
   readiness: BridgeRuntimeReadiness;
+  runtimeConfig: BridgeRuntimeConfig;
+  featureGates: BridgeFeatureGateRegistry;
 }
 
 export interface BridgeRuntimeOptions {
