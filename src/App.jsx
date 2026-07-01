@@ -22,6 +22,7 @@ import Alerts from './pages/Alerts';
 import More from './pages/More';
 import ScanOpsHelp from './pages/ScanOpsHelp';
 import SyncHandoff from './pages/SyncHandoff';
+import ManualSyncControl from './pages/ManualSyncControl';
 import SyncQueue from './pages/SyncQueue';
 import ShelfTickets from './pages/ShelfTickets';
 import Transfers from './pages/TransfersOperator';
@@ -85,6 +86,7 @@ const getAppEscapeMeta = (pathname) => {
     "/waste": { title: "Waste", subtitle: "Scan item, classify loss, queue evidence" },
     "/expiry-check": { title: "Expiry Check", subtitle: "Scan item, confirm date, save freshness evidence" },
     "/inventory-sync": { title: "Sync Status", subtitle: "Queue, status, setup, and review" },
+    "/sync-control": { title: "Manual Sync", subtitle: "Operator-controlled bridge handoff" },
     "/sync-queue": { title: "Sync Status", subtitle: "Device queue and errors" },
     "/shelf-tickets": { title: "Shelf Tickets", subtitle: "Prepare shelf ticket work" },
     "/transfers": { title: "Transfers", subtitle: "Set route, scan item, move quantity, save" },
@@ -163,6 +165,7 @@ const AuthenticatedApp = () => {
             <Route path="/help" element={<ScanOpsHelp />} />
             <Route path="/sync-handoff" element={<SyncHandoff />} />
             <Route path="/inventory-sync" element={<SyncHandoff />} />
+            <Route path="/sync-control" element={<ManualSyncControl />} />
             <Route path="/sync-queue" element={<SyncQueue />} />
             <Route path="/shelf-tickets" element={<ShelfTickets />} />
             <Route path="/transfers" element={<Transfers />} />
