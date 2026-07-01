@@ -43,6 +43,7 @@
     "validate:scanops-bridge-manual-retry-ui-control": "node scripts/validate-scanops-bridge-manual-retry-ui-control.mjs",
     "validate:scanops-bridge-retry-result-acknowledgement-boundary": "node scripts/validate-scanops-bridge-retry-result-acknowledgement-boundary.mjs",
     "validate:scanops-bridge-retry-result-acknowledgement-summary-surface": "node scripts/validate-scanops-bridge-retry-result-acknowledgement-summary-surface.mjs",
+    "validate:scanops-bridge-retry-result-closure-readiness-surface": "node scripts/validate-scanops-bridge-retry-result-closure-readiness-surface.mjs",
     "validate:scanops-bridge-runtime-gate-snapshot": "node scripts/validate-scanops-bridge-runtime-gate-snapshot.mjs",
     "validate:scanops-bridge-feature-gate-accessors": "node scripts/validate-scanops-bridge-feature-gate-accessors.mjs",
     "validate:scanops-bridge-runtime-capability-guard": "node scripts/validate-scanops-bridge-runtime-capability-guard.mjs",
