@@ -7,6 +7,7 @@ import {
 } from "../../inventory-bridge/manualRetry/index.js";
 import { buildScanOpsRetryResultReceiptReviewBoundary } from "../../inventory-bridge/retryResultReceiptReview/index.js";
 import { buildScanOpsRetryResultAcknowledgementBoundary } from "../../inventory-bridge/retryResultAcknowledgement/index.js";
+import { buildScanOpsRetryResultAcknowledgementSummarySurface } from "../../inventory-bridge/retryResultAcknowledgementSummary/index.js";
 import { createScanOpsBridgeHttpDispatchAdapter } from "../../inventory-bridge/transportClient/index.js";
 
 function Metric({ label, value, helper }) {
@@ -71,6 +72,12 @@ function retryAcknowledgementStatusLabel(status) {
   return "Blocked";
 }
 
+function retryAcknowledgementSummaryStatusLabel(status) {
+  if (status === "RETRY_RESULT_ACKNOWLEDGEMENT_SUMMARY_READY") return "Ready";
+  if (status === "RETRY_RESULT_ACKNOWLEDGEMENT_SUMMARY_EMPTY") return "Empty";
+  return "Blocked";
+}
+
 export default function ReceiptDecisionIntentSurface({
   receiptReviewSurface,
   queueItems = [],
@@ -114,6 +121,11 @@ export default function ReceiptDecisionIntentSurface({
       now: nowIso,
     });
   }, [retryResultReceiptReviewBoundary, selectedRetryResultAcknowledgementsById]);
+
+  const retryResultAcknowledgementSummarySurface = useMemo(() => {
+    if (!retryResultAcknowledgementBoundary) return null;
+    return buildScanOpsRetryResultAcknowledgementSummarySurface(retryResultAcknowledgementBoundary, { now: nowIso });
+  }, [retryResultAcknowledgementBoundary]);
 
   const handleReceiptDecisionIntent = (decisionItem, descriptor) => {
     if (!decisionItem?.decisionId || !descriptor) return;
@@ -311,6 +323,34 @@ export default function ReceiptDecisionIntentSurface({
                       );
                     })}
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {retryResultAcknowledgementSummarySurface && (
+            <div className="mt-3 rounded-xl bg-secondary/60 px-3 py-2">
+              <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Retry Result Acknowledgement Summary Surface</p>
+              <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">
+                Summary only for local acknowledgement selections. No persistence, queue write, second retry, background loop, or Inventory mutation is allowed.
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <Metric label="Summary state" value={retryAcknowledgementSummaryStatusLabel(retryResultAcknowledgementSummarySurface.status)} />
+                <Metric label="Items" value={retryResultAcknowledgementSummarySurface.summaryItemCount || 0} helper="Display only" />
+                <Metric label="Selected" value={retryResultAcknowledgementSummarySurface.selectedSummaryCount || 0} />
+                <Metric label="Pending" value={retryResultAcknowledgementSummarySurface.pendingSummaryCount || 0} />
+                <Metric label="Acknowledged" value={retryResultAcknowledgementSummarySurface.acknowledgedSummaryCount || 0} />
+                <Metric label="Keep visible" value={retryResultAcknowledgementSummarySurface.keptVisibleSummaryCount || 0} />
+              </div>
+              <div className="mt-2 rounded-xl bg-background/70 px-3 py-1">
+                <InfoRow label="Mode" value="Local summary only" />
+                <InfoRow label="Persistence" value={retryResultAcknowledgementSummarySurface.summaryPersistenceApplied ? "Applied" : "Blocked"} />
+                <InfoRow label="Queue write" value={retryResultAcknowledgementSummarySurface.queueWriteApplied ? "Applied" : "Blocked"} />
+                <InfoRow label="Second retry" value={retryResultAcknowledgementSummarySurface.secondRetryApplied ? "Applied" : "Not applied"} />
+              </div>
+              {retryResultAcknowledgementSummarySurface.summaryItems?.slice(0, 4).map((item) => (
+                <div key={item.summaryItemId} className="mt-2 rounded-xl bg-background/70 px-3 py-2">
+                  <p className="text-sm font-black text-foreground">{item.queueItemId || "Retry summary"}</p>
+                  <p className="mt-1 text-xs font-semibold text-muted-foreground">{item.summaryStatus} · {item.instruction}</p>
                 </div>
               ))}
             </div>
