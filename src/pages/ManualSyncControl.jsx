@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import PageHeader from "../components/scanner/PageHeader";
+import ReceiptDecisionIntentSurface from "../components/scanner/ReceiptDecisionIntentSurface";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -346,6 +347,15 @@ export default function ManualSyncControl() {
                 ))}
               </div>
             )}
+            {lastResult.receiptReviewSurface && (
+              <ReceiptDecisionIntentSurface
+                receiptReviewSurface={lastResult.receiptReviewSurface}
+                queueItems={manualQueue}
+                endpoint={endpoint}
+                deviceIdentity={deviceIdentity}
+                operatorId={session.actorUserId || session.actorName || "operator"}
+              />
+            )}
             {lastResult.errors?.length > 0 && (
               <div className="mt-3 rounded-2xl bg-secondary/60 p-3">
                 <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">First issue</p>
@@ -360,6 +370,7 @@ export default function ManualSyncControl() {
             {[
               "Operator must tap Sync Now.",
               "No automatic background replay is enabled.",
+              "Manual retry requires selecting Retry manually and then tapping Run Manual Retry.",
               "ScanOps does not write Inventory stock, price, ledger, or approval decisions.",
               "Receipt results are staged for display only before any future scoped queue application.",
               "Receipt review / retry decisions are descriptor-only and do not apply queue writes.",
