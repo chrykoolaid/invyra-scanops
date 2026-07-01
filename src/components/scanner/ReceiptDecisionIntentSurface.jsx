@@ -6,6 +6,7 @@ import {
   runScanOpsManualRetryExecutionBoundary,
 } from "../../inventory-bridge/manualRetry/index.js";
 import { buildScanOpsRetryResultReceiptReviewBoundary } from "../../inventory-bridge/retryResultReceiptReview/index.js";
+import { buildScanOpsRetryResultAcknowledgementBoundary } from "../../inventory-bridge/retryResultAcknowledgement/index.js";
 import { createScanOpsBridgeHttpDispatchAdapter } from "../../inventory-bridge/transportClient/index.js";
 
 function Metric({ label, value, helper }) {
@@ -64,6 +65,12 @@ function retryReviewStatusLabel(status) {
   return "Blocked";
 }
 
+function retryAcknowledgementStatusLabel(status) {
+  if (status === "RETRY_RESULT_ACKNOWLEDGEMENT_READY") return "Ready";
+  if (status === "RETRY_RESULT_ACKNOWLEDGEMENT_EMPTY") return "Empty";
+  return "Blocked";
+}
+
 export default function ReceiptDecisionIntentSurface({
   receiptReviewSurface,
   queueItems = [],
@@ -72,6 +79,7 @@ export default function ReceiptDecisionIntentSurface({
   operatorId = "operator",
 }) {
   const [selectedIntentsByDecisionId, setSelectedIntentsByDecisionId] = useState({});
+  const [selectedRetryResultAcknowledgementsById, setSelectedRetryResultAcknowledgementsById] = useState({});
   const [isManualRetryRunning, setIsManualRetryRunning] = useState(false);
   const [manualRetryResult, setManualRetryResult] = useState(null);
 
@@ -99,12 +107,33 @@ export default function ReceiptDecisionIntentSurface({
     return buildScanOpsRetryResultReceiptReviewBoundary(manualRetryResult, { now: nowIso });
   }, [manualRetryResult]);
 
+  const retryResultAcknowledgementBoundary = useMemo(() => {
+    if (!retryResultReceiptReviewBoundary) return null;
+    return buildScanOpsRetryResultAcknowledgementBoundary(retryResultReceiptReviewBoundary, {
+      selectedAcknowledgementsByRetryResultReviewId: selectedRetryResultAcknowledgementsById,
+      now: nowIso,
+    });
+  }, [retryResultReceiptReviewBoundary, selectedRetryResultAcknowledgementsById]);
+
   const handleReceiptDecisionIntent = (decisionItem, descriptor) => {
     if (!decisionItem?.decisionId || !descriptor) return;
     setManualRetryResult(null);
+    setSelectedRetryResultAcknowledgementsById({});
     setSelectedIntentsByDecisionId((current) => ({
       ...current,
       [decisionItem.decisionId]: Object.freeze({
+        descriptor,
+        selectedAt: nowIso(),
+        selectedBy: operatorId,
+      }),
+    }));
+  };
+
+  const handleRetryResultAcknowledgement = (acknowledgementItem, descriptor) => {
+    if (!acknowledgementItem?.retryResultReviewId || !descriptor) return;
+    setSelectedRetryResultAcknowledgementsById((current) => ({
+      ...current,
+      [acknowledgementItem.retryResultReviewId]: Object.freeze({
         descriptor,
         selectedAt: nowIso(),
         selectedBy: operatorId,
@@ -117,6 +146,7 @@ export default function ReceiptDecisionIntentSurface({
   const handleManualRetryExecution = async () => {
     if (!canRunManualRetry) return;
     setIsManualRetryRunning(true);
+    setSelectedRetryResultAcknowledgementsById({});
     try {
       const dispatch = createScanOpsBridgeHttpDispatchAdapter(typeof window !== "undefined" ? window.fetch?.bind(window) : null);
       const result = await runScanOpsManualRetryExecutionBoundary(queueItems, decisionIntentSurface, {
@@ -241,6 +271,46 @@ export default function ReceiptDecisionIntentSurface({
                 <div key={item.retryResultReviewId} className="mt-2 rounded-xl bg-background/70 px-3 py-2">
                   <p className="text-sm font-black text-foreground">{item.queueItemId || "Retry receipt"}</p>
                   <p className="mt-1 text-xs font-semibold text-muted-foreground">{item.outcomeLabel} · {item.instruction}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {retryResultAcknowledgementBoundary && (
+            <div className="mt-3 rounded-xl bg-secondary/60 px-3 py-2">
+              <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Retry Result Acknowledgement Boundary</p>
+              <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">
+                Local acknowledgement intent only. No queue write, persistence, second retry, or Inventory mutation is allowed.
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <Metric label="Ack state" value={retryAcknowledgementStatusLabel(retryResultAcknowledgementBoundary.status)} />
+                <Metric label="Items" value={retryResultAcknowledgementBoundary.acknowledgementItemCount || 0} helper="Display only" />
+                <Metric label="Selected" value={retryResultAcknowledgementBoundary.selectedAcknowledgementCount || 0} />
+                <Metric label="Queue writes" value="0" helper="Blocked" />
+              </div>
+              <div className="mt-2 rounded-xl bg-background/70 px-3 py-1">
+                <InfoRow label="Mode" value="Local acknowledgement intent only" />
+                <InfoRow label="Persistence" value={retryResultAcknowledgementBoundary.acknowledgementPersistenceApplied ? "Applied" : "Blocked"} />
+                <InfoRow label="Second retry" value={retryResultAcknowledgementBoundary.secondRetryApplied ? "Applied" : "Not applied"} />
+              </div>
+              {retryResultAcknowledgementBoundary.acknowledgementItems?.slice(0, 4).map((item) => (
+                <div key={item.acknowledgementIntentId} className="mt-2 rounded-xl bg-background/70 px-3 py-2">
+                  <p className="text-sm font-black text-foreground">{item.queueItemId || "Retry result"}</p>
+                  <p className="mt-1 text-xs font-semibold text-muted-foreground">{item.outcomeLabel || item.classification}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {item.availableAcknowledgementDescriptors?.map((descriptor) => {
+                      const selected = selectedRetryResultAcknowledgementsById[item.retryResultReviewId]?.descriptor === descriptor;
+                      return (
+                        <button
+                          key={`${item.retryResultReviewId}:${descriptor}`}
+                          type="button"
+                          className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide active:scale-[0.98] ${selected ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}
+                          onClick={() => handleRetryResultAcknowledgement(item, descriptor)}
+                        >
+                          {selected ? `${descriptor} selected` : descriptor}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               ))}
             </div>
