@@ -36,6 +36,7 @@
     "validate:scanops-bridge-handshake-candidate": "node scripts/validate-scanops-bridge-handshake-candidate.mjs",
     "validate:scanops-bridge-transport-client-foundation": "node scripts/validate-scanops-bridge-transport-client-foundation.mjs",
     "validate:scanops-bridge-queue-sync-receipts": "node scripts/validate-scanops-bridge-queue-sync-receipts.mjs",
+    "validate:scanops-bridge-runtime-capability-guard": "node scripts/validate-scanops-bridge-runtime-capability-guard.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
