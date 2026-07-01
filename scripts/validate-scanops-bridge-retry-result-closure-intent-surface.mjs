@@ -137,9 +137,9 @@ assert(componentFile.includes('retryResultClosureIntentSurface'), 'Manual retry 
 assert(componentFile.includes('Retry Result Closure Intent Descriptor Surface'), 'Manual retry UI must expose Phase 19 closure intent copy');
 assert(componentFile.includes('Local descriptor intent only'), 'Manual retry UI must state the Phase 19 descriptor boundary');
 assert(componentFile.includes('No closure is applied, persisted, written to the queue, retried, or sent to Inventory.'), 'Manual retry UI must state Phase 19 guardrails');
-assert(componentFile.includes('Ready for future closure'), 'Manual retry UI must expose the ready-for-future-closure descriptor through boundary-driven rendering');
-assert(componentFile.includes('Keep review open'), 'Manual retry UI must expose the keep-review-open descriptor through boundary-driven rendering');
-assert(componentFile.includes('Acknowledgement still pending'), 'Manual retry UI must expose the acknowledgement-still-pending descriptor through boundary-driven rendering');
+assert(moduleFile.includes('Ready for future closure'), 'Phase 19 module must expose the ready-for-future-closure descriptor');
+assert(moduleFile.includes('Keep review open'), 'Phase 19 module must expose the keep-review-open descriptor');
+assert(moduleFile.includes('Acknowledgement still pending'), 'Phase 19 module must expose the acknowledgement-still-pending descriptor');
 assert(packageFile.includes('validate:scanops-bridge-retry-result-closure-intent-surface'), 'package scripts must register Phase 19 validation');
 
 const forbiddenModulePatterns = [
