@@ -40,6 +40,7 @@
     "validate:scanops-bridge-manual-sync-ui-control": "node scripts/validate-scanops-bridge-manual-sync-ui-control.mjs",
     "validate:scanops-bridge-receipt-application-boundary": "node scripts/validate-scanops-bridge-receipt-application-boundary.mjs",
     "validate:scanops-bridge-receipt-review-decision-surface": "node scripts/validate-scanops-bridge-receipt-review-decision-surface.mjs",
+    "validate:scanops-bridge-manual-retry-ui-control": "node scripts/validate-scanops-bridge-manual-retry-ui-control.mjs",
     "validate:scanops-bridge-runtime-gate-snapshot": "node scripts/validate-scanops-bridge-runtime-gate-snapshot.mjs",
     "validate:scanops-bridge-feature-gate-accessors": "node scripts/validate-scanops-bridge-feature-gate-accessors.mjs",
     "validate:scanops-bridge-runtime-capability-guard": "node scripts/validate-scanops-bridge-runtime-capability-guard.mjs",
