@@ -107,9 +107,11 @@ const moduleFile = read('src/inventory-bridge/retryResultAcknowledgement/index.j
 assert(componentFile.includes('buildScanOpsRetryResultAcknowledgementBoundary'), 'Manual retry UI must build the Phase 16 retry result acknowledgement boundary');
 assert(componentFile.includes('selectedRetryResultAcknowledgementsById'), 'Manual retry UI must keep Phase 16 acknowledgements local to component state');
 assert(componentFile.includes('Retry Result Acknowledgement Boundary'), 'Manual retry UI must expose Phase 16 acknowledgement copy');
-assert(componentFile.includes('Acknowledge retry result'), 'Manual retry UI must expose the acknowledgement descriptor');
-assert(componentFile.includes('Keep visible'), 'Manual retry UI must expose the keep-visible descriptor');
-assert(componentFile.includes('Review later'), 'Manual retry UI must expose the review-later descriptor');
+assert(moduleFile.includes('Acknowledge retry result'), 'Phase 16 boundary must expose the acknowledgement descriptor');
+assert(moduleFile.includes('Keep visible'), 'Phase 16 boundary must expose the keep-visible descriptor');
+assert(moduleFile.includes('Review later'), 'Phase 16 boundary must expose the review-later descriptor');
+assert(boundary.acknowledgementItems.some((item) => item.availableAcknowledgementDescriptors.includes(SCANOPS_BRIDGE_RETRY_RESULT_ACKNOWLEDGEMENT_DESCRIPTORS.ACKNOWLEDGE_RETRY_RESULT)), 'Phase 16 items must expose acknowledgement descriptors through boundary data');
+assert(boundary.acknowledgementItems.some((item) => item.availableAcknowledgementDescriptors.includes(SCANOPS_BRIDGE_RETRY_RESULT_ACKNOWLEDGEMENT_DESCRIPTORS.KEEP_VISIBLE)), 'Phase 16 items must expose keep-visible descriptors through boundary data');
 assert(componentFile.includes('Local acknowledgement intent only'), 'Manual retry UI must state acknowledgement is local intent only');
 assert(componentFile.includes('No queue write, persistence, second retry, or Inventory mutation is allowed.'), 'Manual retry UI must state Phase 16 guardrails');
 assert(packageFile.includes('validate:scanops-bridge-retry-result-acknowledgement-boundary'), 'package scripts must register Phase 16 validation');
