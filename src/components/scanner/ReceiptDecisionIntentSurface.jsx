@@ -9,6 +9,7 @@ import { buildScanOpsRetryResultReceiptReviewBoundary } from "../../inventory-br
 import { buildScanOpsRetryResultAcknowledgementBoundary } from "../../inventory-bridge/retryResultAcknowledgement/index.js";
 import { buildScanOpsRetryResultAcknowledgementSummarySurface } from "../../inventory-bridge/retryResultAcknowledgementSummary/index.js";
 import { buildScanOpsRetryResultClosureReadinessSurface } from "../../inventory-bridge/retryResultClosureReadiness/index.js";
+import { buildScanOpsRetryResultClosureIntentSurface } from "../../inventory-bridge/retryResultClosureIntent/index.js";
 import { createScanOpsBridgeHttpDispatchAdapter } from "../../inventory-bridge/transportClient/index.js";
 
 function Metric({ label, value, helper }) {
@@ -85,6 +86,12 @@ function retryClosureReadinessStatusLabel(status) {
   return "Blocked";
 }
 
+function retryClosureIntentStatusLabel(status) {
+  if (status === "RETRY_RESULT_CLOSURE_INTENT_READY") return "Ready";
+  if (status === "RETRY_RESULT_CLOSURE_INTENT_EMPTY") return "Empty";
+  return "Blocked";
+}
+
 export default function ReceiptDecisionIntentSurface({
   receiptReviewSurface,
   queueItems = [],
@@ -94,6 +101,7 @@ export default function ReceiptDecisionIntentSurface({
 }) {
   const [selectedIntentsByDecisionId, setSelectedIntentsByDecisionId] = useState({});
   const [selectedRetryResultAcknowledgementsById, setSelectedRetryResultAcknowledgementsById] = useState({});
+  const [selectedRetryResultClosureIntentsById, setSelectedRetryResultClosureIntentsById] = useState({});
   const [isManualRetryRunning, setIsManualRetryRunning] = useState(false);
   const [manualRetryResult, setManualRetryResult] = useState(null);
 
@@ -139,10 +147,19 @@ export default function ReceiptDecisionIntentSurface({
     return buildScanOpsRetryResultClosureReadinessSurface(retryResultAcknowledgementSummarySurface, { now: nowIso });
   }, [retryResultAcknowledgementSummarySurface]);
 
+  const retryResultClosureIntentSurface = useMemo(() => {
+    if (!retryResultClosureReadinessSurface) return null;
+    return buildScanOpsRetryResultClosureIntentSurface(retryResultClosureReadinessSurface, {
+      selectedClosureIntentsByReadinessItemId: selectedRetryResultClosureIntentsById,
+      now: nowIso,
+    });
+  }, [retryResultClosureReadinessSurface, selectedRetryResultClosureIntentsById]);
+
   const handleReceiptDecisionIntent = (decisionItem, descriptor) => {
     if (!decisionItem?.decisionId || !descriptor) return;
     setManualRetryResult(null);
     setSelectedRetryResultAcknowledgementsById({});
+    setSelectedRetryResultClosureIntentsById({});
     setSelectedIntentsByDecisionId((current) => ({
       ...current,
       [decisionItem.decisionId]: Object.freeze({
@@ -155,9 +172,22 @@ export default function ReceiptDecisionIntentSurface({
 
   const handleRetryResultAcknowledgement = (acknowledgementItem, descriptor) => {
     if (!acknowledgementItem?.retryResultReviewId || !descriptor) return;
+    setSelectedRetryResultClosureIntentsById({});
     setSelectedRetryResultAcknowledgementsById((current) => ({
       ...current,
       [acknowledgementItem.retryResultReviewId]: Object.freeze({
+        descriptor,
+        selectedAt: nowIso(),
+        selectedBy: operatorId,
+      }),
+    }));
+  };
+
+  const handleRetryResultClosureIntent = (closureIntentItem, descriptor) => {
+    if (!closureIntentItem?.readinessItemId || !descriptor) return;
+    setSelectedRetryResultClosureIntentsById((current) => ({
+      ...current,
+      [closureIntentItem.readinessItemId]: Object.freeze({
         descriptor,
         selectedAt: nowIso(),
         selectedBy: operatorId,
@@ -171,6 +201,7 @@ export default function ReceiptDecisionIntentSurface({
     if (!canRunManualRetry) return;
     setIsManualRetryRunning(true);
     setSelectedRetryResultAcknowledgementsById({});
+    setSelectedRetryResultClosureIntentsById({});
     try {
       const dispatch = createScanOpsBridgeHttpDispatchAdapter(typeof window !== "undefined" ? window.fetch?.bind(window) : null);
       const result = await runScanOpsManualRetryExecutionBoundary(queueItems, decisionIntentSurface, {
@@ -391,6 +422,50 @@ export default function ReceiptDecisionIntentSurface({
                 <div key={item.readinessItemId} className="mt-2 rounded-xl bg-background/70 px-3 py-2">
                   <p className="text-sm font-black text-foreground">{item.queueItemId || "Closure readiness"}</p>
                   <p className="mt-1 text-xs font-semibold text-muted-foreground">{item.closureReadinessStatus} · {item.instruction}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {retryResultClosureIntentSurface && (
+            <div className="mt-3 rounded-xl bg-secondary/60 px-3 py-2">
+              <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Retry Result Closure Intent Descriptor Surface</p>
+              <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">
+                Local descriptor intent only. No closure is applied, persisted, written to the queue, retried, or sent to Inventory.
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <Metric label="Intent state" value={retryClosureIntentStatusLabel(retryResultClosureIntentSurface.status)} />
+                <Metric label="Items" value={retryResultClosureIntentSurface.closureIntentItemCount || 0} helper="Descriptor only" />
+                <Metric label="Selected" value={retryResultClosureIntentSurface.selectedClosureIntentCount || 0} />
+                <Metric label="Ready intent" value={retryResultClosureIntentSurface.readyForFutureClosureIntentCount || 0} />
+                <Metric label="Keep open" value={retryResultClosureIntentSurface.keepReviewOpenIntentCount || 0} />
+                <Metric label="Queue writes" value="0" helper="Blocked" />
+              </div>
+              <div className="mt-2 rounded-xl bg-background/70 px-3 py-1">
+                <InfoRow label="Mode" value="Local closure intent descriptor only" />
+                <InfoRow label="Closure applied" value={retryResultClosureIntentSurface.closureApplied ? "Applied" : "Not applied"} />
+                <InfoRow label="Persistence" value={retryResultClosureIntentSurface.closureIntentPersistenceApplied ? "Applied" : "Blocked"} />
+                <InfoRow label="Second retry" value={retryResultClosureIntentSurface.secondRetryApplied ? "Applied" : "Not applied"} />
+              </div>
+              {retryResultClosureIntentSurface.closureIntentItems?.slice(0, 4).map((item) => (
+                <div key={item.closureIntentId} className="mt-2 rounded-xl bg-background/70 px-3 py-2">
+                  <p className="text-sm font-black text-foreground">{item.queueItemId || "Closure intent"}</p>
+                  <p className="mt-1 text-xs font-semibold text-muted-foreground">{item.closureReadinessStatus || item.classification}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {item.availableClosureIntentDescriptors?.map((descriptor) => {
+                      const selected = selectedRetryResultClosureIntentsById[item.readinessItemId]?.descriptor === descriptor;
+                      return (
+                        <button
+                          key={`${item.readinessItemId}:${descriptor}`}
+                          type="button"
+                          className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide active:scale-[0.98] ${selected ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}
+                          onClick={() => handleRetryResultClosureIntent(item, descriptor)}
+                        >
+                          {selected ? `${descriptor} selected` : descriptor}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-[11px] font-semibold leading-snug text-muted-foreground">{item.instruction}</p>
                 </div>
               ))}
             </div>
