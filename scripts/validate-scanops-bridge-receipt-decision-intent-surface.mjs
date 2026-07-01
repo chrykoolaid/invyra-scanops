@@ -53,7 +53,7 @@ assert(surface.selectedIntentCount === 3, 'decision intent surface must count se
 assert(surface.retryIntentSelectedCount === 1, 'Retry manually must be captured as local intent only');
 assert(surface.duplicateAcknowledgementIntentSelectedCount === 1, 'Acknowledge duplicate must be captured as local intent only');
 assert(surface.reviewIntentSelectedCount === 1, 'Review must be captured as local intent only');
-assert(surface.pendingIntentCount === 3, 'remaining operator-required items must stay pending without automatic decisions');
+assert(surface.pendingIntentCount === 2, 'unselected operator-required items must stay pending without automatic decisions');
 assert(surface.descriptorOnlyCount === 6, 'all decision intent items must be descriptor-only');
 assert(surface.intentPersistenceAllowed === false, 'decision intent persistence must not be allowed');
 assert(surface.intentPersistenceApplied === false, 'decision intent persistence must not be applied');
