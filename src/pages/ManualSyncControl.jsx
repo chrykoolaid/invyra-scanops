@@ -18,6 +18,7 @@ import {
   buildScanOpsManualSyncExecutionPlan,
   runScanOpsManualSyncExecution,
 } from "../inventory-bridge/manualSync/index.js";
+import { buildScanOpsReceiptApplicationBoundary } from "../inventory-bridge/receiptApplication/index.js";
 import { createScanOpsBridgeHttpDispatchAdapter } from "../inventory-bridge/transportClient/index.js";
 
 const SETUP_STORAGE_KEY = "scanops_sync_endpoint_config";
@@ -195,18 +196,19 @@ export default function ManualSyncControl() {
         dispatch,
         now: nowIso,
       });
-      setLastResult({ ...result, completedAtLabel: nowLabel() });
+      const receiptBoundary = buildScanOpsReceiptApplicationBoundary(result, { now: nowIso });
+      setLastResult({ ...result, receiptBoundary, completedAtLabel: nowLabel() });
       createScanOpsEvent(SCANOPS_EVENT_TYPES.SYNC_STATUS_VIEWED, {
         source_module: "Manual Sync Control",
         status: `manual_sync_${String(result.status || "unknown").toLowerCase()}`,
         queue_items_selected: manualQueue.length,
         queue_items_dispatched: result.syncResults?.length || 0,
+        receipt_display_staged: receiptBoundary.stagedReceiptCount || 0,
         sync_exempt: true,
       });
     } catch (error) {
-      setLastResult({
+      const failedResult = {
         status: SCANOPS_BRIDGE_MANUAL_SYNC_STATUSES.FAILED,
-        completedAtLabel: nowLabel(),
         dispatchAttempted: false,
         projectedQueuePatches: [],
         syncResults: [],
@@ -217,6 +219,11 @@ export default function ManualSyncControl() {
         priceMutationAttempted: false,
         approvalMutationAttempted: false,
         queueWriteApplied: false,
+      };
+      setLastResult({
+        ...failedResult,
+        receiptBoundary: buildScanOpsReceiptApplicationBoundary(failedResult, { now: nowIso }),
+        completedAtLabel: nowLabel(),
       });
     } finally {
       setIsRunning(false);
@@ -276,7 +283,26 @@ export default function ManualSyncControl() {
               <Metric label="Finished" value={lastResult.completedAtLabel || "Just now"} />
               <Metric label="Dispatched" value={lastResult.syncResults?.length || 0} />
               <Metric label="Projected" value={lastResult.projectedQueuePatches?.length || 0} helper="Local descriptors" />
+              <Metric label="Staged" value={lastResult.receiptBoundary?.stagedReceiptCount || 0} helper="Display only" />
+              <Metric label="Queue writes" value="0" helper="Blocked" />
             </div>
+            {lastResult.receiptBoundary && (
+              <div className="mt-3 rounded-2xl bg-secondary/60 p-3">
+                <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Receipt boundary</p>
+                <div className="mt-2 rounded-xl bg-background/70 px-3 py-1">
+                  <InfoRow label="Mode" value="Display staging only" />
+                  <InfoRow label="Review" value={String(lastResult.receiptBoundary.reviewRequiredCount || 0)} />
+                  <InfoRow label="Retry" value={String(lastResult.receiptBoundary.retryRequiredCount || 0)} />
+                  <InfoRow label="Queue write" value={lastResult.receiptBoundary.queueWriteApplied ? "Applied" : "Blocked"} />
+                </div>
+                {lastResult.receiptBoundary.stagedReceiptApplications?.slice(0, 3).map((item) => (
+                  <div key={item.boundaryId} className="mt-2 rounded-xl bg-background/70 px-3 py-2">
+                    <p className="text-sm font-black text-foreground">{item.queueItemId || "Queue item"}</p>
+                    <p className="mt-1 text-xs font-semibold text-muted-foreground">{item.displayStatus} · {item.nextAction}</p>
+                  </div>
+                ))}
+              </div>
+            )}
             {lastResult.errors?.length > 0 && (
               <div className="mt-3 rounded-2xl bg-secondary/60 p-3">
                 <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">First issue</p>
@@ -292,6 +318,7 @@ export default function ManualSyncControl() {
               "Operator must tap Sync Now.",
               "No automatic background replay is enabled.",
               "ScanOps does not write Inventory stock, price, ledger, or approval decisions.",
+              "Receipt results are staged for display only before any future scoped queue application.",
               "Queue status changes shown here are projected descriptors only.",
             ].map((item) => (
               <div key={item} className="rounded-2xl bg-secondary/60 px-3 py-3 text-sm font-bold text-foreground">{item}</div>
