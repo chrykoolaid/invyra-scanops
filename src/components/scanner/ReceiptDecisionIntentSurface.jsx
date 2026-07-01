@@ -8,6 +8,7 @@ import {
 import { buildScanOpsRetryResultReceiptReviewBoundary } from "../../inventory-bridge/retryResultReceiptReview/index.js";
 import { buildScanOpsRetryResultAcknowledgementBoundary } from "../../inventory-bridge/retryResultAcknowledgement/index.js";
 import { buildScanOpsRetryResultAcknowledgementSummarySurface } from "../../inventory-bridge/retryResultAcknowledgementSummary/index.js";
+import { buildScanOpsRetryResultClosureReadinessSurface } from "../../inventory-bridge/retryResultClosureReadiness/index.js";
 import { createScanOpsBridgeHttpDispatchAdapter } from "../../inventory-bridge/transportClient/index.js";
 
 function Metric({ label, value, helper }) {
@@ -78,6 +79,12 @@ function retryAcknowledgementSummaryStatusLabel(status) {
   return "Blocked";
 }
 
+function retryClosureReadinessStatusLabel(status) {
+  if (status === "RETRY_RESULT_CLOSURE_READINESS_READY") return "Ready";
+  if (status === "RETRY_RESULT_CLOSURE_READINESS_EMPTY") return "Empty";
+  return "Blocked";
+}
+
 export default function ReceiptDecisionIntentSurface({
   receiptReviewSurface,
   queueItems = [],
@@ -126,6 +133,11 @@ export default function ReceiptDecisionIntentSurface({
     if (!retryResultAcknowledgementBoundary) return null;
     return buildScanOpsRetryResultAcknowledgementSummarySurface(retryResultAcknowledgementBoundary, { now: nowIso });
   }, [retryResultAcknowledgementBoundary]);
+
+  const retryResultClosureReadinessSurface = useMemo(() => {
+    if (!retryResultAcknowledgementSummarySurface) return null;
+    return buildScanOpsRetryResultClosureReadinessSurface(retryResultAcknowledgementSummarySurface, { now: nowIso });
+  }, [retryResultAcknowledgementSummarySurface]);
 
   const handleReceiptDecisionIntent = (decisionItem, descriptor) => {
     if (!decisionItem?.decisionId || !descriptor) return;
@@ -351,6 +363,34 @@ export default function ReceiptDecisionIntentSurface({
                 <div key={item.summaryItemId} className="mt-2 rounded-xl bg-background/70 px-3 py-2">
                   <p className="text-sm font-black text-foreground">{item.queueItemId || "Retry summary"}</p>
                   <p className="mt-1 text-xs font-semibold text-muted-foreground">{item.summaryStatus} · {item.instruction}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {retryResultClosureReadinessSurface && (
+            <div className="mt-3 rounded-xl bg-secondary/60 px-3 py-2">
+              <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Retry Result Review Closure Readiness Surface</p>
+              <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">
+                Readiness only for future scoped closure. No closure is applied, persisted, written to the queue, retried, or sent to Inventory.
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <Metric label="Readiness state" value={retryClosureReadinessStatusLabel(retryResultClosureReadinessSurface.status)} />
+                <Metric label="Items" value={retryResultClosureReadinessSurface.readinessItemCount || 0} helper="Display only" />
+                <Metric label="Ready" value={retryResultClosureReadinessSurface.closureReadyCount || 0} />
+                <Metric label="Pending" value={retryResultClosureReadinessSurface.closurePendingCount || 0} />
+                <Metric label="Future closure" value={retryResultClosureReadinessSurface.futureScopedClosureReady ? "Ready" : "Not ready"} helper="Not applied" />
+                <Metric label="Queue writes" value="0" helper="Blocked" />
+              </div>
+              <div className="mt-2 rounded-xl bg-background/70 px-3 py-1">
+                <InfoRow label="Mode" value="Local closure readiness only" />
+                <InfoRow label="Closure applied" value={retryResultClosureReadinessSurface.closureApplied ? "Applied" : "Not applied"} />
+                <InfoRow label="Persistence" value={retryResultClosureReadinessSurface.closurePersistenceApplied ? "Applied" : "Blocked"} />
+                <InfoRow label="Queue write" value={retryResultClosureReadinessSurface.queueWriteApplied ? "Applied" : "Blocked"} />
+              </div>
+              {retryResultClosureReadinessSurface.readinessItems?.slice(0, 4).map((item) => (
+                <div key={item.readinessItemId} className="mt-2 rounded-xl bg-background/70 px-3 py-2">
+                  <p className="text-sm font-black text-foreground">{item.queueItemId || "Closure readiness"}</p>
+                  <p className="mt-1 text-xs font-semibold text-muted-foreground">{item.closureReadinessStatus} · {item.instruction}</p>
                 </div>
               ))}
             </div>
