@@ -8,26 +8,22 @@ export type BridgePhase32NextAllowedStep = "phase-32-cleanup-pass";
 
 export type BridgePhase32GateOutcome = "closed-cleanup-required-no-activation";
 
-export interface BridgePhase32PendingExternalDraftSurface {
-  readonly phase: "12";
+export interface BridgePhase32MergedExternalSurface {
+  readonly phase: "8" | "9" | "10" | "11" | "12";
 
-  readonly label: "Receipt decision intent surface";
-
-  readonly pullRequest: 199;
-
-  readonly draft: true;
-
-  readonly merged: false;
+  readonly label: string;
 
   readonly phase32Owned: false;
 
   readonly requiresSeparateGovernanceReview: true;
 }
 
-export interface BridgePhase32NextGateDecisionTotals {
-  readonly mergedExternalSurfaceCount: 4;
+export type BridgePhase32PendingExternalDraftSurface = never;
 
-  readonly pendingExternalDraftSurfaceCount: 1;
+export interface BridgePhase32NextGateDecisionTotals {
+  readonly mergedExternalSurfaceCount: 5;
+
+  readonly pendingExternalDraftSurfaceCount: 0;
 
   readonly packageRegistrationChangesApplied: false;
 }
@@ -44,6 +40,8 @@ export interface BridgePhase32NextGateDecision {
   readonly closureSnapshot: BridgePhase32ClosureSnapshot;
 
   readonly nextAllowedStep: BridgePhase32NextAllowedStep;
+
+  readonly mergedExternalSurfaces: readonly BridgePhase32MergedExternalSurface[];
 
   readonly pendingExternalDraftSurfaces: readonly BridgePhase32PendingExternalDraftSurface[];
 
