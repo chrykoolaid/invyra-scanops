@@ -19,6 +19,7 @@ import {
   runScanOpsManualSyncExecution,
 } from "../inventory-bridge/manualSync/index.js";
 import { buildScanOpsReceiptApplicationBoundary } from "../inventory-bridge/receiptApplication/index.js";
+import { buildScanOpsReceiptReviewDecisionSurface } from "../inventory-bridge/receiptReview/index.js";
 import { createScanOpsBridgeHttpDispatchAdapter } from "../inventory-bridge/transportClient/index.js";
 
 const SETUP_STORAGE_KEY = "scanops_sync_endpoint_config";
@@ -197,13 +198,15 @@ export default function ManualSyncControl() {
         now: nowIso,
       });
       const receiptBoundary = buildScanOpsReceiptApplicationBoundary(result, { now: nowIso });
-      setLastResult({ ...result, receiptBoundary, completedAtLabel: nowLabel() });
+      const receiptReviewSurface = buildScanOpsReceiptReviewDecisionSurface(receiptBoundary, { now: nowIso });
+      setLastResult({ ...result, receiptBoundary, receiptReviewSurface, completedAtLabel: nowLabel() });
       createScanOpsEvent(SCANOPS_EVENT_TYPES.SYNC_STATUS_VIEWED, {
         source_module: "Manual Sync Control",
         status: `manual_sync_${String(result.status || "unknown").toLowerCase()}`,
         queue_items_selected: manualQueue.length,
         queue_items_dispatched: result.syncResults?.length || 0,
         receipt_display_staged: receiptBoundary.stagedReceiptCount || 0,
+        receipt_decision_descriptors: receiptReviewSurface.decisionItemCount || 0,
         sync_exempt: true,
       });
     } catch (error) {
@@ -220,9 +223,12 @@ export default function ManualSyncControl() {
         approvalMutationAttempted: false,
         queueWriteApplied: false,
       };
+      const receiptBoundary = buildScanOpsReceiptApplicationBoundary(failedResult, { now: nowIso });
+      const receiptReviewSurface = buildScanOpsReceiptReviewDecisionSurface(receiptBoundary, { now: nowIso });
       setLastResult({
         ...failedResult,
-        receiptBoundary: buildScanOpsReceiptApplicationBoundary(failedResult, { now: nowIso }),
+        receiptBoundary,
+        receiptReviewSurface,
         completedAtLabel: nowLabel(),
       });
     } finally {
@@ -303,6 +309,43 @@ export default function ManualSyncControl() {
                 ))}
               </div>
             )}
+            {lastResult.receiptReviewSurface && (
+              <div className="mt-3 rounded-2xl bg-secondary/60 p-3">
+                <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Receipt Review / Retry Decision Surface</p>
+                <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">
+                  Operator decision descriptors only. Available descriptors: Review, Retry manually, Keep queued, Acknowledge duplicate.
+                </p>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <Metric label="Accepted" value={lastResult.receiptReviewSurface.acceptedCount || 0} />
+                  <Metric label="Duplicate" value={lastResult.receiptReviewSurface.duplicateCount || 0} />
+                  <Metric label="Retry" value={lastResult.receiptReviewSurface.retryRequiredCount || 0} />
+                  <Metric label="Blocked" value={lastResult.receiptReviewSurface.blockedCount || 0} />
+                </div>
+                <div className="mt-2 rounded-xl bg-background/70 px-3 py-1">
+                  <InfoRow label="Mode" value="Operator decision descriptors only" />
+                  <InfoRow label="Decision writes" value={lastResult.receiptReviewSurface.queueWriteApplied ? "Applied" : "Blocked"} />
+                  <InfoRow label="Retry applied" value={lastResult.receiptReviewSurface.retryApplied ? "Applied" : "Not applied"} />
+                </div>
+                {lastResult.receiptReviewSurface.decisionItems?.slice(0, 4).map((item) => (
+                  <div key={item.decisionId} className="mt-2 rounded-xl bg-background/70 px-3 py-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-black text-foreground">{item.queueItemId || "Receipt item"}</p>
+                        <p className="mt-1 text-xs font-semibold text-muted-foreground">{item.outcomeLabel} · {item.instruction}</p>
+                      </div>
+                      <span className="shrink-0 rounded-full border border-border px-2 py-1 text-[10px] font-black uppercase tracking-wide text-muted-foreground">{item.classification}</span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {item.decisionDescriptors?.map((descriptor) => (
+                        <span key={`${item.decisionId}:${descriptor}`} className="rounded-full bg-secondary px-2 py-1 text-[10px] font-black uppercase tracking-wide text-muted-foreground">
+                          {descriptor}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
             {lastResult.errors?.length > 0 && (
               <div className="mt-3 rounded-2xl bg-secondary/60 p-3">
                 <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">First issue</p>
@@ -319,6 +362,7 @@ export default function ManualSyncControl() {
               "No automatic background replay is enabled.",
               "ScanOps does not write Inventory stock, price, ledger, or approval decisions.",
               "Receipt results are staged for display only before any future scoped queue application.",
+              "Receipt review / retry decisions are descriptor-only and do not apply queue writes.",
               "Queue status changes shown here are projected descriptors only.",
             ].map((item) => (
               <div key={item} className="rounded-2xl bg-secondary/60 px-3 py-3 text-sm font-bold text-foreground">{item}</div>
