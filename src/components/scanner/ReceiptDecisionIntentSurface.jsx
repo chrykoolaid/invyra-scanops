@@ -10,6 +10,7 @@ import { buildScanOpsRetryResultAcknowledgementBoundary } from "../../inventory-
 import { buildScanOpsRetryResultAcknowledgementSummarySurface } from "../../inventory-bridge/retryResultAcknowledgementSummary/index.js";
 import { buildScanOpsRetryResultClosureReadinessSurface } from "../../inventory-bridge/retryResultClosureReadiness/index.js";
 import { buildScanOpsRetryResultClosureIntentSurface } from "../../inventory-bridge/retryResultClosureIntent/index.js";
+import { buildScanOpsRetryResultClosureIntentSummarySurface } from "../../inventory-bridge/retryResultClosureIntentSummary/index.js";
 import { createScanOpsBridgeHttpDispatchAdapter } from "../../inventory-bridge/transportClient/index.js";
 
 function Metric({ label, value, helper }) {
@@ -92,6 +93,12 @@ function retryClosureIntentStatusLabel(status) {
   return "Blocked";
 }
 
+function retryClosureIntentSummaryStatusLabel(status) {
+  if (status === "RETRY_RESULT_CLOSURE_INTENT_SUMMARY_READY") return "Ready";
+  if (status === "RETRY_RESULT_CLOSURE_INTENT_SUMMARY_EMPTY") return "Empty";
+  return "Blocked";
+}
+
 export default function ReceiptDecisionIntentSurface({
   receiptReviewSurface,
   queueItems = [],
@@ -154,6 +161,11 @@ export default function ReceiptDecisionIntentSurface({
       now: nowIso,
     });
   }, [retryResultClosureReadinessSurface, selectedRetryResultClosureIntentsById]);
+
+  const retryResultClosureIntentSummarySurface = useMemo(() => {
+    if (!retryResultClosureIntentSurface) return null;
+    return buildScanOpsRetryResultClosureIntentSummarySurface(retryResultClosureIntentSurface, { now: nowIso });
+  }, [retryResultClosureIntentSurface]);
 
   const handleReceiptDecisionIntent = (decisionItem, descriptor) => {
     if (!decisionItem?.decisionId || !descriptor) return;
@@ -466,6 +478,34 @@ export default function ReceiptDecisionIntentSurface({
                     })}
                   </div>
                   <p className="mt-2 text-[11px] font-semibold leading-snug text-muted-foreground">{item.instruction}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {retryResultClosureIntentSummarySurface && (
+            <div className="mt-3 rounded-xl bg-secondary/60 px-3 py-2">
+              <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Retry Result Closure Intent Summary Surface</p>
+              <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">
+                Summary only for selected local closure-intent descriptors. No closure is applied, persisted, written to the queue, retried, or sent to Inventory.
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <Metric label="Summary state" value={retryClosureIntentSummaryStatusLabel(retryResultClosureIntentSummarySurface.status)} />
+                <Metric label="Items" value={retryResultClosureIntentSummarySurface.closureIntentSummaryItemCount || 0} helper="Display only" />
+                <Metric label="Selected" value={retryResultClosureIntentSummarySurface.selectedClosureIntentSummaryCount || 0} />
+                <Metric label="Ready summary" value={retryResultClosureIntentSummarySurface.readyForFutureClosureSummaryCount || 0} />
+                <Metric label="Keep open" value={retryResultClosureIntentSummarySurface.keepReviewOpenSummaryCount || 0} />
+                <Metric label="Pending" value={retryResultClosureIntentSummarySurface.pendingClosureIntentSummaryCount || 0} />
+              </div>
+              <div className="mt-2 rounded-xl bg-background/70 px-3 py-1">
+                <InfoRow label="Mode" value="Local closure intent summary only" />
+                <InfoRow label="Closure applied" value={retryResultClosureIntentSummarySurface.closureApplied ? "Applied" : "Not applied"} />
+                <InfoRow label="Persistence" value={retryResultClosureIntentSummarySurface.closureIntentSummaryPersistenceApplied ? "Applied" : "Blocked"} />
+                <InfoRow label="Queue write" value={retryResultClosureIntentSummarySurface.queueWriteApplied ? "Applied" : "Blocked"} />
+              </div>
+              {retryResultClosureIntentSummarySurface.closureIntentSummaryItems?.slice(0, 4).map((item) => (
+                <div key={item.closureIntentSummaryId} className="mt-2 rounded-xl bg-background/70 px-3 py-2">
+                  <p className="text-sm font-black text-foreground">{item.queueItemId || "Closure intent summary"}</p>
+                  <p className="mt-1 text-xs font-semibold text-muted-foreground">{item.summaryStatus} · {item.instruction}</p>
                 </div>
               ))}
             </div>
