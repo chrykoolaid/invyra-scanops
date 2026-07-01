@@ -11,6 +11,10 @@ export {
   isBridgeContractRegistryEntryEnabled,
 } from "./bridgeContractRegistryAccessors";
 
+export {
+  createBridgeContractRegistryReadinessReport,
+} from "./bridgeContractRegistryReadinessReport";
+
 export type {
   BridgeContractRegistryEntry,
   BridgeContractRegistryName,
@@ -22,3 +26,9 @@ export type {
 export type {
   BridgeContractRegistryAccessResult,
 } from "./bridgeContractRegistryAccessors";
+
+export type {
+  BridgeContractRegistryReadinessReport,
+  BridgeContractRegistryReadinessReportPhase,
+  BridgeContractRegistryReadinessReportTotals,
+} from "./bridgeContractRegistryReadinessReportTypes";
