@@ -37,6 +37,7 @@
     "validate:scanops-bridge-transport-client-foundation": "node scripts/validate-scanops-bridge-transport-client-foundation.mjs",
     "validate:scanops-bridge-queue-sync-receipts": "node scripts/validate-scanops-bridge-queue-sync-receipts.mjs",
     "validate:scanops-bridge-manual-sync-execution": "node scripts/validate-scanops-bridge-manual-sync-execution.mjs",
+    "validate:scanops-bridge-manual-sync-ui-control": "node scripts/validate-scanops-bridge-manual-sync-ui-control.mjs",
     "validate:scanops-bridge-runtime-capability-guard": "node scripts/validate-scanops-bridge-runtime-capability-guard.mjs",
     "preview": "vite preview"
   },
