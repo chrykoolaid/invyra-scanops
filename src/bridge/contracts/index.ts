@@ -15,6 +15,10 @@ export {
   createBridgeContractRegistryReadinessReport,
 } from "./bridgeContractRegistryReadinessReport";
 
+export {
+  createBridgeManualSyncBoundaryReport,
+} from "./bridgeManualSyncBoundaryReport";
+
 export type {
   BridgeContractRegistryEntry,
   BridgeContractRegistryName,
@@ -32,3 +36,9 @@ export type {
   BridgeContractRegistryReadinessReportPhase,
   BridgeContractRegistryReadinessReportTotals,
 } from "./bridgeContractRegistryReadinessReportTypes";
+
+export type {
+  BridgeManualSyncBoundaryLayer,
+  BridgeManualSyncBoundaryReport,
+  BridgeManualSyncBoundaryReportPhase,
+} from "./bridgeManualSyncBoundaryReportTypes";
