@@ -1,6 +1,7 @@
 export const SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_PHASE = '23';
 export const SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_COMPONENT = 'scanops_bridge_retry_result_final_review_readiness_outcome_descriptor_surface';
 export const SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_VERSION = 'scanops-retry-result-final-review-readiness-outcome.v0.23.0';
+export const SCANOPS_BRIDGE_PHASE_22_FINAL_REVIEW_READINESS_SUMMARY_COMPONENT = 'scanops_bridge_retry_result_final_review_readiness_summary_surface';
 
 export const SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_STATUSES = Object.freeze({
   READY: 'RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_READY',
@@ -33,6 +34,13 @@ function freezeArray(values) {
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isPhase22ReadinessSummarySurface(value) {
+  return isPlainObject(value)
+    && value.phase === '22'
+    && value.component === SCANOPS_BRIDGE_PHASE_22_FINAL_REVIEW_READINESS_SUMMARY_COMPONENT
+    && Array.isArray(value.readinessSummaryItems);
 }
 
 function nowIso(now) {
@@ -130,9 +138,11 @@ function buildOutcomeItem(item = {}, index = 0, timestamp) {
   });
 }
 
-function validationErrors(summarySurface = {}, options = {}) {
+function validationErrors(summarySurface = null, options = {}) {
   const errors = [];
-  if (!isPlainObject(summarySurface)) errors.push(issue(SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_BLOCKERS.READINESS_SUMMARY_REQUIRED, 'Phase 23 requires the Phase 22 readiness summary surface.', 'summarySurface'));
+  if (!isPhase22ReadinessSummarySurface(summarySurface)) {
+    errors.push(issue(SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_BLOCKERS.READINESS_SUMMARY_REQUIRED, 'Phase 23 requires the Phase 22 readiness summary surface.', 'summarySurface'));
+  }
   if (options.applyOutcome === true || options.applyReadinessOutcome === true) errors.push(issue(SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_BLOCKERS.OUTCOME_APPLICATION_BLOCKED, 'Phase 23 outcome is descriptor-only.', 'applyOutcome'));
   if (options.applyClosure === true || options.closeReview === true) errors.push(issue(SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_BLOCKERS.CLOSURE_APPLICATION_BLOCKED, 'Phase 23 cannot apply closure.', 'applyClosure'));
   if (options.persistOutcome === true || options.persistReadinessOutcome === true) errors.push(issue(SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_BLOCKERS.PERSISTENCE_BLOCKED, 'Phase 23 cannot persist outcomes.', 'persistOutcome'));
@@ -144,7 +154,7 @@ function validationErrors(summarySurface = {}, options = {}) {
   return errors;
 }
 
-export function buildScanOpsRetryResultFinalReviewReadinessOutcomeSurface(summarySurface = {}, options = {}) {
+export function buildScanOpsRetryResultFinalReviewReadinessOutcomeSurface(summarySurface = null, options = {}) {
   const timestamp = nowIso(options.now);
   const errors = validationErrors(summarySurface, options);
   if (errors.length > 0) {
@@ -161,7 +171,7 @@ export function buildScanOpsRetryResultFinalReviewReadinessOutcomeSurface(summar
     });
   }
 
-  const sourceItems = Array.isArray(summarySurface.readinessSummaryItems) ? summarySurface.readinessSummaryItems : [];
+  const sourceItems = summarySurface.readinessSummaryItems;
   if (sourceItems.length === 0) {
     return Object.freeze({
       ...base(SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_STATUSES.EMPTY, timestamp),
@@ -177,7 +187,6 @@ export function buildScanOpsRetryResultFinalReviewReadinessOutcomeSurface(summar
   }
 
   const outcomeItems = sourceItems.map((item, index) => buildOutcomeItem(item, index, timestamp));
-
   return Object.freeze({
     ...base(SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_STATUSES.READY, timestamp),
     outcomeItems: freezeArray(outcomeItems),
