@@ -1,6 +1,7 @@
 export const SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_PHASE = '24';
 export const SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_COMPONENT = 'scanops_bridge_retry_result_final_review_readiness_outcome_summary_surface';
 export const SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_VERSION = 'scanops-retry-result-final-review-readiness-outcome-summary.v0.24.0';
+export const SCANOPS_BRIDGE_PHASE_23_FINAL_REVIEW_READINESS_OUTCOME_COMPONENT = 'scanops_bridge_retry_result_final_review_readiness_outcome_descriptor_surface';
 
 export const SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_STATUSES = Object.freeze({
   READY: 'RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_READY',
@@ -26,6 +27,13 @@ function freezeArray(values) {
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isPhase23ReadinessOutcomeSurface(value) {
+  return isPlainObject(value)
+    && value.phase === '23'
+    && value.component === SCANOPS_BRIDGE_PHASE_23_FINAL_REVIEW_READINESS_OUTCOME_COMPONENT
+    && Array.isArray(value.outcomeItems);
 }
 
 function nowIso(now) {
@@ -119,9 +127,11 @@ function buildSummaryItem(item = {}, index = 0, timestamp) {
   });
 }
 
-function validationErrors(outcomeSurface = {}, options = {}) {
+function validationErrors(outcomeSurface = null, options = {}) {
   const errors = [];
-  if (!isPlainObject(outcomeSurface)) errors.push(issue(SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_BLOCKERS.OUTCOME_SURFACE_REQUIRED, 'Phase 24 requires the Phase 23 outcome surface.', 'outcomeSurface'));
+  if (!isPhase23ReadinessOutcomeSurface(outcomeSurface)) {
+    errors.push(issue(SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_BLOCKERS.OUTCOME_SURFACE_REQUIRED, 'Phase 24 requires the Phase 23 outcome surface.', 'outcomeSurface'));
+  }
   if (options.applySummary === true || options.applyOutcomeSummary === true) errors.push(issue(SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_BLOCKERS.SUMMARY_APPLICATION_BLOCKED, 'Phase 24 summary is display-only.', 'applySummary'));
   if (options.applyClosure === true || options.closeReview === true) errors.push(issue(SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_BLOCKERS.CLOSURE_APPLICATION_BLOCKED, 'Phase 24 cannot apply closure.', 'applyClosure'));
   if (options.persistSummary === true || options.persistOutcomeSummary === true) errors.push(issue(SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_BLOCKERS.PERSISTENCE_BLOCKED, 'Phase 24 cannot persist summaries.', 'persistSummary'));
@@ -133,7 +143,7 @@ function validationErrors(outcomeSurface = {}, options = {}) {
   return errors;
 }
 
-export function buildScanOpsRetryResultFinalReviewReadinessOutcomeSummarySurface(outcomeSurface = {}, options = {}) {
+export function buildScanOpsRetryResultFinalReviewReadinessOutcomeSummarySurface(outcomeSurface = null, options = {}) {
   const timestamp = nowIso(options.now);
   const errors = validationErrors(outcomeSurface, options);
   if (errors.length > 0) {
@@ -150,7 +160,7 @@ export function buildScanOpsRetryResultFinalReviewReadinessOutcomeSummarySurface
     });
   }
 
-  const sourceItems = Array.isArray(outcomeSurface.outcomeItems) ? outcomeSurface.outcomeItems : [];
+  const sourceItems = outcomeSurface.outcomeItems;
   if (sourceItems.length === 0) {
     return Object.freeze({
       ...base(SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_STATUSES.EMPTY, timestamp),
@@ -166,7 +176,6 @@ export function buildScanOpsRetryResultFinalReviewReadinessOutcomeSummarySurface
   }
 
   const outcomeSummaryItems = sourceItems.map((item, index) => buildSummaryItem(item, index, timestamp));
-
   return Object.freeze({
     ...base(SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_STATUSES.READY, timestamp),
     outcomeSummaryItems: freezeArray(outcomeSummaryItems),
