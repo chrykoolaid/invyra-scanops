@@ -25,68 +25,14 @@ const outcomeSurface = Object.freeze({
   component: 'scanops_bridge_retry_result_final_review_readiness_outcome_descriptor_surface',
   status: 'RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_READY',
   outcomeItems: Object.freeze([
-    Object.freeze({
-      finalReviewReadinessOutcomeId: 'outcome:item-1',
-      finalReviewReadinessSummaryItemId: 'summary:item-1',
-      retryResultReviewId: 'retry-result-review:item-1',
-      queueItemId: 'item-1',
-      outcomeDescriptor: 'Ready for later closure review',
-      readyForLaterClosureReview: true,
-      keepReviewOpen: false,
-      acknowledgementResolutionRequired: false,
-      finalReviewPending: false,
-      queueWriteApplied: false,
-      closureApplied: false,
-      finalReviewReadinessOutcomePersistenceApplied: false,
-    }),
-    Object.freeze({
-      finalReviewReadinessOutcomeId: 'outcome:item-2',
-      finalReviewReadinessSummaryItemId: 'summary:item-2',
-      retryResultReviewId: 'retry-result-review:item-2',
-      queueItemId: 'item-2',
-      outcomeDescriptor: 'Keep review open',
-      readyForLaterClosureReview: false,
-      keepReviewOpen: true,
-      acknowledgementResolutionRequired: false,
-      finalReviewPending: false,
-      queueWriteApplied: false,
-      closureApplied: false,
-      finalReviewReadinessOutcomePersistenceApplied: false,
-    }),
-    Object.freeze({
-      finalReviewReadinessOutcomeId: 'outcome:item-3',
-      finalReviewReadinessSummaryItemId: 'summary:item-3',
-      retryResultReviewId: 'retry-result-review:item-3',
-      queueItemId: 'item-3',
-      outcomeDescriptor: 'Resolve acknowledgement first',
-      readyForLaterClosureReview: false,
-      keepReviewOpen: false,
-      acknowledgementResolutionRequired: true,
-      finalReviewPending: false,
-      queueWriteApplied: false,
-      closureApplied: false,
-      finalReviewReadinessOutcomePersistenceApplied: false,
-    }),
-    Object.freeze({
-      finalReviewReadinessOutcomeId: 'outcome:item-4',
-      finalReviewReadinessSummaryItemId: 'summary:item-4',
-      retryResultReviewId: 'retry-result-review:item-4',
-      queueItemId: 'item-4',
-      outcomeDescriptor: 'Final review pending',
-      readyForLaterClosureReview: false,
-      keepReviewOpen: false,
-      acknowledgementResolutionRequired: false,
-      finalReviewPending: true,
-      queueWriteApplied: false,
-      closureApplied: false,
-      finalReviewReadinessOutcomePersistenceApplied: false,
-    }),
+    Object.freeze({ finalReviewReadinessOutcomeId: 'outcome:item-1', finalReviewReadinessSummaryItemId: 'summary:item-1', retryResultReviewId: 'retry-result-review:item-1', queueItemId: 'item-1', outcomeDescriptor: 'Ready for later closure review', readyForLaterClosureReview: true, keepReviewOpen: false, acknowledgementResolutionRequired: false, finalReviewPending: false, queueWriteApplied: false, closureApplied: false, finalReviewReadinessOutcomePersistenceApplied: false }),
+    Object.freeze({ finalReviewReadinessOutcomeId: 'outcome:item-2', finalReviewReadinessSummaryItemId: 'summary:item-2', retryResultReviewId: 'retry-result-review:item-2', queueItemId: 'item-2', outcomeDescriptor: 'Keep review open', readyForLaterClosureReview: false, keepReviewOpen: true, acknowledgementResolutionRequired: false, finalReviewPending: false, queueWriteApplied: false, closureApplied: false, finalReviewReadinessOutcomePersistenceApplied: false }),
+    Object.freeze({ finalReviewReadinessOutcomeId: 'outcome:item-3', finalReviewReadinessSummaryItemId: 'summary:item-3', retryResultReviewId: 'retry-result-review:item-3', queueItemId: 'item-3', outcomeDescriptor: 'Resolve acknowledgement first', readyForLaterClosureReview: false, keepReviewOpen: false, acknowledgementResolutionRequired: true, finalReviewPending: false, queueWriteApplied: false, closureApplied: false, finalReviewReadinessOutcomePersistenceApplied: false }),
+    Object.freeze({ finalReviewReadinessOutcomeId: 'outcome:item-4', finalReviewReadinessSummaryItemId: 'summary:item-4', retryResultReviewId: 'retry-result-review:item-4', queueItemId: 'item-4', outcomeDescriptor: 'Final review pending', readyForLaterClosureReview: false, keepReviewOpen: false, acknowledgementResolutionRequired: false, finalReviewPending: true, queueWriteApplied: false, closureApplied: false, finalReviewReadinessOutcomePersistenceApplied: false }),
   ]),
 });
 
-const summarySurface = buildScanOpsRetryResultFinalReviewReadinessOutcomeSummarySurface(outcomeSurface, {
-  now: () => fixedNow,
-});
+const summarySurface = buildScanOpsRetryResultFinalReviewReadinessOutcomeSummarySurface(outcomeSurface, { now: () => fixedNow });
 
 assert(summarySurface.phase === '24', 'Phase 24 outcome summary must declare phase 24');
 assert(summarySurface.component === 'scanops_bridge_retry_result_final_review_readiness_outcome_summary_surface', 'Phase 24 must expose the expected component id');
@@ -113,8 +59,25 @@ assert(summarySurface.outcomeSummaryItems.some((item) => item.summaryStatus === 
 assert(summarySurface.outcomeSummaryItems.some((item) => item.summaryStatus === 'Acknowledgement-first outcome summarized locally'), 'Phase 24 must summarize acknowledgement-first state');
 assert(summarySurface.outcomeSummaryItems.some((item) => item.summaryStatus === 'Final-review-pending outcome summarized locally'), 'Phase 24 must summarize final-review-pending state');
 
-const emptySummary = buildScanOpsRetryResultFinalReviewReadinessOutcomeSummarySurface({ outcomeItems: [] }, { now: () => fixedNow });
-assert(emptySummary.status === SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_STATUSES.EMPTY, 'Phase 24 must expose empty status when there are no outcome items');
+const validEmptyPhase23Outcome = Object.freeze({
+  phase: '23',
+  component: 'scanops_bridge_retry_result_final_review_readiness_outcome_descriptor_surface',
+  status: 'RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_EMPTY',
+  outcomeItems: Object.freeze([]),
+});
+const emptySummary = buildScanOpsRetryResultFinalReviewReadinessOutcomeSummarySurface(validEmptyPhase23Outcome, { now: () => fixedNow });
+assert(emptySummary.status === SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_STATUSES.EMPTY, 'Phase 24 must expose empty status only for a valid empty Phase 23 outcome surface');
+
+const missingSummary = buildScanOpsRetryResultFinalReviewReadinessOutcomeSummarySurface(undefined, { now: () => fixedNow });
+assert(missingSummary.status === SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_STATUSES.BLOCKED, 'Phase 24 must block missing Phase 23 outcome input');
+assert(missingSummary.errors.some((error) => error.code === SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_BLOCKERS.OUTCOME_SURFACE_REQUIRED), 'Phase 24 must report missing Phase 23 outcome blocker');
+
+const uninitializedSummary = buildScanOpsRetryResultFinalReviewReadinessOutcomeSummarySurface({}, { now: () => fixedNow });
+assert(uninitializedSummary.status === SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_STATUSES.BLOCKED, 'Phase 24 must block uninitialized outcome objects');
+assert(uninitializedSummary.errors.some((error) => error.code === SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_BLOCKERS.OUTCOME_SURFACE_REQUIRED), 'Phase 24 must not treat {} as a valid empty outcome');
+
+const wrongComponentSummary = buildScanOpsRetryResultFinalReviewReadinessOutcomeSummarySurface({ phase: '23', component: 'wrong', outcomeItems: [] }, { now: () => fixedNow });
+assert(wrongComponentSummary.status === SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_STATUSES.BLOCKED, 'Phase 24 must block non-Phase 23 outcome-shaped inputs');
 
 const blockedApplySummary = buildScanOpsRetryResultFinalReviewReadinessOutcomeSummarySurface(outcomeSurface, { applySummary: true, now: () => fixedNow });
 assert(blockedApplySummary.status === SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_STATUSES.BLOCKED, 'Phase 24 must block summary application');
@@ -139,6 +102,8 @@ assert(componentFile.includes('buildScanOpsRetryResultFinalReviewReadinessOutcom
 assert(componentFile.includes('Retry Result Final Review Readiness Outcome Summary Surface'), 'Phase 24 UI component must expose summary copy');
 assert(componentFile.includes('Outcome summary only for final review readiness descriptors'), 'Phase 24 UI component must state the summary boundary');
 assert(componentFile.includes('No closure is applied, persisted, written to the queue, retried, or sent to Inventory.'), 'Phase 24 UI component must state Phase 24 guardrails');
+assert(moduleFile.includes('isPhase23ReadinessOutcomeSurface'), 'Phase 24 module must require an initialized Phase 23 outcome surface');
+assert(moduleFile.includes('scanops_bridge_retry_result_final_review_readiness_outcome_descriptor_surface'), 'Phase 24 module must require the Phase 23 outcome component id');
 
 const forbiddenModulePatterns = [
   { pattern: /setInterval\s*\(/, label: 'background interval' },
@@ -166,4 +131,4 @@ if (errors.length > 0) {
   process.exit(1);
 }
 
-console.log('ScanOps bridge Phase 24 retry result final review readiness outcome summary surface validates display-only outcome summaries, no closure application, no persistence, no queue writes, no second retry/background replay, and no Inventory/stock/price/ledger/approval mutation.');
+console.log('ScanOps bridge Phase 24 retry result final review readiness outcome summary surface validates required Phase 23 outcome input, display-only outcome summaries, no closure application, no persistence, no queue writes, no second retry/background replay, and no Inventory/stock/price/ledger/approval mutation.');
