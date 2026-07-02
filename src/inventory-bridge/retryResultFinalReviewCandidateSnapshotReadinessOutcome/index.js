@@ -24,12 +24,17 @@ function freezeArray(values) {
   return Object.freeze([...(values || [])]);
 }
 
+function hasBlockedPhase29Status(value) {
+  return typeof value?.status === 'string' && value.status.endsWith('_BLOCKED');
+}
+
 function isValidPhase29(value) {
   return Boolean(value)
     && typeof value === 'object'
     && !Array.isArray(value)
     && value.phase === '29'
     && value.component === SCANOPS_BRIDGE_PHASE_29_SNAPSHOT_READINESS_SUMMARY_COMPONENT
+    && !hasBlockedPhase29Status(value)
     && Array.isArray(value.snapshotReadinessSummaryItems);
 }
 
