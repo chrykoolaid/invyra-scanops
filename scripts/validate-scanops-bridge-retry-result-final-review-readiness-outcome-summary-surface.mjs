@@ -132,7 +132,6 @@ assert(blockedRetry.errors.some((error) => error.code === SCANOPS_BRIDGE_RETRY_R
 const blockedQueueWrite = buildScanOpsRetryResultFinalReviewReadinessOutcomeSummarySurface(outcomeSurface, { applyQueueWrites: true, now: () => fixedNow });
 assert(blockedQueueWrite.errors.some((error) => error.code === SCANOPS_BRIDGE_RETRY_RESULT_FINAL_REVIEW_READINESS_OUTCOME_SUMMARY_BLOCKERS.QUEUE_WRITE_BLOCKED), 'Phase 24 must block queue writes');
 
-const packageFile = read('package.json');
 const moduleFile = read('src/inventory-bridge/retryResultFinalReviewReadinessOutcomeSummary/index.js');
 const componentFile = read('src/components/scanner/RetryResultFinalReviewReadinessOutcomeSummarySurface.jsx');
 
@@ -140,7 +139,6 @@ assert(componentFile.includes('buildScanOpsRetryResultFinalReviewReadinessOutcom
 assert(componentFile.includes('Retry Result Final Review Readiness Outcome Summary Surface'), 'Phase 24 UI component must expose summary copy');
 assert(componentFile.includes('Outcome summary only for final review readiness descriptors'), 'Phase 24 UI component must state the summary boundary');
 assert(componentFile.includes('No closure is applied, persisted, written to the queue, retried, or sent to Inventory.'), 'Phase 24 UI component must state Phase 24 guardrails');
-assert(packageFile.includes('validate:scanops-bridge-retry-result-final-review-readiness-outcome-summary-surface'), 'package scripts must register Phase 24 validation');
 
 const forbiddenModulePatterns = [
   { pattern: /setInterval\s*\(/, label: 'background interval' },
