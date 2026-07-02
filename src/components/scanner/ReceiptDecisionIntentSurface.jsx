@@ -11,6 +11,7 @@ import { buildScanOpsRetryResultAcknowledgementSummarySurface } from "../../inve
 import { buildScanOpsRetryResultClosureReadinessSurface } from "../../inventory-bridge/retryResultClosureReadiness/index.js";
 import { buildScanOpsRetryResultClosureIntentSurface } from "../../inventory-bridge/retryResultClosureIntent/index.js";
 import { buildScanOpsRetryResultClosureIntentSummarySurface } from "../../inventory-bridge/retryResultClosureIntentSummary/index.js";
+import { buildScanOpsRetryResultFinalReviewSnapshotSurface } from "../../inventory-bridge/retryResultFinalReviewSnapshot/index.js";
 import { createScanOpsBridgeHttpDispatchAdapter } from "../../inventory-bridge/transportClient/index.js";
 
 function Metric({ label, value, helper }) {
@@ -99,6 +100,12 @@ function retryClosureIntentSummaryStatusLabel(status) {
   return "Blocked";
 }
 
+function retryFinalReviewSnapshotStatusLabel(status) {
+  if (status === "RETRY_RESULT_FINAL_REVIEW_SNAPSHOT_READY") return "Ready";
+  if (status === "RETRY_RESULT_FINAL_REVIEW_SNAPSHOT_EMPTY") return "Empty";
+  return "Blocked";
+}
+
 export default function ReceiptDecisionIntentSurface({
   receiptReviewSurface,
   queueItems = [],
@@ -166,6 +173,11 @@ export default function ReceiptDecisionIntentSurface({
     if (!retryResultClosureIntentSurface) return null;
     return buildScanOpsRetryResultClosureIntentSummarySurface(retryResultClosureIntentSurface, { now: nowIso });
   }, [retryResultClosureIntentSurface]);
+
+  const retryResultFinalReviewSnapshotSurface = useMemo(() => {
+    if (!retryResultClosureIntentSummarySurface) return null;
+    return buildScanOpsRetryResultFinalReviewSnapshotSurface(retryResultClosureIntentSummarySurface, { now: nowIso });
+  }, [retryResultClosureIntentSummarySurface]);
 
   const handleReceiptDecisionIntent = (decisionItem, descriptor) => {
     if (!decisionItem?.decisionId || !descriptor) return;
@@ -506,6 +518,34 @@ export default function ReceiptDecisionIntentSurface({
                 <div key={item.closureIntentSummaryId} className="mt-2 rounded-xl bg-background/70 px-3 py-2">
                   <p className="text-sm font-black text-foreground">{item.queueItemId || "Closure intent summary"}</p>
                   <p className="mt-1 text-xs font-semibold text-muted-foreground">{item.summaryStatus} · {item.instruction}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {retryResultFinalReviewSnapshotSurface && (
+            <div className="mt-3 rounded-xl bg-secondary/60 px-3 py-2">
+              <p className="text-xs font-black uppercase tracking-wide text-muted-foreground">Retry Result Final Review Snapshot Surface</p>
+              <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">
+                Final review snapshot only. No closure is applied, persisted, written to the queue, retried, or sent to Inventory.
+              </p>
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                <Metric label="Snapshot state" value={retryFinalReviewSnapshotStatusLabel(retryResultFinalReviewSnapshotSurface.status)} />
+                <Metric label="Items" value={retryResultFinalReviewSnapshotSurface.finalReviewSnapshotItemCount || 0} helper="Display only" />
+                <Metric label="Selected" value={retryResultFinalReviewSnapshotSurface.selectedFinalReviewCount || 0} />
+                <Metric label="Ready later" value={retryResultFinalReviewSnapshotSurface.readyForFutureClosureReviewCount || 0} />
+                <Metric label="Keep open" value={retryResultFinalReviewSnapshotSurface.keepReviewOpenCount || 0} />
+                <Metric label="Pending" value={retryResultFinalReviewSnapshotSurface.finalReviewPendingCount || 0} />
+              </div>
+              <div className="mt-2 rounded-xl bg-background/70 px-3 py-1">
+                <InfoRow label="Mode" value="Local final review snapshot only" />
+                <InfoRow label="Future scoped closure" value={retryResultFinalReviewSnapshotSurface.futureScopedClosureConsiderationReady ? "Consider later" : "Not ready"} />
+                <InfoRow label="Closure applied" value={retryResultFinalReviewSnapshotSurface.closureApplied ? "Applied" : "Not applied"} />
+                <InfoRow label="Queue write" value={retryResultFinalReviewSnapshotSurface.queueWriteApplied ? "Applied" : "Blocked"} />
+              </div>
+              {retryResultFinalReviewSnapshotSurface.finalReviewSnapshotItems?.slice(0, 4).map((item) => (
+                <div key={item.finalReviewSnapshotItemId} className="mt-2 rounded-xl bg-background/70 px-3 py-2">
+                  <p className="text-sm font-black text-foreground">{item.queueItemId || "Final review snapshot"}</p>
+                  <p className="mt-1 text-xs font-semibold text-muted-foreground">{item.finalReviewStatus} · {item.instruction}</p>
                 </div>
               ))}
             </div>
