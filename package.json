@@ -47,6 +47,7 @@
     "validate:scanops-bridge-retry-result-closure-intent-surface": "node scripts/validate-scanops-bridge-retry-result-closure-intent-surface.mjs",
     "validate:scanops-bridge-retry-result-closure-intent-summary-surface": "node scripts/validate-scanops-bridge-retry-result-closure-intent-summary-surface.mjs",
     "validate:scanops-bridge-retry-result-final-review-snapshot-surface": "node scripts/validate-scanops-bridge-retry-result-final-review-snapshot-surface.mjs",
+    "validate:scanops-bridge-retry-result-final-review-readiness-summary-surface": "node scripts/validate-scanops-bridge-retry-result-final-review-readiness-summary-surface.mjs",
     "validate:scanops-bridge-runtime-gate-snapshot": "node scripts/validate-scanops-bridge-runtime-gate-snapshot.mjs",
     "validate:scanops-bridge-feature-gate-accessors": "node scripts/validate-scanops-bridge-feature-gate-accessors.mjs",
     "validate:scanops-bridge-runtime-capability-guard": "node scripts/validate-scanops-bridge-runtime-capability-guard.mjs",
