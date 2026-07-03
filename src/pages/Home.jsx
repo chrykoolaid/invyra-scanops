@@ -56,8 +56,9 @@ function syncLabel(syncState = {}) {
 }
 
 function QuickInfoCard({ label, value, helper, tone = "text-slate-200" }) {
+  const accessibleLabel = helper ? `${label}: ${value}. ${helper}.` : `${label}: ${value}.`;
   return (
-    <div className="min-w-0 rounded-2xl bg-slate-950/45 px-2.5 py-2 text-center">
+    <div className="min-w-0 rounded-2xl bg-slate-950/45 px-2.5 py-2 text-center" aria-label={accessibleLabel} title={accessibleLabel}>
       <div className="text-[9px] font-bold uppercase tracking-wide text-slate-400">{label}</div>
       <div className={`mt-0.5 truncate text-[11px] font-black ${tone}`}>{value}</div>
       {helper && <div className="mt-0.5 truncate text-[9px] font-bold text-slate-500">{helper}</div>}
