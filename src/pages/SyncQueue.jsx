@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import PageHeader from "../components/scanner/PageHeader";
-import { AlertTriangle, CheckCircle2, Eye, FileWarning, GitCompareArrows, RefreshCw, RotateCcw, ShieldAlert, Trash2, Wifi, WifiOff } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, FileWarning, GitCompareArrows, RotateCcw, ShieldAlert, Trash2, Wifi, WifiOff } from "lucide-react";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
-import { getInventoryConnection } from "../lib/inventorySystemAdapter";
 import { useScanOpsSession } from "../lib/scanOpsSession";
 import { hasRoleAtLeast, restrictedActionReason } from "../lib/scanOpsPermissions";
 import {
@@ -19,7 +19,6 @@ import {
   keepDuplicateAsSeparateEvidence,
   keepLocalAsEvidence,
   refreshServerValue,
-  retryAllSyncEvents,
   retrySyncEvent,
   SYNC_STATUSES,
 } from "../lib/scanOpsSync";
@@ -127,20 +126,18 @@ function canResolveSyncAction(action, record, session) {
 }
 
 export default function SyncQueue() {
+  const navigate = useNavigate();
   const session = useScanOpsSession();
   const [queue, setQueue] = useState(() => getSyncQueue());
   const [selected, setSelected] = useState(null);
   const [activeTab, setActiveTab] = useState("pending");
-  const [connection, setConnection] = useState(() => getInventoryConnection());
   const [retryingIds, setRetryingIds] = useState(() => new Set());
-  const [retryingAll, setRetryingAll] = useState(false);
   const [syncMessage, setSyncMessage] = useState(null);
   const summary = useMemo(() => getSyncSummary(), [queue]);
 
   const refresh = () => {
     const next = getSyncQueue();
     setQueue(next);
-    setConnection(getInventoryConnection());
     if (selected) {
       const refreshedSelected = next.find((record) => record.id === selected.id || record.queueId === selected.queueId);
       if (refreshedSelected) setSelected(refreshedSelected);
@@ -175,22 +172,15 @@ export default function SyncQueue() {
     refresh();
   };
 
-  const handleRetryAll = () => {
-    if (retryingAll || retryableCount === 0) return;
-    setRetryingAll(true);
-    createScanOpsEvent(SCANOPS_EVENT_TYPES.INVENTORY_PUSH_STARTED, { source_module: "Inventory Handoff", status: "retry_started", sync_exempt: true });
-    setSyncMessage(null);
-    const results = retryAllSyncEvents();
-    createScanOpsEvent(SCANOPS_EVENT_TYPES.INVENTORY_PUSH_SUCCEEDED, {
+  const handleOpenManualSync = () => {
+    createScanOpsEvent(SCANOPS_EVENT_TYPES.SYNC_STATUS_VIEWED, {
       source_module: "Inventory Handoff",
-      status: "retry_attempted",
-      attempted_count: results.length,
-      ready_count: results.filter((item) => item?.status === SYNC_STATUSES.SYNCED).length,
+      status: "manual_sync_opened_from_queue",
+      pending_count: summary.pending,
+      review_count: summary.failed + summary.conflict + summary.duplicate + summary.needsReview + summary.escalated,
       sync_exempt: true,
     });
-    setRetryingAll(false);
-    setSyncMessage({ title: "Retry checked", helper: `${results.length} item${results.length === 1 ? "" : "s"} checked. Failed items stay saved locally for retry/review.` });
-    refresh();
+    navigate("/sync-control");
   };
 
   const handleResolve = (action, record, reason) => {
@@ -259,11 +249,15 @@ export default function SyncQueue() {
             <div className="min-w-0 flex-1">
               <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Current Status</p>
               <h2 className="text-lg font-black text-foreground mt-1 break-words">{summary.pending} pending handoff · {reviewCount + summary.failed} review/blocked · {summary.synced} ready</h2>
-              <p className="text-sm text-muted-foreground mt-1 break-words">Saved locally for future Inventory Desktop handoff. Retry only checks readiness; this screen never creates products, posts stock, approves counts, sends audit uploads, or prints tickets.</p>
+              <p className="text-sm text-muted-foreground mt-1 break-words">Saved locally for future Inventory Desktop handoff. Queue review is visibility-first: this screen never creates products, posts stock, approves counts, sends audit uploads, prints tickets, or runs retry-all.</p>
             </div>
           </div>
-          <button onClick={handleRetryAll} disabled={retryableCount === 0 || retryingAll} className={`${BUTTON_SECONDARY} mt-4`}>
-            <RefreshCw className="w-4 h-4" />{retryingAll ? "Retrying..." : "Retry failed / pending"}
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <SmallFact label="Retry eligible" value={`${retryableCount} item${retryableCount === 1 ? "" : "s"}`} />
+            <SmallFact label="Control mode" value="Single item / manual sync" />
+          </div>
+          <button onClick={handleOpenManualSync} className={`${BUTTON_SECONDARY} mt-3`}>
+            <RotateCcw className="w-4 h-4" />Open Manual Sync
           </button>
           <p className="text-xs text-muted-foreground mt-3">Desktop transport: {offline ? "Offline" : "Not connected / local pilot"} · Scope: {session?.actorRole === "Staff" ? "own device/user" : session?.actorRole === "Admin" ? "all handoff records" : "store/team handoff records"}</p>
         </section>
