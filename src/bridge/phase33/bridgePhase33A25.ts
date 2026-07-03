@@ -7,7 +7,7 @@ export function createBridgePhase33A25Report() {
 
   return Object.freeze({
     phase: "33.A25",
-    status: "a25-defined-read-only",
+    status: "a25-safety-summary-defined-read-only",
     systemOfRecord: "Inventory Desktop",
     operationalLayer: "ScanOps",
     a24,
@@ -18,8 +18,12 @@ export function createBridgePhase33A25Report() {
       activationStepsAllowed: 0,
     }),
     summaryDefined: true,
+    safetySummaryDefined: true,
     readyForNextPlanning: true,
     readyForFixtureExecution: false,
-    nextAllowedStep: "phase-33-a26-summary",
+    crossRepoValidationConfirmed: false,
+    bridgeActivationAllowed: false,
+    safeToRunOperationalBridge: false,
+    nextAllowedStep: "phase-33-a26-safety-closure",
   });
 }
