@@ -177,12 +177,13 @@ export function StickyActions({ leftLabel, rightLabel, onLeft, onRight, rightDis
 }
 
 export function DoneCard({ title, helper, rows = [] }) {
+  const doneLabel = helper ? `${title}. ${helper}` : title;
   return (
-    <SectionCard className="border-primary/20 bg-primary/5">
+    <SectionCard className="border-primary/20 bg-primary/5" aria-label={doneLabel} title={doneLabel}>
       <div className="flex items-start gap-3">
-        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
         <div className="min-w-0">
-          <h2 className="text-base font-black text-foreground">{title}</h2>
+          <h2 className="text-base font-black text-foreground" title={title}>{title}</h2>
           {helper && <p className="mt-1 text-sm leading-snug text-muted-foreground">{helper}</p>}
         </div>
       </div>
