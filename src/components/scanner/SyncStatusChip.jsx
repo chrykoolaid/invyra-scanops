@@ -27,16 +27,19 @@ export default function SyncStatusChip({ compact = false }) {
   const count = state.state === "issue" ? state.summary.issue : ["pending", "offline"].includes(state.state) ? state.summary.pending : 0;
   const displayLabel = state.state === "synced" ? "Ready" : state.label;
   const label = count > 0 && !compact ? `${displayLabel} · ${count}` : displayLabel;
+  const accessibleLabel = count > 0
+    ? `Open Inventory Handoff. Sync status ${displayLabel}. ${count} item${count === 1 ? "" : "s"} need attention.`
+    : `Open Inventory Handoff. Sync status ${displayLabel}.`;
 
   return (
     <button
       type="button"
       onClick={() => navigate("/sync-queue")}
-      className={`inline-flex max-w-[132px] shrink-0 items-center justify-center gap-1.5 rounded-xl border px-2.5 py-2 text-[11px] font-black active:scale-[0.98] transition-all ${tone[chipState] || tone.ready}`}
-      aria-label="Open Inventory Handoff"
-      title="Open Inventory Handoff"
+      className={`inline-flex min-h-11 max-w-[150px] shrink-0 items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-[11px] font-black active:scale-[0.98] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/40 ${tone[chipState] || tone.ready}`}
+      aria-label={accessibleLabel}
+      title={accessibleLabel}
     >
-      <Icon className="h-3.5 w-3.5 shrink-0" />
+      <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
       <span className="truncate">{label}</span>
     </button>
   );
