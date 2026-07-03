@@ -65,9 +65,10 @@ export function OperatorAlert({ title, helper = "", tone = "warning", actions = 
 }
 
 export function FieldError({ title, helper }) {
+  const errorLabel = helper ? `${title}. ${helper}` : title;
   return (
-    <div className="rounded-2xl border border-destructive/20 bg-destructive/10 px-3 py-2">
-      <p className="text-xs font-black text-destructive">{title}</p>
+    <div className="rounded-2xl border border-destructive/20 bg-destructive/10 px-3 py-2" aria-label={errorLabel} title={errorLabel}>
+      <p className="text-xs font-black text-destructive" title={title}>{title}</p>
       {helper && <p className="mt-1 text-xs font-semibold leading-snug text-destructive/80">{helper}</p>}
     </div>
   );
