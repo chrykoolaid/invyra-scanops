@@ -114,7 +114,7 @@ function Section({ icon: Icon, title, helper, badge, children }) {
         <div className="flex min-w-0 items-start gap-3">
           {Icon && (
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-              <Icon className="h-5 w-5" />
+              <Icon className="h-5 w-5" aria-hidden="true" />
             </span>
           )}
           <div className="min-w-0">
@@ -177,6 +177,11 @@ export default function ManualSyncControl() {
       : plan.status !== SCANOPS_BRIDGE_MANUAL_SYNC_STATUSES.READY
         ? "No eligible queue items are ready for manual sync."
         : "Ready for operator-initiated sync.";
+  const syncButtonLabel = isRunning
+    ? "Manual sync is running."
+    : canRunManualSync
+      ? `Run manual sync for ${manualQueue.length} eligible item${manualQueue.length === 1 ? "" : "s"}.`
+      : `Manual sync unavailable. ${disabledReason}`;
 
   const handleSyncNow = async () => {
     if (!canRunManualSync) return;
@@ -248,10 +253,10 @@ export default function ManualSyncControl() {
           </p>
         </div>
 
-        <section className={`rounded-3xl border p-4 shadow-sm ${resultTone(plan.status)}`}>
+        <section className={`rounded-3xl border p-4 shadow-sm ${resultTone(plan.status)}`} aria-live="polite" aria-label={`Manual sync status: ${statusLabel(plan.status)}`}>
           <div className="flex items-start gap-3">
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/70">
-              {isOffline ? <WifiOff className="h-6 w-6" /> : <PlayCircle className="h-6 w-6" />}
+              {isOffline ? <WifiOff className="h-6 w-6" aria-hidden="true" /> : <PlayCircle className="h-6 w-6" aria-hidden="true" />}
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-black uppercase tracking-[0.16em] opacity-80">Manual Control</p>
@@ -259,9 +264,9 @@ export default function ManualSyncControl() {
               <p className="mt-1 text-sm font-bold leading-snug opacity-90">{disabledReason}</p>
             </div>
           </div>
-          <button type="button" className={`mt-4 w-full ${BTN_PRIMARY}`} onClick={handleSyncNow} disabled={!canRunManualSync}>
-            {isRunning ? <RefreshCw className="mr-2 inline h-4 w-4 animate-spin" /> : <PlayCircle className="mr-2 inline h-4 w-4" />}
-            {isRunning ? "Sync Running" : "Sync Now"}
+          <button type="button" className={`mt-4 w-full ${BTN_PRIMARY}`} onClick={handleSyncNow} disabled={!canRunManualSync} aria-label={syncButtonLabel} title={syncButtonLabel}>
+            {isRunning ? <RefreshCw className="mr-2 inline h-4 w-4 animate-spin" aria-hidden="true" /> : <PlayCircle className="mr-2 inline h-4 w-4" aria-hidden="true" />}
+            <span>{isRunning ? "Sync Running" : "Sync Now"}</span>
           </button>
         </section>
 
