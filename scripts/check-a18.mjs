@@ -14,6 +14,8 @@ const typeRequired = [
 
 const implementationRequired = [
   'createBridgePhase33A18Report(): BridgePhase33A18SnapshotReport',
+  'phase: "33.A18"',
+  'status: "a18-snapshot-defined-read-only"',
   'const readinessReview = createBridgePhase33FixtureEvidenceReadinessReviewReport();',
   'readinessReview,',
   'checks: 8',
