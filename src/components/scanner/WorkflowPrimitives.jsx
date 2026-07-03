@@ -13,8 +13,8 @@ export function WorkflowMain({ children, className = "" }) {
   );
 }
 
-export function SectionCard({ children, className = "" }) {
-  return <section className={`scanops-work-card ${className}`}>{children}</section>;
+export function SectionCard({ children, className = "", ...sectionProps }) {
+  return <section className={`scanops-work-card ${className}`} {...sectionProps}>{children}</section>;
 }
 
 export function ReadyCard() {
