@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 const emphasisClasses = {
   hero: "min-h-[118px] items-start justify-between rounded-[1.65rem] px-4 py-4 text-left",
-  default: "h-[92px] min-h-[92px] items-center justify-center rounded-2xl px-2 py-2.5 text-center",
+  default: "h-[96px] min-h-[96px] items-center justify-center rounded-2xl px-2.5 py-3 text-center",
 };
 
 const activeClasses = {
@@ -57,9 +57,11 @@ export default function ActionTile({
   const navigate = useNavigate();
   const mode = emphasisClasses[emphasis] ? emphasis : "default";
   const tileTone = toneClasses[tone] || toneClasses.default;
+  const isInteractive = Boolean(active && to);
+  const accessibleLabel = description ? `${label}. ${description}` : label;
 
   const handleTap = () => {
-    if (active && to) navigate(to);
+    if (isInteractive) navigate(to);
   };
 
   const activeTileClass = mode === "hero"
@@ -72,10 +74,14 @@ export default function ActionTile({
     <button
       type="button"
       onClick={handleTap}
+      disabled={!isInteractive}
+      aria-label={accessibleLabel}
       className={`
-        group flex w-full flex-col border transition-all duration-150 active:scale-[0.98]
+        group flex w-full min-w-0 flex-col border transition-all duration-150 active:scale-[0.98]
+        focus-visible:outline-none disabled:active:scale-100
         ${emphasisClasses[mode]}
         ${active ? activeTileClass : "bg-slate-800/60 border-transparent text-slate-500 opacity-60"}
+        ${isInteractive ? "cursor-pointer" : "cursor-not-allowed"}
         ${className}
       `}
     >
@@ -83,12 +89,12 @@ export default function ActionTile({
         <Icon className={mode === "hero" ? "h-5 w-5" : "h-4 w-4"} strokeWidth={2} />
       </span>
 
-      <span className={mode === "hero" ? "mt-3 min-w-0" : "mt-1.5 min-w-0"}>
-        <span className={`block font-black leading-tight ${mode === "hero" ? "text-sm" : "text-[12px]"} ${active ? "text-current" : "text-slate-500"}`}>
+      <span className={mode === "hero" ? "mt-3 min-w-0 max-w-full" : "mt-1.5 min-w-0 max-w-full"}>
+        <span className={`block max-w-full break-words font-black leading-tight ${mode === "hero" ? "text-sm" : "text-[12px]"} ${active ? "text-current" : "text-slate-500"}`}>
           {label}
         </span>
         {description && (
-          <span className={`mt-0.5 block font-bold leading-snug ${mode === "hero" ? "text-xs" : "text-[9.5px]"} ${active ? "text-current/70" : "text-slate-500"}`}>
+          <span className={`mt-0.5 block max-w-full break-words font-bold leading-snug ${mode === "hero" ? "text-xs" : "text-[9.5px]"} ${active ? "text-current/70" : "text-slate-500"}`}>
             {description}
           </span>
         )}
