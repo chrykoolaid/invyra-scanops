@@ -12,13 +12,15 @@ const TOOL_TILES = [
 ];
 
 export default function More() {
+  const toolsSummary = "Tasks, manual sync, settings, help, and return to Home";
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col overflow-x-hidden">
       <AppHeader title="Tools" subtitle="Support & device tools" />
       <main data-scanops-scroll className="scanops-console-screen flex-1 overflow-hidden bg-slate-950 px-4 py-3 pb-24">
-        <section className="rounded-2xl border border-white/10 bg-slate-900/80 px-3 py-2" aria-label="Tools summary">
+        <section className="rounded-2xl border border-white/10 bg-slate-900/80 px-3 py-2" aria-label={`Tools summary: ${toolsSummary}`} title={toolsSummary}>
           <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Tools</div>
-          <div className="mt-1 text-sm font-black text-slate-50">Tasks, manual sync, settings, help, and return to Home</div>
+          <div className="mt-1 text-sm font-black leading-snug text-slate-50">{toolsSummary}</div>
         </section>
 
         <section className="mt-2 grid grid-cols-2 gap-2" aria-label="ScanOps tools support pad">
