@@ -33,10 +33,11 @@ export function OperatorAlert({ title, helper = "", tone = "warning", actions = 
     success: "border-primary/20 bg-primary/5 text-primary",
   };
   const Icon = tone === "success" ? CheckCircle2 : tone === "info" ? Info : AlertTriangle;
+  const alertLabel = helper ? `${title}. ${helper}` : title;
   return (
-    <div className={`rounded-2xl border px-4 py-3 ${toneMap[tone] || toneMap.warning}`}>
+    <div className={`rounded-2xl border px-4 py-3 ${toneMap[tone] || toneMap.warning}`} aria-label={alertLabel} title={alertLabel}>
       <div className="flex items-start gap-3">
-        <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+        <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <p className="break-words text-sm font-black text-foreground">{title}</p>
           {helper && <p className="mt-1 break-words text-xs font-semibold leading-snug text-muted-foreground">{helper}</p>}
@@ -50,6 +51,8 @@ export function OperatorAlert({ title, helper = "", tone = "warning", actions = 
               type="button"
               onClick={action.onClick}
               disabled={action.disabled}
+              aria-label={action.label}
+              title={action.label}
               className={`min-h-10 rounded-xl px-3 text-xs font-black active:scale-[0.98] disabled:opacity-40 ${action.variant === "primary" ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}
             >
               {action.label}
