@@ -1,16 +1,19 @@
 import {
   createBridgePhase33FixtureEvidenceReadinessReviewReport,
 } from "./bridgePhase33FixtureEvidenceReadinessReview";
+import type {
+  BridgePhase33A18SnapshotReport,
+} from "./bridgePhase33A18SnapshotTypes";
 
-export function createBridgePhase33A18Report() {
-  const review = createBridgePhase33FixtureEvidenceReadinessReviewReport();
+export function createBridgePhase33A18Report(): BridgePhase33A18SnapshotReport {
+  const readinessReview = createBridgePhase33FixtureEvidenceReadinessReviewReport();
 
   return Object.freeze({
     phase: "33.A18",
     status: "a18-snapshot-defined-read-only",
     systemOfRecord: "Inventory Desktop",
     operationalLayer: "ScanOps",
-    review,
+    readinessReview,
     totals: Object.freeze({
       checks: 8,
       readyChecks: 5,
@@ -30,5 +33,6 @@ export function createBridgePhase33A18Report() {
     inventoryMutationAllowed: false,
     scanOpsMutationAllowed: false,
     nextAllowedStep: "phase-33-a19-cross-repo-fixture-planning-review",
+    reason: "A18 is a read-only closure snapshot handoff for later cross-repo fixture planning. It does not activate the bridge or mutate Inventory, ScanOps, queue state, persistence, stock, price, ledger, or approvals.",
   });
 }
