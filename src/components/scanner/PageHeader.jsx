@@ -31,17 +31,18 @@ const CONTEXT_GUIDES = {
 
 function HeaderContextGuide({ guide }) {
   if (!guide) return null;
+  const guideLabel = `${guide.label}. ${guide.helper}`;
   return (
-    <div className="mt-3 rounded-2xl border border-border bg-background/80 px-3 py-3">
+    <div className="mt-3 rounded-2xl border border-border bg-background/80 px-3 py-3" aria-label={guideLabel} title={guideLabel}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">{guide.label}</p>
-          <p className="mt-1 text-xs font-bold leading-snug text-muted-foreground">{guide.helper}</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground" title={guide.label}>{guide.label}</p>
+          <p className="mt-1 text-xs font-bold leading-snug text-muted-foreground" title={guide.helper}>{guide.helper}</p>
         </div>
       </div>
       <div className="mt-3 grid grid-cols-2 gap-2">
         {guide.steps.map((step, index) => (
-          <div key={step} className="rounded-xl bg-secondary/70 px-2.5 py-2">
+          <div key={step} className="rounded-xl bg-secondary/70 px-2.5 py-2" aria-label={`Step ${index + 1}: ${step}`} title={`Step ${index + 1}: ${step}`}>
             <p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">Step {index + 1}</p>
             <p className="mt-0.5 text-xs font-black text-foreground">{step}</p>
           </div>
@@ -54,9 +55,11 @@ function HeaderContextGuide({ guide }) {
 export default function PageHeader({ title, subtitle, showHome = true }) {
   const navigate = useNavigate();
   const contextGuide = CONTEXT_GUIDES[title];
+  const homeLabel = `Return to ScanOps Home from ${title}`;
+  const headerLabel = subtitle ? `${title}. ${subtitle}` : title;
 
   return (
-    <header className="bg-card border-b border-border px-4 py-3" data-scanops-page-header>
+    <header className="bg-card border-b border-border px-4 py-3" data-scanops-page-header aria-label={headerLabel} title={headerLabel}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           {showHome && (
@@ -64,14 +67,15 @@ export default function PageHeader({ title, subtitle, showHome = true }) {
               type="button"
               onClick={() => navigate("/")}
               className="w-10 h-10 flex items-center justify-center rounded-xl bg-secondary active:bg-border transition-colors shrink-0"
-              aria-label="Return to Home"
+              aria-label={homeLabel}
+              title={homeLabel}
             >
-              <Home className="w-5 h-5 text-foreground" />
+              <Home className="w-5 h-5 text-foreground" aria-hidden="true" />
             </button>
           )}
           <div className="min-w-0">
-            <h1 className="text-base font-bold text-foreground truncate">{title}</h1>
-            {subtitle && <p className="text-xs text-muted-foreground mt-0.5 truncate">{subtitle}</p>}
+            <h1 className="text-base font-bold text-foreground truncate" title={title}>{title}</h1>
+            {subtitle && <p className="text-xs text-muted-foreground mt-0.5 truncate" title={subtitle}>{subtitle}</p>}
           </div>
         </div>
         <SyncStatusChip compact />
