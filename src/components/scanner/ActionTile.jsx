@@ -76,6 +76,7 @@ export default function ActionTile({
       onClick={handleTap}
       disabled={!isInteractive}
       aria-label={accessibleLabel}
+      title={accessibleLabel}
       className={`
         group flex w-full min-w-0 flex-col border transition-all duration-150 active:scale-[0.98]
         focus-visible:outline-none disabled:active:scale-100
@@ -85,16 +86,16 @@ export default function ActionTile({
         ${className}
       `}
     >
-      <span className={`flex shrink-0 items-center justify-center ${active ? iconClass : "h-8 w-8 rounded-xl bg-white/5 text-slate-500"}`}>
-        <Icon className={mode === "hero" ? "h-5 w-5" : "h-4 w-4"} strokeWidth={2} />
+      <span className={`flex shrink-0 items-center justify-center ${active ? iconClass : "h-8 w-8 rounded-xl bg-white/5 text-slate-500"}`} aria-hidden="true">
+        <Icon className={mode === "hero" ? "h-5 w-5" : "h-4 w-4"} strokeWidth={2} aria-hidden="true" />
       </span>
 
       <span className={mode === "hero" ? "mt-3 min-w-0 max-w-full" : "mt-1.5 min-w-0 max-w-full"}>
-        <span className={`block max-w-full break-words font-black leading-tight ${mode === "hero" ? "text-sm" : "text-[12px]"} ${active ? "text-current" : "text-slate-500"}`}>
+        <span className={`block max-w-full break-words font-black leading-tight ${mode === "hero" ? "text-sm" : "text-[12px]"} ${active ? "text-current" : "text-slate-500"}`} title={label}>
           {label}
         </span>
         {description && (
-          <span className={`mt-0.5 block max-w-full break-words font-bold leading-snug ${mode === "hero" ? "text-xs" : "text-[9.5px]"} ${active ? "text-current/70" : "text-slate-500"}`}>
+          <span className={`mt-0.5 block max-w-full break-words font-bold leading-snug ${mode === "hero" ? "text-xs" : "text-[9.5px]"} ${active ? "text-current/70" : "text-slate-500"}`} title={description}>
             {description}
           </span>
         )}
