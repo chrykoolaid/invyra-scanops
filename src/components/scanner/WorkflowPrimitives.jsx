@@ -135,10 +135,12 @@ export function ItemSummaryCard({ item, children = null }) {
 }
 
 export function MetricPill({ label, value, suffix = "" }) {
+  const metricValue = suffix ? `${value} ${suffix}` : `${value}`;
+  const metricLabel = `${label}: ${metricValue}`;
   return (
-    <div className="min-w-0 rounded-2xl bg-secondary/70 px-3 py-2">
-      <p className="truncate text-[10px] font-black uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="mt-0.5 truncate text-sm font-black text-foreground">{value}{suffix ? ` ${suffix}` : ""}</p>
+    <div className="min-w-0 rounded-2xl bg-secondary/70 px-3 py-2" aria-label={metricLabel} title={metricLabel}>
+      <p className="truncate text-[10px] font-black uppercase tracking-wider text-muted-foreground" title={label}>{label}</p>
+      <p className="mt-0.5 truncate text-sm font-black text-foreground" title={metricValue}>{value}{suffix ? ` ${suffix}` : ""}</p>
     </div>
   );
 }
