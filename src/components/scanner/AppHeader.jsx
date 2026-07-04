@@ -7,7 +7,7 @@ import SyncStatusChip from "./SyncStatusChip";
 function HeaderMetaPill({ value }) {
   if (!value) return null;
   return (
-    <span className="max-w-[7.5rem] truncate rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold text-muted-foreground" title={value}>
+    <span className="max-w-[7.5rem] truncate rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold text-muted-foreground" aria-label={value} title={value}>
       {value}
     </span>
   );
@@ -23,12 +23,13 @@ export default function AppHeader() {
     governance.shiftLabel || "Shift",
     governance.deviceLabel || session.deviceId || "Device ready",
   ].filter(Boolean);
+  const sessionLabel = `ScanOps session header. ${metaItems.join(". ")}.`;
 
   return (
-    <header className="bg-card border-b border-border px-4 py-3" aria-label="ScanOps session header">
+    <header className="bg-card border-b border-border px-4 py-3" aria-label={sessionLabel} title={sessionLabel}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h1 className="text-base font-bold text-foreground tracking-tight truncate">Invyra ScanOps</h1>
+          <h1 className="text-base font-bold text-foreground tracking-tight truncate" title="Invyra ScanOps">Invyra ScanOps</h1>
           <div className="mt-1 flex flex-wrap items-center gap-1.5" aria-label="Current ScanOps session context">
             {metaItems.map((item, index) => <HeaderMetaPill key={`${item}:${index}`} value={item} />)}
           </div>
