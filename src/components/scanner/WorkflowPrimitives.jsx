@@ -194,10 +194,13 @@ export function DoneCard({ title, helper, rows = [] }) {
 }
 
 export function InfoLine({ label, value }) {
+  const labelText = typeof label === "string" || typeof label === "number" ? String(label) : "Detail";
+  const valueText = typeof value === "string" || typeof value === "number" ? String(value) : "";
+  const infoLabel = valueText ? `${labelText}: ${valueText}` : labelText;
   return (
-    <div className="flex items-start justify-between gap-3 border-t border-border pt-2 first:border-t-0 first:pt-0">
-      <span className="text-xs font-bold text-muted-foreground">{label}</span>
-      <span className="break-words text-right text-xs font-black text-foreground">{value}</span>
+    <div className="flex items-start justify-between gap-3 border-t border-border pt-2 first:border-t-0 first:pt-0" aria-label={infoLabel} title={infoLabel}>
+      <span className="text-xs font-bold text-muted-foreground" title={labelText}>{label}</span>
+      <span className="break-words text-right text-xs font-black text-foreground" title={valueText || undefined}>{value}</span>
     </div>
   );
 }
