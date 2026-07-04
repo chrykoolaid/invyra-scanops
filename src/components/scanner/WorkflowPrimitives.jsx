@@ -147,19 +147,23 @@ export function MetricPill({ label, value, suffix = "" }) {
 
 export function QuantityStepper({ label = "Quantity", value, onChange, unit = "each", min = 0 }) {
   const set = (next) => onChange?.(Math.max(min, Number(next || 0)));
+  const quantityValue = `${value} ${unit}`;
+  const quantityLabel = `${label}: ${quantityValue}`;
+  const decreaseLabel = `Decrease ${label}`;
+  const increaseLabel = `Increase ${label}`;
   return (
-    <div className="space-y-2">
-      <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">{label}</p>
+    <div className="space-y-2" aria-label={quantityLabel} title={quantityLabel}>
+      <p className="text-xs font-black uppercase tracking-wider text-muted-foreground" title={label}>{label}</p>
       <div className="grid grid-cols-[3.25rem_1fr_3.25rem] gap-3">
-        <button type="button" onClick={() => set(Number(value || 0) - 1)} className="flex min-h-12 items-center justify-center rounded-2xl bg-secondary font-black active:bg-border">
-          <Minus className="h-4 w-4" />
+        <button type="button" onClick={() => set(Number(value || 0) - 1)} className="flex min-h-12 items-center justify-center rounded-2xl bg-secondary font-black active:bg-border" aria-label={decreaseLabel} title={decreaseLabel}>
+          <Minus className="h-4 w-4" aria-hidden="true" />
         </button>
-        <div className="flex min-h-12 flex-col items-center justify-center rounded-2xl bg-secondary/70 px-3">
+        <div className="flex min-h-12 flex-col items-center justify-center rounded-2xl bg-secondary/70 px-3" title={quantityValue}>
           <span className="text-2xl font-black leading-none text-foreground">{value}</span>
           <span className="mt-1 text-xs font-semibold text-muted-foreground">{unit}</span>
         </div>
-        <button type="button" onClick={() => set(Number(value || 0) + 1)} className="flex min-h-12 items-center justify-center rounded-2xl bg-secondary font-black active:bg-border">
-          <Plus className="h-4 w-4" />
+        <button type="button" onClick={() => set(Number(value || 0) + 1)} className="flex min-h-12 items-center justify-center rounded-2xl bg-secondary font-black active:bg-border" aria-label={increaseLabel} title={increaseLabel}>
+          <Plus className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
     </div>
