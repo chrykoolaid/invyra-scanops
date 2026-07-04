@@ -3,17 +3,18 @@ import { WifiOff, RefreshCw, CheckCircle2, AlertTriangle, ShieldCheck } from "lu
 import { useOfflineSync } from "../../lib/useOfflineSync";
 
 function OfflineActionGuide({ queueCount }) {
+  const queueLabel = `${queueCount} item${queueCount === 1 ? "" : "s"} waiting`;
   return (
-    <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-3">
-      <div className="rounded-xl bg-white/55 px-2.5 py-2">
+    <div className="mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-3" aria-label={`Offline action guide. ${queueLabel}.`} title={`Offline action guide. ${queueLabel}.`}>
+      <div className="rounded-xl bg-white/55 px-2.5 py-2" aria-label="Step 1: Keep working. Scans are saved locally." title="Step 1: Keep working. Scans are saved locally.">
         <p className="text-[10px] font-black uppercase tracking-wide text-amber-900/70">1 · Keep Working</p>
         <p className="mt-0.5 text-[11px] font-bold leading-snug text-amber-950">Scans are saved locally.</p>
       </div>
-      <div className="rounded-xl bg-white/55 px-2.5 py-2">
+      <div className="rounded-xl bg-white/55 px-2.5 py-2" aria-label={`Step 2: Queue safe. ${queueLabel}.`} title={`Step 2: Queue safe. ${queueLabel}.`}>
         <p className="text-[10px] font-black uppercase tracking-wide text-amber-900/70">2 · Queue Safe</p>
         <p className="mt-0.5 text-[11px] font-bold leading-snug text-amber-950">{queueCount} item{queueCount === 1 ? "" : "s"} waiting.</p>
       </div>
-      <div className="rounded-xl bg-white/55 px-2.5 py-2">
+      <div className="rounded-xl bg-white/55 px-2.5 py-2" aria-label="Step 3: Auto sync. Sync resumes when online." title="Step 3: Auto sync. Sync resumes when online.">
         <p className="text-[10px] font-black uppercase tracking-wide text-amber-900/70">3 · Auto Sync</p>
         <p className="mt-0.5 text-[11px] font-bold leading-snug text-amber-950">Sync resumes when online.</p>
       </div>
@@ -84,6 +85,7 @@ export default function OfflineBanner() {
     );
   }
 
+  const pendingLabel = `${queueCount} pending offline scan record${queueCount === 1 ? "" : "s"}`;
   return (
     <div className="border-b border-amber-200 bg-amber-50 px-4 py-3" role="status" aria-live="polite">
       <div className="flex items-start gap-3">
@@ -94,7 +96,7 @@ export default function OfflineBanner() {
               <p className="text-sm font-black text-amber-950">Offline Mode</p>
               <p className="mt-0.5 text-xs font-bold leading-snug text-amber-800">Everything you scan is saved locally. Nothing is lost.</p>
             </div>
-            <span className="shrink-0 rounded-full bg-white/60 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-amber-900">
+            <span className="shrink-0 rounded-full bg-white/60 px-2 py-1 text-[10px] font-black uppercase tracking-wide text-amber-900" aria-label={pendingLabel} title={pendingLabel}>
               {queueCount} Pending
             </span>
           </div>
