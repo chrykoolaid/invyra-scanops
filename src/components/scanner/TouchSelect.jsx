@@ -18,25 +18,29 @@ function optionLabel(option) {
 }
 
 export default function TouchSelect({ label, value, onChange, options = [], helper = "", placeholder = "Select" }) {
+  const selectLabel = helper ? `${label}. ${helper}` : label;
   return (
-    <div className="block min-w-0">
-      <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</label>
-      {helper && <p className="mt-1 text-xs leading-snug text-muted-foreground">{helper}</p>}
+    <div className="block min-w-0" aria-label={selectLabel} title={selectLabel}>
+      <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground" title={label}>{label}</label>
+      {helper && <p className="mt-1 text-xs leading-snug text-muted-foreground" title={helper}>{helper}</p>}
       <Select value={value ? String(value) : ""} onValueChange={onChange}>
-        <SelectTrigger className="mt-2 h-12 w-full rounded-2xl border border-border bg-card px-4 text-left text-sm font-bold text-foreground shadow-sm focus:ring-2 focus:ring-primary/25">
+        <SelectTrigger className="mt-2 h-12 w-full rounded-2xl border border-border bg-card px-4 text-left text-sm font-bold text-foreground shadow-sm focus:ring-2 focus:ring-primary/25" aria-label={selectLabel} title={selectLabel}>
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent className="max-h-[min(18rem,70dvh)] rounded-2xl border-border bg-card p-1 shadow-xl z-[80]">
           {options.map((option) => {
             const val = optionValue(option);
+            const optionText = optionLabel(option);
+            const optionTitle = option.helper ? `${optionText}. ${option.helper}` : optionText;
             return (
               <SelectItem
                 key={val}
                 value={val}
                 className="min-h-11 rounded-xl px-3 py-3 text-sm font-bold focus:bg-secondary"
+                title={optionTitle}
               >
                 <span className="flex flex-col gap-0.5">
-                  <span>{optionLabel(option)}</span>
+                  <span>{optionText}</span>
                   {option.helper && <span className="text-[11px] font-medium text-muted-foreground">{option.helper}</span>}
                 </span>
               </SelectItem>
