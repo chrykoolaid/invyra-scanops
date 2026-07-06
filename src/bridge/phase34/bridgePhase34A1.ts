@@ -1,0 +1,77 @@
+import {
+  createBridgePhase33C5Report,
+} from "../phase33/bridgePhase33C5";
+
+export function createBridgePhase34A1Report() {
+  const phase33Closure = createBridgePhase33C5Report();
+
+  return Object.freeze({
+    phase: "34.A1",
+    status: "phase-34-planning-opening-read-only",
+    systemOfRecord: "Inventory Desktop",
+    operationalLayer: "ScanOps",
+    phase33Closure,
+    planningScope: Object.freeze({
+      phase34PlanningOnly: true,
+      readinessDescriptorOnly: true,
+      implementationWorkAllowed: false,
+      runtimeWorkAllowed: false,
+      transportActivationAllowed: false,
+      fixtureExecutionAllowed: false,
+      persistenceAllowed: false,
+      queueProcessingAllowed: false,
+    }),
+    phase33AuthorizationBasis: Object.freeze({
+      phase33FormallyClosed: true,
+      phase33CCompleteThroughC5: true,
+      phase34PlanningAuthorizedByC5: true,
+      phase34ImplementationAuthorizedNow: false,
+      liveBridgeActivationAuthorizedNow: false,
+    }),
+    phase34OpeningGuardrails: Object.freeze({
+      liveBridgeActivation: false,
+      transportActivation: false,
+      fixtureExecution: false,
+      persistence: false,
+      queueProcessing: false,
+      inboxProcessing: false,
+      inventoryMutation: false,
+      scanOpsMutation: false,
+      stockMutation: false,
+      ledgerMutation: false,
+      pricingMutation: false,
+      posMutation: false,
+      orderMutation: false,
+      approvalMutation: false,
+      itemMasterMutation: false,
+    }),
+    protectedDomains: Object.freeze([
+      "stock",
+      "ledger",
+      "pricing",
+      "POS",
+      "orders",
+      "approvals",
+      "Item Master",
+    ]),
+    a1ReadinessVerdict: Object.freeze({
+      phase34PlanningOpened: true,
+      phase34PlanningOnlyConfirmed: true,
+      phase33ClosureReferenceConfirmed: true,
+      noRuntimeBehaviorIntroduced: true,
+      noTransportBehaviorIntroduced: true,
+      noPersistenceBehaviorIntroduced: true,
+      noQueueProcessingIntroduced: true,
+      noMutationIntroduced: true,
+      safeToProceedToPhase34A2Planning: true,
+      safeToBeginPhase34ImplementationNow: false,
+      safeToActivateRuntimeNow: false,
+      safeToExecuteFixturesNow: false,
+      safeToActivateTransportNow: false,
+      safeToEnablePersistenceNow: false,
+      safeToProcessQueuesNow: false,
+      safeToApplyInventoryChangesNow: false,
+    }),
+    nextAllowedStep: "phase-34-a2-planning-readiness-review",
+  });
+}
