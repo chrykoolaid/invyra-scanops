@@ -1,0 +1,83 @@
+import {
+  createBridgePhase34A4Report,
+} from "./bridgePhase34A4";
+
+export function createBridgePhase34A5Report() {
+  const a4 = createBridgePhase34A4Report();
+
+  return Object.freeze({
+    phase: "34.A5",
+    status: "persistence-queue-contract-planning-read-only",
+    roadmapSection: "34-A — Planning & Governance",
+    systemOfRecord: "Inventory Desktop",
+    operationalLayer: "ScanOps",
+    a4,
+    persistenceQueueContractScope: Object.freeze({
+      planningOnly: true,
+      persistenceQueueContractOnly: true,
+      readinessDescriptorOnly: true,
+      implementationWorkAllowed: false,
+      runtimeWorkAllowed: false,
+      transportActivationAllowed: false,
+      fixtureExecutionAllowed: false,
+      persistenceAllowed: false,
+      queueProcessingAllowed: false,
+      inboxProcessingAllowed: false,
+    }),
+    plannedPersistenceBoundaries: Object.freeze([
+      "future-local-durable-buffer-boundary",
+      "future-receipt-envelope-storage-boundary",
+      "future-idempotency-record-boundary",
+      "future-audit-trace-boundary",
+      "future-recovery-checkpoint-boundary",
+    ]),
+    plannedQueueBoundaries: Object.freeze([
+      "future-outbox-boundary",
+      "future-inbox-boundary",
+      "future-pending-state-boundary",
+      "future-dead-letter-state-boundary",
+      "future-manual-review-state-boundary",
+      "future-no-automatic-replay-boundary",
+    ]),
+    persistenceQueueGuardrails: Object.freeze({
+      persistenceImplementationAllowedNow: false,
+      queueImplementationAllowedNow: false,
+      inboxImplementationAllowedNow: false,
+      automaticReplayAllowedNow: false,
+      backgroundDrainAllowedNow: false,
+      durableWritesAllowedNow: false,
+      storageSchemaMigrationAllowedNow: false,
+      inventoryMutationAllowedFromQueue: false,
+      scanOpsMutationAllowedFromQueue: false,
+    }),
+    expectedNoMutationAssertions: Object.freeze({
+      inventoryMutation: false,
+      scanOpsMutation: false,
+      stockMutation: false,
+      ledgerMutation: false,
+      pricingMutation: false,
+      posMutation: false,
+      orderMutation: false,
+      approvalMutation: false,
+      itemMasterMutation: false,
+    }),
+    a5ReadinessVerdict: Object.freeze({
+      persistenceQueueContractPlanningDefined: true,
+      roadmapSectionConfirmed: true,
+      safeToProceedToPhase34A6Planning: true,
+      safeToBeginPhase34ImplementationNow: false,
+      safeToExecuteFixturesNow: false,
+      safeToActivateTransportNow: false,
+      safeToEnablePersistenceNow: false,
+      safeToProcessQueuesNow: false,
+      safeToApplyInventoryChangesNow: false,
+      noRuntimeBehaviorIntroduced: true,
+      noFixtureExecutionIntroduced: true,
+      noTransportBehaviorIntroduced: true,
+      noPersistenceBehaviorIntroduced: true,
+      noQueueProcessingIntroduced: true,
+      noMutationIntroduced: true,
+    }),
+    nextAllowedStep: "phase-34-a6-inventory-boundary-planning",
+  });
+}
