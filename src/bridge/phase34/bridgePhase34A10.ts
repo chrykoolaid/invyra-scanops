@@ -43,6 +43,7 @@ export function createBridgePhase34A10Report() {
       phase34APlanningGovernanceClosed: true,
       implementationDeferredToFutureScopedPhase: true,
       liveActivationStillForbidden: true,
+      nextRoadmapSectionIsBridgeContracts: true,
     }),
     implementationStillBlocked: Object.freeze({
       runtimeBehavior: true,
@@ -70,7 +71,8 @@ export function createBridgePhase34A10Report() {
       planningGovernanceCloseoutDefined: true,
       roadmapSectionConfirmed: true,
       phase34APlanningGovernanceComplete: true,
-      safeToProceedToNextScopedPlanningOrImplementationPhase: true,
+      safeToProceedToPhase34BBridgeContractsPlanning: true,
+      safeToProceedToImplementationNow: false,
       safeToBeginUnscopedImplementationNow: false,
       safeToExecuteFixturesNow: false,
       safeToActivateTransportNow: false,
@@ -84,6 +86,6 @@ export function createBridgePhase34A10Report() {
       noQueueProcessingIntroduced: true,
       noMutationIntroduced: true,
     }),
-    nextAllowedStep: "phase-34-b-controlled-test-training-implementation-scope",
+    nextAllowedStep: "phase-34-b-bridge-contracts-planning",
   });
 }
