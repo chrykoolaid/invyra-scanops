@@ -1,0 +1,82 @@
+import {
+  createBridgePhase34A10Report,
+} from "./bridgePhase34A10";
+
+export function createBridgePhase34B1Report() {
+  const a10 = createBridgePhase34A10Report();
+
+  return Object.freeze({
+    phase: "34.B1",
+    status: "bridge-contracts-planning-opening-read-only",
+    roadmapSection: "34-B — Bridge Contracts",
+    systemOfRecord: "Inventory Desktop",
+    operationalLayer: "ScanOps",
+    a10,
+    bridgeContractsScope: Object.freeze({
+      planningOnly: true,
+      bridgeContractsOnly: true,
+      readinessDescriptorOnly: true,
+      implementationWorkAllowed: false,
+      runtimeWorkAllowed: false,
+      transportActivationAllowed: false,
+      fixtureExecutionAllowed: false,
+      persistenceAllowed: false,
+      queueProcessingAllowed: false,
+      inventoryMutationAllowed: false,
+      scanOpsMutationAllowed: false,
+    }),
+    plannedContractFamilies: Object.freeze([
+      "receipt-envelope-contract",
+      "idempotency-contract",
+      "environment-gate-contract",
+      "operator-status-contract",
+      "inventory-boundary-contract",
+      "failure-recovery-contract",
+      "validation-result-contract",
+    ]),
+    contractOwnershipConfirmation: Object.freeze({
+      scanOpsMayDefineOperationalEvidenceShape: true,
+      inventoryDesktopOwnsSystemOfRecordContract: true,
+      inventoryDesktopOwnsMutationAuthority: true,
+      bridgeContractsDoNotActivateTransport: true,
+      bridgeContractsDoNotEnablePersistence: true,
+      bridgeContractsDoNotProcessQueues: true,
+      bridgeContractsDoNotApplyInventoryChanges: true,
+    }),
+    versioningExpectations: Object.freeze({
+      schemaVersionRequiredInFutureContracts: true,
+      backwardsCompatibilityMustBeReviewed: true,
+      breakingChangesRequireFutureGovernance: true,
+      unversionedRuntimeMessagesAllowedNow: false,
+    }),
+    expectedNoMutationAssertions: Object.freeze({
+      inventoryMutation: false,
+      scanOpsMutation: false,
+      stockMutation: false,
+      ledgerMutation: false,
+      pricingMutation: false,
+      posMutation: false,
+      orderMutation: false,
+      approvalMutation: false,
+      itemMasterMutation: false,
+    }),
+    b1ReadinessVerdict: Object.freeze({
+      bridgeContractsPlanningOpened: true,
+      roadmapSectionConfirmed: true,
+      safeToProceedToPhase34B2Planning: true,
+      safeToBeginPhase34ImplementationNow: false,
+      safeToExecuteFixturesNow: false,
+      safeToActivateTransportNow: false,
+      safeToEnablePersistenceNow: false,
+      safeToProcessQueuesNow: false,
+      safeToApplyInventoryChangesNow: false,
+      noRuntimeBehaviorIntroduced: true,
+      noFixtureExecutionIntroduced: true,
+      noTransportBehaviorIntroduced: true,
+      noPersistenceBehaviorIntroduced: true,
+      noQueueProcessingIntroduced: true,
+      noMutationIntroduced: true,
+    }),
+    nextAllowedStep: "phase-34-b2-receipt-envelope-contract-planning",
+  });
+}
