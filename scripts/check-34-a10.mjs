@@ -22,16 +22,19 @@ const requiredMarkers = [
   'phase34APlanningGovernanceClosed: true',
   'implementationDeferredToFutureScopedPhase: true',
   'liveActivationStillForbidden: true',
+  'nextRoadmapSectionIsBridgeContracts: true',
   'implementationStillBlocked',
   'planningGovernanceCloseoutDefined: true',
   'phase34APlanningGovernanceComplete: true',
+  'safeToProceedToPhase34BBridgeContractsPlanning: true',
+  'safeToProceedToImplementationNow: false',
   'safeToBeginUnscopedImplementationNow: false',
   'safeToExecuteFixturesNow: false',
   'safeToActivateTransportNow: false',
   'safeToEnablePersistenceNow: false',
   'safeToProcessQueuesNow: false',
   'noMutationIntroduced: true',
-  'phase-34-b-controlled-test-training-implementation-scope',
+  'phase-34-b-bridge-contracts-planning',
 ];
 
 let ok = true;
