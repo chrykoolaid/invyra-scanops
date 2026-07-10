@@ -1,0 +1,78 @@
+import {
+  createBridgePhase34B5Report,
+} from "./bridgePhase34B5";
+
+export function createBridgePhase34B6Report() {
+  const b5 = createBridgePhase34B5Report();
+
+  return Object.freeze({
+    phase: "34.B6",
+    status: "inventory-boundary-contract-planning-read-only",
+    roadmapSection: "34-B — Bridge Contracts",
+    systemOfRecord: "Inventory Desktop",
+    operationalLayer: "ScanOps",
+    b5,
+    inventoryBoundaryContractScope: Object.freeze({
+      planningOnly: true,
+      inventoryBoundaryContractOnly: true,
+      readinessDescriptorOnly: true,
+      implementationWorkAllowed: false,
+      runtimeWorkAllowed: false,
+      transportActivationAllowed: false,
+      fixtureExecutionAllowed: false,
+      persistenceAllowed: false,
+      queueProcessingAllowed: false,
+      inventoryMutationAllowed: false,
+      scanOpsMutationAllowed: false,
+    }),
+    plannedBoundaryFields: Object.freeze([
+      "boundaryDecision",
+      "acceptanceState",
+      "rejectionReason",
+      "approvalRequired",
+      "systemOfRecordOwner",
+      "traceId",
+      "environment",
+      "schemaVersion",
+    ]),
+    boundaryRules: Object.freeze({
+      inventoryDesktopOwnsAcceptanceDecision: true,
+      inventoryDesktopOwnsRejectionDecision: true,
+      inventoryDesktopOwnsApprovalDecision: true,
+      scanOpsMaySubmitOperationalEvidenceOnly: true,
+      scanOpsMayNotApplyInventoryChanges: true,
+      boundaryContractDoesNotMutateStockByItself: true,
+      boundaryContractDoesNotMutateLedgerByItself: true,
+      boundaryContractDoesNotMutateItemMasterByItself: true,
+    }),
+    expectedNoMutationAssertions: Object.freeze({
+      inventoryMutation: false,
+      scanOpsMutation: false,
+      stockMutation: false,
+      ledgerMutation: false,
+      pricingMutation: false,
+      posMutation: false,
+      orderMutation: false,
+      approvalMutation: false,
+      itemMasterMutation: false,
+    }),
+    b6ReadinessVerdict: Object.freeze({
+      inventoryBoundaryContractPlanningDefined: true,
+      roadmapSectionConfirmed: true,
+      safeToProceedToPhase34B7Planning: true,
+      safeToBeginPhase34ImplementationNow: false,
+      safeToExecuteFixturesNow: false,
+      safeToActivateTransportNow: false,
+      safeToEnablePersistenceNow: false,
+      safeToProcessQueuesNow: false,
+      safeToApplyInventoryChangesNow: false,
+      noRuntimeBehaviorIntroduced: true,
+      noFixtureExecutionIntroduced: true,
+      noTransportBehaviorIntroduced: true,
+      noPersistenceBehaviorIntroduced: true,
+      noQueueProcessingIntroduced: true,
+      noMutationIntroduced: true,
+    }),
+    nextAllowedStep: "phase-34-b7-failure-recovery-contract-planning",
+  });
+}
