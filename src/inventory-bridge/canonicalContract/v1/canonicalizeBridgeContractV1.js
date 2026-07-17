@@ -1,23 +1,20 @@
 /**
- * canonicalizeBridgeContractV1.js — Phase 34-D-S
+ * canonicalizeBridgeContractV1.js — Phase 34-D-S1
  *
- * Deterministic semantic canonicalization of the Bridge Contract v1.
+ * Deterministic semantic canonicalization of BRIDGE_CONTRACT_V1.
  *
  * Algorithm:
- *   1. Parse the canonical JSON contract.
- *   2. Recursively sort object keys.
- *   3. Preserve array order exactly.
- *   4. Serialize with JSON.stringify without whitespace.
- *   5. Calculate SHA-256 of the resulting UTF-8 text.
+ *   1. Recursively sort object keys.
+ *   2. Preserve array order exactly.
+ *   3. Serialize with JSON.stringify without whitespace.
+ *   4. Calculate SHA-256 of the resulting UTF-8 text.
  *
  * Pure. No runtime, transport, persistence, or mutation behaviour.
  */
 
-import {
-  createHash,
-} from 'node:crypto';
+import { createHash } from 'node:crypto';
 
-import { CANONICAL_CONTRACT } from './bridgeContractV1.js';
+import { BRIDGE_CONTRACT_V1 } from './bridgeContractV1.js';
 
 function sortKeysDeep(value) {
   if (Array.isArray(value)) {
@@ -34,17 +31,17 @@ function sortKeysDeep(value) {
   return value;
 }
 
-export function canonicalizeBridgeContractV1(contract = CANONICAL_CONTRACT) {
+export function canonicalizeBridgeContractV1(contract = BRIDGE_CONTRACT_V1) {
   const sorted = sortKeysDeep(contract);
   return JSON.stringify(sorted);
 }
 
-export function computeBridgeContractV1SemanticHash(contract = CANONICAL_CONTRACT) {
+export function computeBridgeContractV1SemanticHash(contract = BRIDGE_CONTRACT_V1) {
   const canonicalJson = canonicalizeBridgeContractV1(contract);
   return createHash('sha256').update(canonicalJson, 'utf8').digest('hex');
 }
 
-export function getBridgeContractV1SemanticHashSummary(contract = CANONICAL_CONTRACT) {
+export function getBridgeContractV1SemanticHashSummary(contract = BRIDGE_CONTRACT_V1) {
   return Object.freeze({
     contractId: contract.contractId,
     schemaVersion: contract.schemaVersion,

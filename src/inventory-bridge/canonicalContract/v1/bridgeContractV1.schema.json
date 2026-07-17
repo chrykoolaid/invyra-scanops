@@ -9,17 +9,15 @@
     "schemaVersion",
     "canonicalFieldStyle",
     "operationTypes",
-    "environments",
-    "runtimeAllowedEnvironments",
-    "admissionStatuses",
-    "applicationStatuses",
     "envelope",
+    "environments",
     "receipt",
-    "error",
-    "endpoints",
-    "placeholderIdentifiers",
+    "errorObject",
+    "endpointDescriptors",
+    "contentType",
+    "httpServerImplemented",
     "failClosedPolicy",
-    "runtimeBoundaries"
+    "runtimeActivation"
   ],
   "properties": {
     "contractId": { "type": "string", "const": "invyra.scanops.inventory-bridge" },
@@ -31,35 +29,18 @@
       "minItems": 9,
       "uniqueItems": true
     },
-    "environments": {
-      "type": "array",
-      "items": { "type": "string" },
-      "minItems": 4,
-      "uniqueItems": true
-    },
-    "runtimeAllowedEnvironments": {
-      "type": "array",
-      "items": { "type": "string" },
-      "minItems": 2,
-      "uniqueItems": true
-    },
-    "admissionStatuses": {
-      "type": "array",
-      "items": { "type": "string" },
-      "minItems": 5,
-      "uniqueItems": true
-    },
-    "applicationStatuses": {
-      "type": "array",
-      "items": { "type": "string" },
-      "minItems": 10,
-      "uniqueItems": true
-    },
     "envelope": {
       "type": "object",
-      "required": ["requiredFields", "source", "target"],
+      "required": [
+        "requiredTopLevelFields",
+        "source",
+        "target",
+        "placeholderIdsRejected",
+        "noDefaultIdentifiers",
+        "missingIdentifiersMustFail"
+      ],
       "properties": {
-        "requiredFields": {
+        "requiredTopLevelFields": {
           "type": "array",
           "items": { "type": "string" },
           "minItems": 11,
@@ -67,7 +48,7 @@
         },
         "source": {
           "type": "object",
-          "required": ["requiredFields", "systemValue", "operatorRequiredExceptOperations"],
+          "required": ["requiredFields", "systemMustEqual", "operatorId"],
           "properties": {
             "requiredFields": {
               "type": "array",
@@ -75,17 +56,24 @@
               "minItems": 4,
               "uniqueItems": true
             },
-            "systemValue": { "type": "string", "const": "SCANOPS" },
-            "operatorRequiredExceptOperations": {
-              "type": "array",
-              "items": { "type": "string" },
-              "minItems": 1
+            "systemMustEqual": { "type": "string", "const": "SCANOPS" },
+            "operatorId": {
+              "type": "object",
+              "required": ["required", "exceptionOperations"],
+              "properties": {
+                "required": { "type": "boolean", "const": true },
+                "exceptionOperations": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "minItems": 1
+                }
+              }
             }
           }
         },
         "target": {
           "type": "object",
-          "required": ["requiredFields", "systemValue"],
+          "required": ["requiredFields", "systemMustEqual", "inventoryInstanceIdRequired"],
           "properties": {
             "requiredFields": {
               "type": "array",
@@ -93,61 +81,113 @@
               "minItems": 2,
               "uniqueItems": true
             },
-            "systemValue": { "type": "string", "const": "INVENTORY" }
+            "systemMustEqual": { "type": "string", "const": "INVENTORY" },
+            "inventoryInstanceIdRequired": { "type": "boolean", "const": true }
           }
-        }
+        },
+        "placeholderIdsRejected": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 5,
+          "uniqueItems": true
+        },
+        "noDefaultIdentifiers": { "type": "boolean", "const": true },
+        "missingIdentifiersMustFail": { "type": "boolean", "const": true }
+      }
+    },
+    "environments": {
+      "type": "object",
+      "required": [
+        "recognized",
+        "allowedRuntime",
+        "blockedRuntime",
+        "unknownInvalid",
+        "noDefault",
+        "thisPhaseDoesNotActivateRuntime"
+      ],
+      "properties": {
+        "recognized": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 4,
+          "uniqueItems": true
+        },
+        "allowedRuntime": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 2,
+          "uniqueItems": true
+        },
+        "blockedRuntime": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 2,
+          "uniqueItems": true
+        },
+        "unknownInvalid": { "type": "boolean", "const": true },
+        "noDefault": { "type": "boolean", "const": true },
+        "thisPhaseDoesNotActivateRuntime": { "type": "boolean", "const": true }
       }
     },
     "receipt": {
       "type": "object",
-      "required": ["requiredFields"],
+      "required": ["requiredFields", "admissionStatuses", "applicationStatuses"],
       "properties": {
         "requiredFields": {
           "type": "array",
           "items": { "type": "string" },
           "minItems": 16,
           "uniqueItems": true
+        },
+        "admissionStatuses": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 5,
+          "uniqueItems": true
+        },
+        "applicationStatuses": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 10,
+          "uniqueItems": true
         }
       }
     },
-    "error": {
+    "errorObject": {
       "type": "object",
-      "required": ["fields", "codes", "codeFormat"],
+      "required": ["requiredFields", "codeFormat", "coreRegistry"],
       "properties": {
-        "fields": {
+        "requiredFields": {
           "type": "array",
           "items": { "type": "string" },
           "minItems": 4,
           "uniqueItems": true
         },
-        "codes": {
+        "codeFormat": { "type": "string", "const": "UPPER_SNAKE_CASE" },
+        "coreRegistry": {
           "type": "array",
           "items": { "type": "string" },
           "minItems": 23,
           "uniqueItems": true
-        },
-        "codeFormat": { "type": "string", "const": "UPPER_SNAKE_CASE" }
+        }
       }
     },
-    "endpoints": {
+    "endpointDescriptors": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["method", "path", "contentType"],
+        "required": ["method", "path", "descriptorOnly", "implemented"],
         "properties": {
           "method": { "type": "string", "enum": ["GET", "POST"] },
           "path": { "type": "string" },
-          "contentType": { "type": "string", "const": "application/json" }
+          "descriptorOnly": { "type": "boolean", "const": true },
+          "implemented": { "type": "boolean", "const": false }
         }
       },
       "minItems": 3
     },
-    "placeholderIdentifiers": {
-      "type": "array",
-      "items": { "type": "string" },
-      "minItems": 5,
-      "uniqueItems": true
-    },
+    "contentType": { "type": "string", "const": "application/json" },
+    "httpServerImplemented": { "type": "boolean", "const": false },
     "failClosedPolicy": {
       "type": "object",
       "required": [
@@ -171,37 +211,21 @@
         "unknownOperationDenies": { "type": "boolean", "const": true }
       }
     },
-    "runtimeBoundaries": {
+    "runtimeActivation": {
       "type": "object",
       "required": [
-        "runtimeActivated",
-        "transportActivated",
-        "automaticSyncEnabled",
-        "outboxProcessingEnabled",
-        "persistenceEnabled",
-        "discoveryEnabled",
-        "pairingEnabled",
-        "authenticationEnabled",
-        "replayEnabled",
-        "fixtureExecutionEnabled",
-        "mutationEnabled",
-        "liveEnvironmentAllowed",
-        "productionEnvironmentAllowed"
+        "thisPhaseDoesNotActivateRuntime",
+        "liveAndProductionBlockedBySeparateRuntimePolicy",
+        "noNetworkCalls",
+        "noPersistence",
+        "noMutation"
       ],
       "properties": {
-        "runtimeActivated": { "type": "boolean", "const": false },
-        "transportActivated": { "type": "boolean", "const": false },
-        "automaticSyncEnabled": { "type": "boolean", "const": false },
-        "outboxProcessingEnabled": { "type": "boolean", "const": false },
-        "persistenceEnabled": { "type": "boolean", "const": false },
-        "discoveryEnabled": { "type": "boolean", "const": false },
-        "pairingEnabled": { "type": "boolean", "const": false },
-        "authenticationEnabled": { "type": "boolean", "const": false },
-        "replayEnabled": { "type": "boolean", "const": false },
-        "fixtureExecutionEnabled": { "type": "boolean", "const": false },
-        "mutationEnabled": { "type": "boolean", "const": false },
-        "liveEnvironmentAllowed": { "type": "boolean", "const": false },
-        "productionEnvironmentAllowed": { "type": "boolean", "const": false }
+        "thisPhaseDoesNotActivateRuntime": { "type": "boolean", "const": true },
+        "liveAndProductionBlockedBySeparateRuntimePolicy": { "type": "boolean", "const": true },
+        "noNetworkCalls": { "type": "boolean", "const": true },
+        "noPersistence": { "type": "boolean", "const": true },
+        "noMutation": { "type": "boolean", "const": true }
       }
     }
   },
