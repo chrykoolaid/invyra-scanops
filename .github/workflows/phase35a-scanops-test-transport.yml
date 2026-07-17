@@ -1,0 +1,30 @@
+name: Phase 35-A ScanOps TEST Transport
+
+on:
+  pull_request:
+    paths:
+      - 'src/inventory-bridge/testTransport/v1/**'
+      - 'src/inventory-bridge/canonicalAdapter/v1/**'
+      - 'src/inventory-bridge/canonicalContract/v1/**'
+      - 'src/inventory-bridge/config/bridgeConfigurationDefaults.js'
+      - 'scripts/validate-phase35a-scanops-test-transport.mjs'
+      - 'scripts/validate-phase35a-scanops-invalid-host.mjs'
+      - 'scripts/validate-phase35a-cross-repository-test-transport.mjs'
+      - 'scripts/validate-scanops-bridge-canonical-adapter-v1.mjs'
+      - 'scripts/validate-scanops-bridge-canonical-contract-v1.mjs'
+      - '.github/workflows/phase35a-scanops-test-transport.yml'
+  workflow_dispatch:
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/validate-scanops-bridge-canonical-contract-v1.mjs
+      - run: node scripts/validate-scanops-bridge-canonical-adapter-v1.mjs
+      - run: node scripts/validate-phase35a-scanops-test-transport.mjs
+      - run: node scripts/validate-phase35a-scanops-invalid-host.mjs
