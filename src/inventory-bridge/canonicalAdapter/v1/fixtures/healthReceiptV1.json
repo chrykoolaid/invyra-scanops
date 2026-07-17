@@ -1,0 +1,18 @@
+{
+  "contractId": "invyra.scanops.inventory-bridge",
+  "schemaVersion": "1.0.0",
+  "receiptId": "receipt:test:health:000001",
+  "envelopeId": "env:test:health:000001",
+  "idempotencyKey": "idem:test:health:000001",
+  "traceId": "trace:test:health:000001",
+  "admissionStatus": "ACCEPTED",
+  "applicationStatus": "NOT_APPLICABLE",
+  "receivedAt": "2026-07-17T12:00:01.000Z",
+  "processedAt": "2026-07-17T12:00:01.000Z",
+  "inventoryInstanceId": "inventory-instance-001",
+  "environment": "TEST",
+  "operationType": "DEVICE_HEALTH_PING",
+  "message": "Canonical TEST health envelope accepted for validation projection.",
+  "errors": [],
+  "warnings": []
+}

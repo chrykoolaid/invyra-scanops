@@ -1,0 +1,24 @@
+{
+  "contractId": "invyra.scanops.inventory-bridge",
+  "schemaVersion": "1.0.0",
+  "envelopeId": "env:test:health:000001",
+  "idempotencyKey": "idem:test:health:000001",
+  "traceId": "trace:test:health:000001",
+  "operationType": "DEVICE_HEALTH_PING",
+  "occurredAt": "2026-07-17T12:00:00.000Z",
+  "environment": "TEST",
+  "source": {
+    "system": "SCANOPS",
+    "deviceId": "scanops-device-001",
+    "storeId": "store-001",
+    "sessionId": "session-001"
+  },
+  "target": {
+    "system": "INVENTORY",
+    "inventoryInstanceId": "inventory-instance-001"
+  },
+  "payload": {
+    "requestType": "BRIDGE_HEALTH",
+    "clientTime": "2026-07-17T12:00:00.000Z"
+  }
+}
