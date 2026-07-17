@@ -1,0 +1,209 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "invyra.scanops.inventory-bridge.v1.0.0.schema.json",
+  "title": "Invyra ScanOps ↔ Inventory Bridge Contract v1",
+  "description": "Canonical, machine-comparable bridge contract definition. Contract-only; no runtime activation.",
+  "type": "object",
+  "required": [
+    "contractId",
+    "schemaVersion",
+    "canonicalFieldStyle",
+    "operationTypes",
+    "environments",
+    "runtimeAllowedEnvironments",
+    "admissionStatuses",
+    "applicationStatuses",
+    "envelope",
+    "receipt",
+    "error",
+    "endpoints",
+    "placeholderIdentifiers",
+    "failClosedPolicy",
+    "runtimeBoundaries"
+  ],
+  "properties": {
+    "contractId": { "type": "string", "const": "invyra.scanops.inventory-bridge" },
+    "schemaVersion": { "type": "string", "const": "1.0.0" },
+    "canonicalFieldStyle": { "type": "string", "const": "camelCase" },
+    "operationTypes": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 9,
+      "uniqueItems": true
+    },
+    "environments": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 4,
+      "uniqueItems": true
+    },
+    "runtimeAllowedEnvironments": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 2,
+      "uniqueItems": true
+    },
+    "admissionStatuses": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 5,
+      "uniqueItems": true
+    },
+    "applicationStatuses": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 10,
+      "uniqueItems": true
+    },
+    "envelope": {
+      "type": "object",
+      "required": ["requiredFields", "source", "target"],
+      "properties": {
+        "requiredFields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 11,
+          "uniqueItems": true
+        },
+        "source": {
+          "type": "object",
+          "required": ["requiredFields", "systemValue", "operatorRequiredExceptOperations"],
+          "properties": {
+            "requiredFields": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 4,
+              "uniqueItems": true
+            },
+            "systemValue": { "type": "string", "const": "SCANOPS" },
+            "operatorRequiredExceptOperations": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1
+            }
+          }
+        },
+        "target": {
+          "type": "object",
+          "required": ["requiredFields", "systemValue"],
+          "properties": {
+            "requiredFields": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 2,
+              "uniqueItems": true
+            },
+            "systemValue": { "type": "string", "const": "INVENTORY" }
+          }
+        }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "required": ["requiredFields"],
+      "properties": {
+        "requiredFields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 16,
+          "uniqueItems": true
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "required": ["fields", "codes", "codeFormat"],
+      "properties": {
+        "fields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 4,
+          "uniqueItems": true
+        },
+        "codes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 23,
+          "uniqueItems": true
+        },
+        "codeFormat": { "type": "string", "const": "UPPER_SNAKE_CASE" }
+      }
+    },
+    "endpoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["method", "path", "contentType"],
+        "properties": {
+          "method": { "type": "string", "enum": ["GET", "POST"] },
+          "path": { "type": "string" },
+          "contentType": { "type": "string", "const": "application/json" }
+        }
+      },
+      "minItems": 3
+    },
+    "placeholderIdentifiers": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 5,
+      "uniqueItems": true
+    },
+    "failClosedPolicy": {
+      "type": "object",
+      "required": [
+        "emptyAcceptedSchemaListDenies",
+        "emptyAcceptedOperationListDenies",
+        "emptyTrustedDeviceListDenies",
+        "emptyAllowedStoreListDenies",
+        "missingEnvironmentDenies",
+        "missingInventoryInstanceDenies",
+        "contractMajorVersionMismatchDenies",
+        "unknownOperationDenies"
+      ],
+      "properties": {
+        "emptyAcceptedSchemaListDenies": { "type": "boolean", "const": true },
+        "emptyAcceptedOperationListDenies": { "type": "boolean", "const": true },
+        "emptyTrustedDeviceListDenies": { "type": "boolean", "const": true },
+        "emptyAllowedStoreListDenies": { "type": "boolean", "const": true },
+        "missingEnvironmentDenies": { "type": "boolean", "const": true },
+        "missingInventoryInstanceDenies": { "type": "boolean", "const": true },
+        "contractMajorVersionMismatchDenies": { "type": "boolean", "const": true },
+        "unknownOperationDenies": { "type": "boolean", "const": true }
+      }
+    },
+    "runtimeBoundaries": {
+      "type": "object",
+      "required": [
+        "runtimeActivated",
+        "transportActivated",
+        "automaticSyncEnabled",
+        "outboxProcessingEnabled",
+        "persistenceEnabled",
+        "discoveryEnabled",
+        "pairingEnabled",
+        "authenticationEnabled",
+        "replayEnabled",
+        "fixtureExecutionEnabled",
+        "mutationEnabled",
+        "liveEnvironmentAllowed",
+        "productionEnvironmentAllowed"
+      ],
+      "properties": {
+        "runtimeActivated": { "type": "boolean", "const": false },
+        "transportActivated": { "type": "boolean", "const": false },
+        "automaticSyncEnabled": { "type": "boolean", "const": false },
+        "outboxProcessingEnabled": { "type": "boolean", "const": false },
+        "persistenceEnabled": { "type": "boolean", "const": false },
+        "discoveryEnabled": { "type": "boolean", "const": false },
+        "pairingEnabled": { "type": "boolean", "const": false },
+        "authenticationEnabled": { "type": "boolean", "const": false },
+        "replayEnabled": { "type": "boolean", "const": false },
+        "fixtureExecutionEnabled": { "type": "boolean", "const": false },
+        "mutationEnabled": { "type": "boolean", "const": false },
+        "liveEnvironmentAllowed": { "type": "boolean", "const": false },
+        "productionEnvironmentAllowed": { "type": "boolean", "const": false }
+      }
+    }
+  },
+  "additionalProperties": false
+}

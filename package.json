@@ -75,6 +75,7 @@
     "validate:scanops-bridge-phase-32-closure-snapshot": "node scripts/validate-scanops-bridge-phase-32-closure-snapshot.mjs",
     "validate:scanops-bridge-phase-32-next-gate-decision": "node scripts/validate-scanops-bridge-phase-32-next-gate-decision.mjs",
     "validate:scanops-bridge-phase-32-cleanup-report": "node scripts/validate-scanops-bridge-phase-32-cleanup-report.mjs",
+    "validate:scanops-bridge-canonical-contract-v1": "node scripts/validate-scanops-bridge-canonical-contract-v1.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
