@@ -1,0 +1,106 @@
+name: Phase 35-A Cross-Repository Certification
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/phase35a-cross-repository-certification.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-definition:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Validate certification-only workflow definition
+        run: |
+          echo "Phase 35-A cross-repository certification workflow loaded."
+          echo "Pull-request validation performs no transport, persistence, queue, or mutation work."
+
+  certify-merged-baseline:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SCANOPS_CERTIFIED_SHA: 8ca1b84d3d08cfdb409dc8c05273fbd931fde4d7
+      INVENTORY_CERTIFIED_SHA: 35760216b168cf2dfa9b46f61b6c0fefc2b3169c
+    steps:
+      - name: Verify Inventory repository read token
+        env:
+          INVENTORY_REPO_READ_TOKEN: ${{ secrets.INVENTORY_REPO_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${INVENTORY_REPO_READ_TOKEN}" ]; then
+            echo "::error::Repository secret INVENTORY_REPO_READ_TOKEN is required. Configure a fine-grained token with read-only Contents and Metadata access to chrykoolaid/invyra-base44."
+            exit 1
+          fi
+
+      - name: Checkout certified ScanOps merge
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SCANOPS_CERTIFIED_SHA }}
+          path: scanops-repo
+          persist-credentials: false
+
+      - name: Checkout certified Inventory merge
+        uses: actions/checkout@v4
+        with:
+          repository: chrykoolaid/invyra-base44
+          ref: ${{ env.INVENTORY_CERTIFIED_SHA }}
+          token: ${{ secrets.INVENTORY_REPO_READ_TOKEN }}
+          path: scanops-repo/inventory-repo
+          persist-credentials: false
+
+      - name: Set up Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Capture certified commit evidence
+        run: |
+          set -euo pipefail
+          scanops_sha="$(git -C scanops-repo rev-parse HEAD)"
+          inventory_sha="$(git -C scanops-repo/inventory-repo rev-parse HEAD)"
+          test "${scanops_sha}" = "${SCANOPS_CERTIFIED_SHA}"
+          test "${inventory_sha}" = "${INVENTORY_CERTIFIED_SHA}"
+          printf '{\n  "scanOpsCommit": "%s",\n  "inventoryCommit": "%s"\n}\n' \
+            "${scanops_sha}" "${inventory_sha}" \
+            | tee scanops-repo/phase35a-cross-repository-commits.json
+
+      - name: Validate ScanOps canonical contract and adapter
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-scanops-bridge-canonical-contract-v1.mjs
+          node scripts/validate-scanops-bridge-canonical-adapter-v1.mjs
+          node scripts/validate-phase35a-scanops-test-transport.mjs
+          node scripts/validate-phase35a-scanops-invalid-host.mjs
+
+      - name: Validate Inventory canonical contract and adapter
+        working-directory: scanops-repo/inventory-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-inventory-bridge-canonical-contract-v1.mjs
+          node scripts/validate-inventory-bridge-canonical-adapter-v1.mjs
+          node scripts/validate-phase35a-inventory-test-transport.mjs
+
+      - name: Run actual cross-repository loopback certification
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-phase35a-cross-repository-test-transport.mjs \
+            | tee phase35a-cross-repository-report.json
+
+      - name: Upload Phase 35-A certification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase35a-cross-repository-certification
+          path: |
+            scanops-repo/phase35a-cross-repository-commits.json
+            scanops-repo/phase35a-cross-repository-report.json
+          if-no-files-found: warn
+          retention-days: 30
