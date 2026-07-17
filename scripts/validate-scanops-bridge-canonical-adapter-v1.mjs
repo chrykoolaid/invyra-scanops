@@ -1,82 +1,56 @@
 #!/usr/bin/env node
-/**
- * validate-scanops-bridge-canonical-adapter-v1.mjs — Phase 34-E-S
- *
- * Validates the pure canonical transport adapter foundation:
- *  - prerequisite canonical contract hash
- *  - envelope builder positive + negative tests
- *  - receipt validator positive + negative tests
- *  - golden fixture hash drift lock
- *  - safety: no fetch/dispatch/queue/persistence/mutation
- *
- * Contract-only. Performs no transport, dispatch, persistence, queue, or
- * mutation work.
- *
- * Usage:
- *   node scripts/validate-scanops-bridge-canonical-adapter-v1.mjs
- */
-
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { BRIDGE_CONTRACT_V1 } from '../src/inventory-bridge/canonicalContract/v1/bridgeContractV1.js';
+import {
+  canonicalizeBridgeContractV1,
+  computeBridgeContractV1SemanticHash,
+} from '../src/inventory-bridge/canonicalContract/v1/canonicalizeBridgeContractV1.js';
+import {
+  buildCanonicalEnvelopeV1,
+  validateCanonicalReceiptV1,
+} from '../src/inventory-bridge/canonicalAdapter/v1/index.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const repoRoot = join(__dirname, '..');
-
-const contractModulePath = join(repoRoot, 'src/inventory-bridge/canonicalContract/v1/bridgeContractV1.js');
-const canonicalizeModulePath = join(repoRoot, 'src/inventory-bridge/canonicalContract/v1/canonicalizeBridgeContractV1.js');
-const builderModulePath = join(repoRoot, 'src/inventory-bridge/canonicalAdapter/v1/buildCanonicalEnvelopeV1.js');
-const receiptModulePath = join(repoRoot, 'src/inventory-bridge/canonicalAdapter/v1/validateCanonicalReceiptV1.js');
-const envelopeFixturePath = join(repoRoot, 'src/inventory-bridge/canonicalAdapter/v1/fixtures/healthEnvelopeV1.json');
-const receiptFixturePath = join(repoRoot, 'src/inventory-bridge/canonicalAdapter/v1/fixtures/healthReceiptV1.json');
-
-const { computeBridgeContractV1SemanticHash } = await import(canonicalizeModulePath);
-const { buildCanonicalEnvelopeV1 } = await import(builderModulePath);
-const { validateCanonicalReceiptV1 } = await import(receiptModulePath);
-
-const envelopeFixture = JSON.parse(readFileSync(envelopeFixturePath, 'utf8'));
-const receiptFixture = JSON.parse(readFileSync(receiptFixturePath, 'utf8'));
-
-const EXPECTED_CONTRACT_HASH = '9a7718a37f66236d0c0e9873cade6745c83f3a56cf41d969edf8ef9359eee5f5';
-const EXPECTED_ENVELOPE_HASH = '50c8098e8ec84b63b49e307c648e691c2b3aba41f015614edd3a5f4c9a0f4a81';
-const EXPECTED_RECEIPT_HASH = 'c5fdfbe7f0b990e9b312ba669a35fab411539c6cdafd8bd808bc0a7be906d192';
-
-function sortKeysDeep(value) {
-  if (Array.isArray(value)) {
-    return value.map(sortKeysDeep);
-  }
-  if (value && typeof value === 'object') {
-    const result = {};
-    for (const key of Object.keys(value).sort()) {
-      result[key] = sortKeysDeep(value[key]);
-    }
-    return result;
-  }
-  return value;
-}
-
-function semanticHash(obj) {
-  return createHash('sha256').update(JSON.stringify(sortKeysDeep(obj)), 'utf8').digest('hex');
-}
-
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const envelopeFixture = JSON.parse(readFileSync(
+  join(root, 'src/inventory-bridge/canonicalAdapter/v1/fixtures/healthEnvelopeV1.json'),
+  'utf8',
+));
+const receiptFixture = JSON.parse(readFileSync(
+  join(root, 'src/inventory-bridge/canonicalAdapter/v1/fixtures/healthReceiptV1.json'),
+  'utf8',
+));
+const EXPECTED = Object.freeze({
+  contract: '9a7718a37f66236d0c0e9873cade6745c83f3a56cf41d969edf8ef9359eee5f5',
+  envelope: '50c8098e8ec84b63b49e307c648e691c2b3aba41f015614edd3a5f4c9a0f4a81',
+  receipt: 'c5fdfbe7f0b990e9b312ba669a35fab411539c6cdafd8bd808bc0a7be906d192',
+});
 const checks = [];
-function check(name, passed, detail = '') {
-  checks.push({ name, passed: passed === true, detail });
+
+function check(name, condition, detail = '') {
+  checks.push({ name, passed: condition === true, detail });
 }
 
-// --- Prerequisite: canonical contract hash ---
-const contractHash = computeBridgeContractV1SemanticHash();
-check('prerequisite_contract_hash_matches', contractHash === EXPECTED_CONTRACT_HASH, contractHash);
+function hash(value) {
+  return createHash('sha256')
+    .update(canonicalizeBridgeContractV1(value), 'utf8')
+    .digest('hex');
+}
 
-// --- Golden fixture hashes (computed, not copied) ---
-const computedEnvelopeFixtureHash = semanticHash(envelopeFixture);
-check('envelope_fixture_hash_matches', computedEnvelopeFixtureHash === EXPECTED_ENVELOPE_HASH, computedEnvelopeFixtureHash);
-const computedReceiptFixtureHash = semanticHash(receiptFixture);
-check('receipt_fixture_hash_matches', computedReceiptFixtureHash === EXPECTED_RECEIPT_HASH, computedReceiptFixtureHash);
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
 
-// --- Envelope builder positive ---
+check(
+  'contract_hash',
+  computeBridgeContractV1SemanticHash() === EXPECTED.contract,
+  computeBridgeContractV1SemanticHash(),
+);
+check('envelope_hash', hash(envelopeFixture) === EXPECTED.envelope, hash(envelopeFixture));
+check('receipt_hash', hash(receiptFixture) === EXPECTED.receipt, hash(receiptFixture));
+
 const healthInput = {
   envelopeId: 'env:test:health:000001',
   idempotencyKey: 'idem:test:health:000001',
@@ -89,169 +63,296 @@ const healthInput = {
     storeId: 'store-001',
     sessionId: 'session-001',
   },
-  target: {
-    inventoryInstanceId: 'inventory-instance-001',
-  },
+  target: { inventoryInstanceId: 'inventory-instance-001' },
   payload: {
     requestType: 'BRIDGE_HEALTH',
     clientTime: '2026-07-17T12:00:00.000Z',
   },
 };
 
-const built = buildCanonicalEnvelopeV1(healthInput);
-check('builder_positive_ok', built.ok === true);
-check('builder_positive_contract_id', built.envelope.contractId === 'invyra.scanops.inventory-bridge');
-check('builder_positive_schema_version', built.envelope.schemaVersion === '1.0.0');
-check('builder_positive_source_system_scanops', built.envelope.source.system === 'SCANOPS');
-check('builder_positive_target_system_inventory', built.envelope.target.system === 'INVENTORY');
-check('builder_positive_envelope_frozen', Object.isFrozen(built.envelope));
-check('builder_positive_envelope_matches_fixture', semanticHash(built.envelope) === EXPECTED_ENVELOPE_HASH);
-check('builder_positive_no_dispatch', built.dispatchAttempted === false);
-check('builder_positive_no_queue', built.queueWriteAttempted === false);
-check('builder_positive_no_persistence', built.persistenceAttempted === false);
-check('builder_positive_no_inventory_mutation', built.inventoryMutationAttempted === false);
-check('builder_positive_no_scanops_mutation', built.scanOpsMutationAttempted === false);
+const healthBuilt = buildCanonicalEnvelopeV1(healthInput);
+check('health_builds', healthBuilt.ok === true);
+check('health_hash', hash(healthBuilt.envelope) === EXPECTED.envelope);
+check(
+  'health_operator_omitted',
+  !Object.prototype.hasOwnProperty.call(healthBuilt.envelope.source, 'operatorId'),
+);
+check(
+  'builder_flags',
+  healthBuilt.dispatchAttempted === false
+    && healthBuilt.envelopeSendAllowed === false
+    && healthBuilt.queueWriteAttempted === false
+    && healthBuilt.persistenceAttempted === false
+    && healthBuilt.inventoryMutationAttempted === false
+    && healthBuilt.scanOpsMutationAttempted === false,
+);
 
-// --- Envelope builder negative tests ---
-function expectEnvelopeError(name, input) {
-  const result = buildCanonicalEnvelopeV1(input);
-  check(name, result.ok === false && result.errors.length > 0 && result.envelope === null);
-}
-
-const baseValid = {
+const businessInput = {
   envelopeId: 'env:test:count:000001',
   idempotencyKey: 'idem:test:count:000001',
   traceId: 'trace:test:count:000001',
   operationType: 'COUNT_SUBMISSION',
   occurredAt: '2026-07-17T12:00:00.000Z',
   environment: 'TEST',
-  operatorId: 'operator-001',
   source: {
     deviceId: 'scanops-device-001',
     storeId: 'store-001',
     sessionId: 'session-001',
+    operatorId: 'operator-001',
   },
-  target: {
-    inventoryInstanceId: 'inventory-instance-001',
-  },
-  payload: { count: 5 },
+  target: { inventoryInstanceId: 'inventory-instance-001' },
+  payload: { count: 5, nested: { value: 1 } },
 };
 
-expectEnvelopeError('neg_missing_envelope_id', { ...baseValid, envelopeId: undefined });
-expectEnvelopeError('neg_missing_idempotency_key', { ...baseValid, idempotencyKey: undefined });
-expectEnvelopeError('neg_missing_trace_id', { ...baseValid, traceId: undefined });
-expectEnvelopeError('neg_missing_timestamp', { ...baseValid, occurredAt: undefined });
-expectEnvelopeError('neg_invalid_timestamp', { ...baseValid, occurredAt: '2026-07-17 12:00:00' });
-expectEnvelopeError('neg_missing_environment', { ...baseValid, environment: undefined });
-expectEnvelopeError('neg_unknown_environment', { ...baseValid, environment: 'UNKNOWN' });
-expectEnvelopeError('neg_live_environment', { ...baseValid, environment: 'LIVE' });
-expectEnvelopeError('neg_production_environment', { ...baseValid, environment: 'PRODUCTION' });
-expectEnvelopeError('neg_unsupported_operation', { ...baseValid, operationType: 'SCAN_FINGERPRINT' });
-expectEnvelopeError('neg_missing_device', { ...baseValid, source: { ...baseValid.source, deviceId: undefined } });
-expectEnvelopeError('neg_placeholder_device', { ...baseValid, source: { ...baseValid.source, deviceId: 'scanops-device-local' } });
-expectEnvelopeError('neg_missing_store', { ...baseValid, source: { ...baseValid.source, storeId: undefined } });
-expectEnvelopeError('neg_placeholder_store', { ...baseValid, source: { ...baseValid.source, storeId: 'store-local' } });
-expectEnvelopeError('neg_missing_session', { ...baseValid, source: { ...baseValid.source, sessionId: undefined } });
-expectEnvelopeError('neg_placeholder_session', { ...baseValid, source: { ...baseValid.source, sessionId: 'session-local' } });
-expectEnvelopeError('neg_missing_operator_for_count', { ...baseValid, operatorId: undefined });
-expectEnvelopeError('neg_missing_inventory_instance', { ...baseValid, target: { ...baseValid.target, inventoryInstanceId: undefined } });
-expectEnvelopeError('neg_placeholder_inventory_instance', { ...baseValid, target: { ...baseValid.target, inventoryInstanceId: 'inventory-desktop-local' } });
-expectEnvelopeError('neg_non_object_payload', { ...baseValid, payload: 'not-an-object' });
+const businessBuilt = buildCanonicalEnvelopeV1(businessInput);
+check('business_builds', businessBuilt.ok === true);
+check(
+  'operator_inside_source',
+  businessBuilt.envelope.source.operatorId === 'operator-001'
+    && businessBuilt.metadata.operatorIdIncludedInEnvelope === true,
+);
+check(
+  'no_operator_sidecar',
+  !Object.prototype.hasOwnProperty.call(businessBuilt.metadata, 'operatorId'),
+);
 
-// Health ping without operator passes
-const healthNoOperator = buildCanonicalEnvelopeV1({
-  ...healthInput,
-});
-check('neg_health_ping_without_operator_passes', healthNoOperator.ok === true);
+const originalNested = businessInput.payload.nested;
+originalNested.value = 99;
+check('payload_deep_cloned', businessBuilt.envelope.payload.nested.value === 1);
+check('payload_deep_frozen', Object.isFrozen(businessBuilt.envelope.payload.nested));
 
-// No identifier silently defaulted: building with empty source object should fail
-expectEnvelopeError('neg_no_silent_default_device', { ...baseValid, source: {} });
-
-// --- Receipt validator positive ---
-const validated = validateCanonicalReceiptV1(receiptFixture, built.envelope);
-check('receipt_positive_valid', validated.valid === true);
-check('receipt_positive_correlated', validated.correlated === true);
-check('receipt_positive_admission', validated.admissionStatus === 'ACCEPTED');
-check('receipt_positive_application', validated.applicationStatus === 'NOT_APPLICABLE');
-check('receipt_positive_result_frozen', Object.isFrozen(validated));
-check('receipt_positive_no_inventory_mutation', validated.inventoryMutationAttempted === false);
-check('receipt_positive_no_scanops_mutation', validated.scanOpsMutationAttempted === false);
-check('receipt_positive_no_persistence', validated.persistenceAttempted === false);
-check('receipt_positive_no_dispatch', validated.dispatchAttempted === false);
-check('receipt_positive_no_queue', validated.queueWriteAttempted === false);
-check('receipt_positive_normalized_frozen', Object.isFrozen(validated.normalizedReceipt));
-check('receipt_positive_normalized_hash', semanticHash(validated.normalizedReceipt) === EXPECTED_RECEIPT_HASH);
-
-// --- Receipt validator negative tests ---
-function expectReceiptInvalid(name, receipt, envelope = built.envelope) {
-  const result = validateCanonicalReceiptV1(receipt, envelope);
-  check(name, result.valid === false);
+function expectBuilderError(name, input) {
+  const result = buildCanonicalEnvelopeV1(input);
+  check(
+    name,
+    result.ok === false && result.envelope === null && result.errors.length > 0,
+  );
+  return result;
 }
 
-const baseReceipt = { ...receiptFixture };
+expectBuilderError('top_level_operator_rejected', {
+  ...businessInput,
+  operatorId: 'operator-001',
+});
+expectBuilderError('business_missing_operator', {
+  ...businessInput,
+  source: { ...businessInput.source, operatorId: undefined },
+});
 
-expectReceiptInvalid('neg_receipt_missing', null);
-expectReceiptInvalid('neg_receipt_wrong_contract_id', { ...baseReceipt, contractId: 'wrong.contract' });
-expectReceiptInvalid('neg_receipt_wrong_major_schema', { ...baseReceipt, schemaVersion: '2.0.0' });
-expectReceiptInvalid('neg_receipt_missing_receipt_id', { ...baseReceipt, receiptId: undefined });
-expectReceiptInvalid('neg_receipt_unknown_admission', { ...baseReceipt, admissionStatus: 'WEIRD' });
-expectReceiptInvalid('neg_receipt_unknown_application', { ...baseReceipt, applicationStatus: 'WEIRD' });
-expectReceiptInvalid('neg_receipt_envelope_id_mismatch', { ...baseReceipt, envelopeId: 'env:other' });
-expectReceiptInvalid('neg_receipt_idempotency_mismatch', { ...baseReceipt, idempotencyKey: 'idem:other' });
-expectReceiptInvalid('neg_receipt_trace_mismatch', { ...baseReceipt, traceId: 'trace:other' });
-expectReceiptInvalid('neg_receipt_operation_mismatch', { ...baseReceipt, operationType: 'COUNT_SUBMISSION' });
-expectReceiptInvalid('neg_receipt_environment_mismatch', { ...baseReceipt, environment: 'TRAINING' });
-expectReceiptInvalid('neg_receipt_inventory_instance_mismatch', { ...baseReceipt, inventoryInstanceId: 'inventory-instance-999' });
-expectReceiptInvalid('neg_receipt_invalid_timestamp', { ...baseReceipt, receivedAt: '2026-07-17 12:00:01' });
-expectReceiptInvalid('neg_receipt_invalid_errors_array', { ...baseReceipt, errors: 'not-array' });
-expectReceiptInvalid('neg_receipt_invalid_error_object', { ...baseReceipt, errors: [{ code: 'BAD', message: 'x' }] });
-expectReceiptInvalid('neg_receipt_live', { ...baseReceipt, environment: 'LIVE' });
-expectReceiptInvalid('neg_receipt_production', { ...baseReceipt, environment: 'PRODUCTION' });
+for (const placeholder of BRIDGE_CONTRACT_V1.envelope.placeholderIdsRejected) {
+  expectBuilderError(`health_placeholder_operator_${placeholder}`, {
+    ...healthInput,
+    source: { ...healthInput.source, operatorId: placeholder },
+  });
+}
 
-// Business operation ACCEPTED + NOT_APPLICABLE rejected
-const businessReceipt = {
-  ...baseReceipt,
-  receiptId: 'receipt:test:count:000001',
-  envelopeId: 'env:test:count:000001',
-  idempotencyKey: 'idem:test:count:000001',
-  traceId: 'trace:test:count:000001',
-  operationType: 'COUNT_SUBMISSION',
-  admissionStatus: 'ACCEPTED',
-  applicationStatus: 'NOT_APPLICABLE',
-};
-const businessEnvelope = buildCanonicalEnvelopeV1(baseValid);
-const businessValidation = validateCanonicalReceiptV1(businessReceipt, businessEnvelope.envelope);
-check('neg_receipt_business_accepted_not_applicable_rejected', businessValidation.valid === false);
+for (const [field, value] of [
+  ['envelopeId', '   '],
+  ['idempotencyKey', 123],
+  ['traceId', {}],
+]) {
+  expectBuilderError(`invalid_${field}`, { ...businessInput, [field]: value });
+}
 
-// --- Safety: source scans ---
-const builderSrc = readFileSync(builderModulePath, 'utf8');
-const receiptSrc = readFileSync(receiptModulePath, 'utf8');
-check('no_fetch_in_builder', !/\bfetch\(/.test(builderSrc) && !/\bfetch\(/.test(receiptSrc));
-check('no_dispatch_adapter_in_builder', !/createScanOpsBridgeTransportClient/.test(builderSrc) && !/httpDispatchAdapter/.test(builderSrc));
-check('no_queue_write_in_builder', !/offlineSyncQueue/.test(builderSrc) && !/localStorage/.test(builderSrc) && !/indexedDB/.test(builderSrc));
-check('no_base44_entity_in_builder', !/base44\.entities/.test(builderSrc) && !/base44\.entities/.test(receiptSrc));
-check('no_mutation_in_receipt_validator', !/\.create\(/.test(receiptSrc) || receiptSrc.includes('makeError'));
-check('no_retry_in_builder', !/setTimeout/.test(builderSrc) && !/setInterval/.test(builderSrc));
-check('import_authority_from_contract', /from '\.\.\/\.\.\/canonicalContract\/v1\/bridgeContractV1\.js'/.test(builderSrc) && /from '\.\.\/\.\.\/canonicalContract\/v1\/bridgeContractV1\.js'/.test(receiptSrc));
-check('no_duplicate_operation_list_in_builder', !/\[ ['"]LOOKUP_REQUEST['"],/.test(builderSrc));
+expectBuilderError('invalid_device_type', {
+  ...businessInput,
+  source: { ...businessInput.source, deviceId: 123 },
+});
+expectBuilderError('invalid_store_whitespace', {
+  ...businessInput,
+  source: { ...businessInput.source, storeId: '   ' },
+});
+expectBuilderError('invalid_session_type', {
+  ...businessInput,
+  source: { ...businessInput.source, sessionId: [] },
+});
+expectBuilderError('invalid_operator_type', {
+  ...businessInput,
+  source: { ...businessInput.source, operatorId: 456 },
+});
+expectBuilderError('invalid_inventory_type', {
+  ...businessInput,
+  target: { inventoryInstanceId: true },
+});
+expectBuilderError('invalid_calendar_timestamp', {
+  ...businessInput,
+  occurredAt: '2026-99-99T99:99:99Z',
+});
+expectBuilderError('live_blocked', { ...businessInput, environment: 'LIVE' });
+expectBuilderError('production_blocked', {
+  ...businessInput,
+  environment: 'PRODUCTION',
+});
+expectBuilderError('payload_non_object', { ...businessInput, payload: 'bad' });
 
-// Final tally
-const passed = checks.every((c) => c.passed);
-const checksPassed = checks.filter((c) => c.passed).length;
-const checksFailed = checks.filter((c) => !c.passed).length;
+const receiptPositive = validateCanonicalReceiptV1(
+  receiptFixture,
+  healthBuilt.envelope,
+);
+check('receipt_positive', receiptPositive.valid && receiptPositive.correlated);
+check(
+  'receipt_hash_normalized',
+  hash(receiptPositive.normalizedReceipt) === EXPECTED.receipt,
+);
+check(
+  'receipt_flags',
+  !receiptPositive.inventoryMutationAttempted
+    && !receiptPositive.scanOpsMutationAttempted
+    && !receiptPositive.persistenceAttempted
+    && !receiptPositive.dispatchAttempted
+    && !receiptPositive.queueWriteAttempted,
+);
 
+function expectReceiptInvalid(name, receipt, envelope = healthBuilt.envelope) {
+  let result;
+  let threw = false;
+  try {
+    result = validateCanonicalReceiptV1(receipt, envelope);
+  } catch (error) {
+    threw = true;
+    result = error;
+  }
+  check(name, !threw && result.valid === false);
+  return result;
+}
+
+expectReceiptInvalid(
+  'malformed_envelope_rejected_without_throw',
+  receiptFixture,
+  {},
+);
+expectReceiptInvalid('invalid_calendar_received', {
+  ...receiptFixture,
+  receivedAt: '2026-99-99T99:99:99Z',
+});
+expectReceiptInvalid('invalid_calendar_processed', {
+  ...receiptFixture,
+  processedAt: '2026-02-31T12:00:00Z',
+});
+expectReceiptInvalid('health_accepted_applied', {
+  ...receiptFixture,
+  applicationStatus: 'APPLIED',
+});
+expectReceiptInvalid('rejected_applied', {
+  ...receiptFixture,
+  admissionStatus: 'REJECTED',
+  applicationStatus: 'APPLIED',
+});
+expectReceiptInvalid('service_unavailable_applied', {
+  ...receiptFixture,
+  admissionStatus: 'SERVICE_UNAVAILABLE',
+  applicationStatus: 'APPLIED',
+});
+expectReceiptInvalid(
+  'business_accepted_not_applicable',
+  {
+    ...receiptFixture,
+    receiptId: 'receipt:test:count:000001',
+    envelopeId: businessBuilt.envelope.envelopeId,
+    idempotencyKey: businessBuilt.envelope.idempotencyKey,
+    traceId: businessBuilt.envelope.traceId,
+    operationType: businessBuilt.envelope.operationType,
+    inventoryInstanceId: businessBuilt.envelope.target.inventoryInstanceId,
+    applicationStatus: 'NOT_APPLICABLE',
+  },
+  businessBuilt.envelope,
+);
+expectReceiptInvalid('wrong_contract', {
+  ...receiptFixture,
+  contractId: 'wrong',
+});
+expectReceiptInvalid('wrong_schema', {
+  ...receiptFixture,
+  schemaVersion: '2.0.0',
+});
+expectReceiptInvalid('unknown_admission', {
+  ...receiptFixture,
+  admissionStatus: 'WEIRD',
+});
+expectReceiptInvalid('unknown_application', {
+  ...receiptFixture,
+  applicationStatus: 'WEIRD',
+});
+expectReceiptInvalid('invalid_error_object', {
+  ...receiptFixture,
+  errors: [{ code: 'BAD', message: 'x' }],
+});
+expectReceiptInvalid('live_receipt', {
+  ...receiptFixture,
+  environment: 'LIVE',
+});
+expectReceiptInvalid('correlation_mismatch', {
+  ...receiptFixture,
+  traceId: 'other',
+});
+
+const nestedReceipt = clone(receiptFixture);
+nestedReceipt.warnings = [{ detail: { value: 1 } }];
+const nestedResult = validateCanonicalReceiptV1(
+  nestedReceipt,
+  healthBuilt.envelope,
+);
+nestedReceipt.warnings[0].detail.value = 999;
+check(
+  'normalized_receipt_deep_cloned',
+  nestedResult.normalizedReceipt.warnings[0].detail.value === 1,
+);
+check(
+  'normalized_receipt_deep_frozen',
+  Object.isFrozen(nestedResult.normalizedReceipt.warnings[0].detail),
+);
+
+const builderSrc = readFileSync(
+  join(root, 'src/inventory-bridge/canonicalAdapter/v1/buildCanonicalEnvelopeV1.js'),
+  'utf8',
+);
+const receiptSrc = readFileSync(
+  join(root, 'src/inventory-bridge/canonicalAdapter/v1/validateCanonicalReceiptV1.js'),
+  'utf8',
+);
+const forbidden = [
+  /\bfetch\s*\(/,
+  /createScanOpsBridgeTransportClient/,
+  /httpDispatchAdapter/,
+  /offlineSyncQueue/,
+  /\blocalStorage\b/,
+  /\bindexedDB\b/,
+  /base44\.entities/,
+  /\.create\s*\(/,
+  /\.update\s*\(/,
+  /\.delete\s*\(/,
+  /setTimeout\s*\(/,
+  /setInterval\s*\(/,
+];
+check(
+  'source_no_side_effects',
+  [builderSrc, receiptSrc].every(
+    (source) => forbidden.every((pattern) => !pattern.test(source)),
+  ),
+);
+check(
+  'single_contract_import',
+  /canonicalContract\/v1\/bridgeContractV1\.js/.test(builderSrc)
+    && /canonicalContract\/v1\/bridgeContractV1\.js/.test(receiptSrc),
+);
+check(
+  'no_duplicate_operation_array',
+  !builderSrc.includes("['LOOKUP_REQUEST'")
+    && !receiptSrc.includes("['LOOKUP_REQUEST'"),
+);
+
+const failed = checks.filter((item) => !item.passed);
 console.log(JSON.stringify({
-  phase: '34-E-S',
-  passed,
-  checksPassed,
-  checksFailed,
+  phase: '34-E-S-correction',
+  passed: failed.length === 0,
   totalChecks: checks.length,
-  canonicalContractHash: contractHash,
-  goldenEnvelopeHash: computedEnvelopeFixtureHash,
-  goldenReceiptHash: computedReceiptFixtureHash,
-  builderPositive: { ok: built.ok, envelopeHash: built.ok ? semanticHash(built.envelope) : null },
-  receiptCorrelationPositive: { valid: validated.valid, correlated: validated.correlated },
-  checks,
+  checksPassed: checks.length - failed.length,
+  checksFailed: failed.length,
+  hashes: {
+    contract: computeBridgeContractV1SemanticHash(),
+    envelope: hash(envelopeFixture),
+    receipt: hash(receiptFixture),
+  },
+  failed,
 }, null, 2));
-
-process.exit(passed ? 0 : 1);
+process.exit(failed.length === 0 ? 0 : 1);

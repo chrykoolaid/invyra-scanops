@@ -1,35 +1,78 @@
-/**
- * buildCanonicalEnvelopeV1.js — Phase 34-E-S
- *
- * Pure canonical Bridge Contract v1 envelope builder.
- *
- * Builds envelopes from explicit governed inputs only. Never defaults,
- * generates, persists, sends, dispatches, or mutates. Returns a frozen
- * envelope on success, or a canonical error result on invalid input.
- *
- * Import authority: src/inventory-bridge/canonicalContract/v1/
- */
+/** Pure ScanOps canonical envelope builder. No sending, queueing or mutation. */
+import { BRIDGE_CONTRACT_V1 } from '../../canonicalContract/v1/bridgeContractV1.js';
 
-import {
-  BRIDGE_CONTRACT_V1,
-} from '../../canonicalContract/v1/bridgeContractV1.js';
-
-const ISO_8601_REGEX =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
+const HEALTH_OPERATION = BRIDGE_CONTRACT_V1.envelope.source.operatorId.exceptionOperations[0];
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function makeErrorResult(code, field, message, retryable = false) {
+function normalizeRequiredString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function isValidIsoTimestamp(value) {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/);
+  if (!match) return false;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+
+  if (month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59) {
+    return false;
+  }
+
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  if (day < 1 || day > daysInMonth) return false;
+
+  if (match[7] !== 'Z') {
+    const [offsetHour, offsetMinute] = match[7].slice(1).split(':').map(Number);
+    if (offsetHour > 23 || offsetMinute > 59) return false;
+  }
+
+  return !Number.isNaN(Date.parse(normalized));
+}
+
+function deepCloneFreeze(value) {
+  if (Array.isArray(value)) {
+    return Object.freeze(value.map(deepCloneFreeze));
+  }
+  if (isPlainObject(value)) {
+    const clone = {};
+    for (const [key, item] of Object.entries(value)) {
+      clone[key] = deepCloneFreeze(item);
+    }
+    return Object.freeze(clone);
+  }
+  return value;
+}
+
+function canonicalError(code, field, message, retryable = false) {
+  if (!BRIDGE_CONTRACT_V1.errorObject.coreRegistry.includes(code)) {
+    throw new Error(`Non-canonical error code requested: ${code}`);
+  }
+  return Object.freeze({
+    code,
+    field,
+    message,
+    retryable: Boolean(retryable),
+  });
+}
+
+function makeErrorResult(code, field, message) {
   return Object.freeze({
     ok: false,
     envelope: null,
-    errors: Object.freeze([
-      Object.freeze({ code, field, message, retryable }),
-    ]),
+    metadata: null,
+    errors: Object.freeze([canonicalError(code, field, message)]),
     warnings: Object.freeze([]),
     dispatchAttempted: false,
+    envelopeSendAllowed: false,
     queueWriteAttempted: false,
     persistenceAttempted: false,
     inventoryMutationAttempted: false,
@@ -37,168 +80,207 @@ function makeErrorResult(code, field, message, retryable = false) {
   });
 }
 
-/**
- * Build a canonical Bridge Contract v1 envelope from explicit governed inputs.
- *
- * @param {object} input - Explicit values; nothing is defaulted.
- * @returns {object} Frozen envelope on success; frozen error result otherwise.
- */
+function requireIdentifier(value, code, field, label) {
+  const normalized = normalizeRequiredString(value);
+  if (!normalized) {
+    return {
+      error: makeErrorResult(code, field, `${label} must be a non-empty string.`),
+    };
+  }
+
+  if (BRIDGE_CONTRACT_V1.envelope.placeholderIdsRejected.includes(normalized)) {
+    return {
+      error: makeErrorResult(code, field, `${label} is a reserved placeholder identifier.`),
+    };
+  }
+
+  return { value: normalized };
+}
+
 export function buildCanonicalEnvelopeV1(input) {
   if (!isPlainObject(input)) {
-    return makeErrorResult('PAYLOAD_INVALID', 'input', 'Envelope input must be a plain object.');
+    return makeErrorResult(
+      'PAYLOAD_INVALID',
+      'input',
+      'Envelope input must be a plain object.',
+    );
   }
 
-  const contractId = BRIDGE_CONTRACT_V1.contractId;
-  const schemaVersion = BRIDGE_CONTRACT_V1.schemaVersion;
-  const contractMajor = schemaVersion.split('.')[0];
-
-  // Envelope ID
-  if (input.envelopeId === undefined || input.envelopeId === null || input.envelopeId === '') {
-    return makeErrorResult('ENVELOPE_ID_REQUIRED', 'envelopeId', 'Envelope ID is required.');
-  }
-  if (typeof input.envelopeId !== 'string') {
-    return makeErrorResult('ENVELOPE_ID_REQUIRED', 'envelopeId', 'Envelope ID must be a string.');
+  if (Object.prototype.hasOwnProperty.call(input, 'operatorId')) {
+    return makeErrorResult(
+      'PAYLOAD_INVALID',
+      'operatorId',
+      'operatorId must be supplied only as source.operatorId.',
+    );
   }
 
-  // Idempotency key
-  if (input.idempotencyKey === undefined || input.idempotencyKey === null || input.idempotencyKey === '') {
-    return makeErrorResult('IDEMPOTENCY_KEY_REQUIRED', 'idempotencyKey', 'Idempotency key is required.');
-  }
-  if (typeof input.idempotencyKey !== 'string') {
-    return makeErrorResult('IDEMPOTENCY_KEY_REQUIRED', 'idempotencyKey', 'Idempotency key must be a string.');
-  }
+  const envelopeId = requireIdentifier(
+    input.envelopeId,
+    'ENVELOPE_ID_REQUIRED',
+    'envelopeId',
+    'Envelope ID',
+  );
+  if (envelopeId.error) return envelopeId.error;
 
-  // Trace ID
-  if (input.traceId === undefined || input.traceId === null || input.traceId === '') {
-    return makeErrorResult('TRACE_ID_REQUIRED', 'traceId', 'Trace ID is required.');
-  }
-  if (typeof input.traceId !== 'string') {
-    return makeErrorResult('TRACE_ID_REQUIRED', 'traceId', 'Trace ID must be a string.');
-  }
+  const idempotencyKey = requireIdentifier(
+    input.idempotencyKey,
+    'IDEMPOTENCY_KEY_REQUIRED',
+    'idempotencyKey',
+    'Idempotency key',
+  );
+  if (idempotencyKey.error) return idempotencyKey.error;
 
-  // Operation type
-  if (input.operationType === undefined || input.operationType === null || input.operationType === '') {
-    return makeErrorResult('OPERATION_TYPE_INVALID', 'operationType', 'Operation type is required.');
-  }
+  const traceId = requireIdentifier(
+    input.traceId,
+    'TRACE_ID_REQUIRED',
+    'traceId',
+    'Trace ID',
+  );
+  if (traceId.error) return traceId.error;
+
   if (!BRIDGE_CONTRACT_V1.operationTypes.includes(input.operationType)) {
-    return makeErrorResult('UNSUPPORTED_OPERATION', 'operationType', `Unsupported operation type: ${String(input.operationType)}`);
+    return makeErrorResult(
+      'UNSUPPORTED_OPERATION',
+      'operationType',
+      'operationType must be one of the canonical operations.',
+    );
   }
 
-  // Timestamp
-  if (input.occurredAt === undefined || input.occurredAt === null || input.occurredAt === '') {
-    return makeErrorResult('TIMESTAMP_INVALID', 'occurredAt', 'Occurred-at timestamp is required.');
-  }
-  if (typeof input.occurredAt !== 'string' || !ISO_8601_REGEX.test(input.occurredAt)) {
-    return makeErrorResult('TIMESTAMP_INVALID', 'occurredAt', 'Occurred-at must be an ISO-8601 string.');
-  }
-
-  // Environment
-  if (input.environment === undefined || input.environment === null || input.environment === '') {
-    return makeErrorResult('ENVIRONMENT_REQUIRED', 'environment', 'Environment is required.');
-  }
-  if (input.environment === 'UNKNOWN') {
-    return makeErrorResult('ENVIRONMENT_INVALID', 'environment', 'UNKNOWN environment is invalid.');
-  }
-  if (!BRIDGE_CONTRACT_V1.environments.recognized.includes(input.environment)) {
-    return makeErrorResult('ENVIRONMENT_INVALID', 'environment', `Unrecognized environment: ${String(input.environment)}`);
-  }
-  if (!BRIDGE_CONTRACT_V1.environments.allowedRuntime.includes(input.environment)) {
-    return makeErrorResult('ENVIRONMENT_INVALID', 'environment', `Environment not allowed at runtime: ${String(input.environment)}`);
+  if (!isValidIsoTimestamp(input.occurredAt)) {
+    return makeErrorResult(
+      'TIMESTAMP_INVALID',
+      'occurredAt',
+      'occurredAt must be a real ISO-8601 timestamp.',
+    );
   }
 
-  // Source
+  if (
+    typeof input.environment !== 'string'
+    || !BRIDGE_CONTRACT_V1.environments.recognized.includes(input.environment)
+    || input.environment === 'UNKNOWN'
+    || !BRIDGE_CONTRACT_V1.environments.allowedRuntime.includes(input.environment)
+  ) {
+    return makeErrorResult(
+      input.environment ? 'ENVIRONMENT_INVALID' : 'ENVIRONMENT_REQUIRED',
+      'environment',
+      'environment must be an admitted TRAINING or TEST value.',
+    );
+  }
+
   if (!isPlainObject(input.source)) {
-    return makeErrorResult('PAYLOAD_INVALID', 'source', 'Source must be a plain object.');
-  }
-  const source = input.source;
-
-  if (source.deviceId === undefined || source.deviceId === null || source.deviceId === '') {
-    return makeErrorResult('SOURCE_DEVICE_REQUIRED', 'source.deviceId', 'Source device ID is required.');
-  }
-  if (BRIDGE_CONTRACT_V1.envelope.placeholderIdsRejected.includes(source.deviceId)) {
-    return makeErrorResult('SOURCE_DEVICE_REQUIRED', 'source.deviceId', 'Placeholder device identifier is rejected.');
+    return makeErrorResult('PAYLOAD_INVALID', 'source', 'source must be a plain object.');
   }
 
-  if (source.storeId === undefined || source.storeId === null || source.storeId === '') {
-    return makeErrorResult('SOURCE_STORE_REQUIRED', 'source.storeId', 'Source store ID is required.');
-  }
-  if (BRIDGE_CONTRACT_V1.envelope.placeholderIdsRejected.includes(source.storeId)) {
-    return makeErrorResult('SOURCE_STORE_REQUIRED', 'source.storeId', 'Placeholder store identifier is rejected.');
+  const deviceId = requireIdentifier(
+    input.source.deviceId,
+    'SOURCE_DEVICE_REQUIRED',
+    'source.deviceId',
+    'Source device ID',
+  );
+  if (deviceId.error) return deviceId.error;
+
+  const storeId = requireIdentifier(
+    input.source.storeId,
+    'SOURCE_STORE_REQUIRED',
+    'source.storeId',
+    'Source store ID',
+  );
+  if (storeId.error) return storeId.error;
+
+  const sessionId = requireIdentifier(
+    input.source.sessionId,
+    'SOURCE_SESSION_REQUIRED',
+    'source.sessionId',
+    'Source session ID',
+  );
+  if (sessionId.error) return sessionId.error;
+
+  const operatorSupplied = Object.prototype.hasOwnProperty.call(
+    input.source,
+    'operatorId',
+  );
+  const operatorId = normalizeRequiredString(input.source.operatorId);
+  const operatorRequired = input.operationType !== HEALTH_OPERATION;
+
+  if (operatorRequired && !operatorId) {
+    return makeErrorResult(
+      'SOURCE_OPERATOR_REQUIRED',
+      'source.operatorId',
+      'source.operatorId is required for this operation.',
+    );
   }
 
-  if (source.sessionId === undefined || source.sessionId === null || source.sessionId === '') {
-    return makeErrorResult('SOURCE_SESSION_REQUIRED', 'source.sessionId', 'Source session ID is required.');
-  }
-  if (BRIDGE_CONTRACT_V1.envelope.placeholderIdsRejected.includes(source.sessionId)) {
-    return makeErrorResult('SOURCE_SESSION_REQUIRED', 'source.sessionId', 'Placeholder session identifier is rejected.');
-  }
-
-  // Operator (required except DEVICE_HEALTH_PING)
-  const operatorRequired =
-    !BRIDGE_CONTRACT_V1.envelope.source.operatorId.exceptionOperations.includes(input.operationType);
-  if (operatorRequired) {
-    if (input.operatorId === undefined || input.operatorId === null || input.operatorId === '') {
-      return makeErrorResult('SOURCE_OPERATOR_REQUIRED', 'operatorId', 'Operator ID is required for this operation.');
-    }
-    if (BRIDGE_CONTRACT_V1.envelope.placeholderIdsRejected.includes(input.operatorId)) {
-      return makeErrorResult('SOURCE_OPERATOR_REQUIRED', 'operatorId', 'Placeholder operator identifier is rejected.');
-    }
+  if (operatorSupplied && !operatorId) {
+    return makeErrorResult(
+      'SOURCE_OPERATOR_REQUIRED',
+      'source.operatorId',
+      'A supplied source.operatorId must be a non-empty string.',
+    );
   }
 
-  // Target
+  if (
+    operatorId
+    && BRIDGE_CONTRACT_V1.envelope.placeholderIdsRejected.includes(operatorId)
+  ) {
+    return makeErrorResult(
+      'SOURCE_OPERATOR_REQUIRED',
+      'source.operatorId',
+      'source.operatorId is a reserved placeholder identifier.',
+    );
+  }
+
   if (!isPlainObject(input.target)) {
-    return makeErrorResult('PAYLOAD_INVALID', 'target', 'Target must be a plain object.');
-  }
-  const target = input.target;
-  if (target.inventoryInstanceId === undefined || target.inventoryInstanceId === null || target.inventoryInstanceId === '') {
-    return makeErrorResult('INVENTORY_INSTANCE_REQUIRED', 'target.inventoryInstanceId', 'Inventory instance ID is required.');
-  }
-  if (BRIDGE_CONTRACT_V1.envelope.placeholderIdsRejected.includes(target.inventoryInstanceId)) {
-    return makeErrorResult('INVENTORY_INSTANCE_REQUIRED', 'target.inventoryInstanceId', 'Placeholder Inventory instance identifier is rejected.');
+    return makeErrorResult('PAYLOAD_INVALID', 'target', 'target must be a plain object.');
   }
 
-  // Payload
+  const inventoryInstanceId = requireIdentifier(
+    input.target.inventoryInstanceId,
+    'INVENTORY_INSTANCE_REQUIRED',
+    'target.inventoryInstanceId',
+    'Inventory instance ID',
+  );
+  if (inventoryInstanceId.error) return inventoryInstanceId.error;
+
   if (!isPlainObject(input.payload)) {
-    return makeErrorResult('PAYLOAD_INVALID', 'payload', 'Payload must be a plain object.');
+    return makeErrorResult('PAYLOAD_INVALID', 'payload', 'payload must be a plain object.');
   }
 
-  const envelope = Object.freeze({
-    contractId,
-    schemaVersion,
-    envelopeId: input.envelopeId,
-    idempotencyKey: input.idempotencyKey,
-    traceId: input.traceId,
-    operationType: input.operationType,
-    occurredAt: input.occurredAt,
-    environment: input.environment,
-    source: Object.freeze({
-      system: BRIDGE_CONTRACT_V1.envelope.source.systemMustEqual,
-      deviceId: source.deviceId,
-      storeId: source.storeId,
-      sessionId: source.sessionId,
-    }),
-    target: Object.freeze({
-      system: BRIDGE_CONTRACT_V1.envelope.target.systemMustEqual,
-      inventoryInstanceId: target.inventoryInstanceId,
-    }),
-    payload: Object.freeze({ ...input.payload }),
-  });
+  const source = {
+    system: BRIDGE_CONTRACT_V1.envelope.source.systemMustEqual,
+    deviceId: deviceId.value,
+    storeId: storeId.value,
+    sessionId: sessionId.value,
+  };
+  if (operatorId) source.operatorId = operatorId;
 
-  // operatorId is carried outside the canonical envelope shape when present
-  // (the contract requires it for non-health operations but it is not a
-  // top-level envelope field). Return it as a sidecar for audit only.
-  const sidecar = Object.freeze({
-    operatorId: operatorRequired ? input.operatorId : (input.operatorId ?? null),
-    contractMajor,
+  const envelope = deepCloneFreeze({
+    contractId: BRIDGE_CONTRACT_V1.contractId,
+    schemaVersion: BRIDGE_CONTRACT_V1.schemaVersion,
+    envelopeId: envelopeId.value,
+    idempotencyKey: idempotencyKey.value,
+    traceId: traceId.value,
+    operationType: input.operationType,
+    occurredAt: input.occurredAt.trim(),
+    environment: input.environment,
+    source,
+    target: {
+      system: BRIDGE_CONTRACT_V1.envelope.target.systemMustEqual,
+      inventoryInstanceId: inventoryInstanceId.value,
+    },
+    payload: input.payload,
   });
 
   return Object.freeze({
     ok: true,
     envelope,
-    sidecar,
+    metadata: Object.freeze({
+      contractMajor: BRIDGE_CONTRACT_V1.schemaVersion.split('.')[0],
+      operatorIdIncludedInEnvelope: Boolean(operatorId),
+    }),
     errors: Object.freeze([]),
     warnings: Object.freeze([]),
     dispatchAttempted: false,
+    envelopeSendAllowed: false,
     queueWriteAttempted: false,
     persistenceAttempted: false,
     inventoryMutationAttempted: false,
