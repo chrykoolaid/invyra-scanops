@@ -1,0 +1,113 @@
+name: Phase 37-A Cross-Repository Reliable Delivery
+
+on:
+  pull_request:
+    paths:
+      - 'src/inventory-bridge/reliableDelivery/v1/**'
+      - 'scripts/validate-phase37a-scanops-reliable-delivery.mjs'
+      - 'scripts/validate-phase37a-cross-repository-reliable-delivery.mjs'
+      - '.github/workflows/phase37a-cross-repository-reliable-delivery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      INVENTORY_PHASE37A_SHA: 0f5bf78dd84e7a02fbbefb7d4ad12a18d9ebb40a
+    steps:
+      - name: Verify Inventory repository read token
+        env:
+          INVENTORY_REPO_READ_TOKEN: ${{ secrets.INVENTORY_REPO_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${INVENTORY_REPO_READ_TOKEN}" || {
+            echo "::error::INVENTORY_REPO_READ_TOKEN is required."
+            exit 1
+          }
+      - name: Checkout ScanOps candidate
+        uses: actions/checkout@v4
+        with:
+          path: scanops-repo
+          persist-credentials: false
+      - name: Checkout Inventory Phase 37-A candidate
+        uses: actions/checkout@v4
+        with:
+          repository: chrykoolaid/invyra-base44
+          ref: ${{ env.INVENTORY_PHASE37A_SHA }}
+          token: ${{ secrets.INVENTORY_REPO_READ_TOKEN }}
+          path: scanops-repo/inventory-repo
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Capture candidate evidence
+        run: |
+          set -euo pipefail
+          scanops_sha="$(git -C scanops-repo rev-parse HEAD)"
+          inventory_sha="$(git -C scanops-repo/inventory-repo rev-parse HEAD)"
+          test "${inventory_sha}" = "${INVENTORY_PHASE37A_SHA}"
+          printf '{\n  "scanOpsCommit": "%s",\n  "inventoryCommit": "%s"\n}\n' "${scanops_sha}" "${inventory_sha}" \
+            | tee scanops-repo/phase37a-cross-repository-commits.json
+      - name: Validate ScanOps baseline and reliable delivery
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-scanops-bridge-canonical-contract-v1.mjs
+          node scripts/validate-scanops-bridge-canonical-adapter-v1.mjs
+          node scripts/validate-phase35a-scanops-test-transport.mjs
+          node scripts/validate-phase36a-scanops-ephemeral-pairing.mjs
+          node scripts/validate-phase37a-scanops-reliable-delivery.mjs | tee phase37a-scanops-reliable-delivery-report.json
+      - name: Validate Inventory baseline and reliable delivery
+        working-directory: scanops-repo/inventory-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-inventory-bridge-canonical-contract-v1.mjs
+          node scripts/validate-inventory-bridge-canonical-adapter-v1.mjs
+          node scripts/validate-phase35a-inventory-test-transport.mjs
+          node scripts/validate-phase36a-inventory-ephemeral-pairing.mjs
+          node scripts/validate-phase37a-inventory-reliable-delivery.mjs | tee phase37a-inventory-reliable-delivery-report.json
+      - name: Run actual durable queue-to-inbox certification
+        working-directory: scanops-repo
+        env:
+          INVENTORY_REPO_PATH: inventory-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-phase37a-cross-repository-reliable-delivery.mjs | tee phase37a-cross-repository-reliable-delivery-report.json
+      - name: Verify machine-readable evidence
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          test -s phase37a-cross-repository-commits.json
+          test -s phase37a-scanops-reliable-delivery-report.json
+          test -s phase37a-cross-repository-reliable-delivery-report.json
+          test -s inventory-repo/phase37a-inventory-reliable-delivery-report.json
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const paths = [
+            'phase37a-scanops-reliable-delivery-report.json',
+            'phase37a-cross-repository-reliable-delivery-report.json',
+            'inventory-repo/phase37a-inventory-reliable-delivery-report.json',
+          ];
+          for (const path of paths) {
+            const report = JSON.parse(readFileSync(path, 'utf8'));
+            if (report.passed !== true || report.failedChecks !== 0) {
+              throw new Error(`${path} did not certify successfully.`);
+            }
+          }
+          NODE
+      - name: Upload Phase 37-A evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase37a-cross-repository-reliable-delivery
+          path: |
+            scanops-repo/phase37a-cross-repository-commits.json
+            scanops-repo/phase37a-scanops-reliable-delivery-report.json
+            scanops-repo/phase37a-cross-repository-reliable-delivery-report.json
+            scanops-repo/inventory-repo/phase37a-inventory-reliable-delivery-report.json
+          if-no-files-found: warn
+          retention-days: 30
