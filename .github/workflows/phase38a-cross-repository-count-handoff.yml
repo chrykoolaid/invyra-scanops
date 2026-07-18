@@ -1,0 +1,115 @@
+name: Phase 38-A Cross-Repository Count Handoff
+
+on:
+  pull_request:
+    paths:
+      - 'src/inventory-bridge/countHandoff/v1/**'
+      - 'scripts/validate-phase38a-scanops-count-handoff.mjs'
+      - 'scripts/validate-phase38a-cross-repository-count-handoff.mjs'
+      - 'scripts/phase38a/**'
+      - '.github/workflows/phase38a-cross-repository-count-handoff.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      INVENTORY_PHASE38A_SHA: 213ced228f128a0f3f9d5023e8865a66bf2c520d
+    steps:
+      - name: Verify Inventory repository read token
+        env:
+          INVENTORY_REPO_READ_TOKEN: ${{ secrets.INVENTORY_REPO_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${INVENTORY_REPO_READ_TOKEN}" || {
+            echo "::error::INVENTORY_REPO_READ_TOKEN is required."
+            exit 1
+          }
+      - name: Checkout ScanOps candidate
+        uses: actions/checkout@v4
+        with:
+          path: scanops-repo
+          persist-credentials: false
+      - name: Checkout Inventory Phase 38-A candidate
+        uses: actions/checkout@v4
+        with:
+          repository: chrykoolaid/invyra-base44
+          ref: ${{ env.INVENTORY_PHASE38A_SHA }}
+          token: ${{ secrets.INVENTORY_REPO_READ_TOKEN }}
+          path: scanops-repo/inventory-repo
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Capture candidate evidence
+        run: |
+          set -euo pipefail
+          scanops_sha="$(git -C scanops-repo rev-parse HEAD)"
+          inventory_sha="$(git -C scanops-repo/inventory-repo rev-parse HEAD)"
+          test "${inventory_sha}" = "${INVENTORY_PHASE38A_SHA}"
+          printf '{\n  "scanOpsCommit": "%s",\n  "inventoryCommit": "%s"\n}\n' "${scanops_sha}" "${inventory_sha}" \
+            | tee scanops-repo/phase38a-cross-repository-commits.json
+      - name: Validate ScanOps baseline and count handoff
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-scanops-bridge-canonical-contract-v1.mjs
+          node scripts/validate-scanops-bridge-canonical-adapter-v1.mjs
+          node scripts/validate-phase35a-scanops-test-transport.mjs
+          node scripts/validate-phase36a-scanops-ephemeral-pairing.mjs
+          node scripts/validate-phase37a-scanops-reliable-delivery.mjs
+          node scripts/validate-phase38a-scanops-count-handoff.mjs | tee phase38a-scanops-count-handoff-report.json
+      - name: Validate Inventory baseline and count intake
+        working-directory: scanops-repo/inventory-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-inventory-bridge-canonical-contract-v1.mjs
+          node scripts/validate-inventory-bridge-canonical-adapter-v1.mjs
+          node scripts/validate-phase35a-inventory-test-transport.mjs
+          node scripts/validate-phase36a-inventory-ephemeral-pairing.mjs
+          node scripts/validate-phase37a-inventory-reliable-delivery.mjs
+          node scripts/validate-phase38a-inventory-count-intake.mjs | tee phase38a-inventory-count-intake-report.json
+      - name: Run actual count submission staging certification
+        working-directory: scanops-repo
+        env:
+          INVENTORY_REPO_PATH: inventory-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-phase38a-cross-repository-count-handoff.mjs | tee phase38a-cross-repository-count-handoff-report.json
+      - name: Verify machine-readable evidence
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          test -s phase38a-cross-repository-commits.json
+          test -s phase38a-scanops-count-handoff-report.json
+          test -s phase38a-cross-repository-count-handoff-report.json
+          test -s inventory-repo/phase38a-inventory-count-intake-report.json
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          for (const path of [
+            'phase38a-scanops-count-handoff-report.json',
+            'phase38a-cross-repository-count-handoff-report.json',
+            'inventory-repo/phase38a-inventory-count-intake-report.json',
+          ]) {
+            const report = JSON.parse(readFileSync(path, 'utf8'));
+            if (report.passed !== true || report.failedChecks !== 0) {
+              throw new Error(`${path} did not certify successfully.`);
+            }
+          }
+          NODE
+      - name: Upload Phase 38-A evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase38a-cross-repository-count-handoff
+          path: |
+            scanops-repo/phase38a-cross-repository-commits.json
+            scanops-repo/phase38a-scanops-count-handoff-report.json
+            scanops-repo/phase38a-cross-repository-count-handoff-report.json
+            scanops-repo/inventory-repo/phase38a-inventory-count-intake-report.json
+          if-no-files-found: error
+          retention-days: 30
