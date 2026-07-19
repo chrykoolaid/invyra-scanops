@@ -102,6 +102,7 @@ const getAppEscapeMeta = (pathname) => {
     "/desktop-sync-contract": { title: "Desktop Sync Contract", subtitle: "Review integration contracts" },
     "/store-ops-dashboard": { title: "Store Ops Dashboard", subtitle: "Review store exceptions" },
     "/scanner-settings": { title: "Settings", subtitle: "Device configuration and session controls" },
+    "/scanner-settings/sync": { title: "Sync & Connectivity", subtitle: "Connect this scanner to Inventory Desktop" },
   };
 
   if (exactRoutes[pathname]) return exactRoutes[pathname];
@@ -182,6 +183,7 @@ const AuthenticatedApp = () => {
             <Route path="/printer-settings" element={roleGated(<PrinterSettings />, "Manager", "Printer Settings")} />
             <Route path="/user-management" element={roleGated(<UserManagement />, "Manager", "User Management")} />
             <Route path="/scanner-settings" element={<ScannerSettings />} />
+            <Route path="/scanner-settings/sync" element={<SyncHandoff />} />
             <Route path="/scanner-settings/:workspace" element={<ScannerSettings />} />
             <Route path="*" element={<PageNotFound />} />
           </Routes>
