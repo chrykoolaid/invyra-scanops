@@ -3,6 +3,7 @@ name: Phase 39-0B ScanOps Connection Setup
 on:
   pull_request:
     paths:
+      - 'index.html'
       - 'src/App.jsx'
       - 'src/inventory-bridge/pairing/browser/**'
       - 'src/lib/scanOpsLiveConnectivity.js'
