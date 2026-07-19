@@ -2,8 +2,8 @@ import {
   clearBrowserPairing,
   getBrowserPairedProfile,
   pairWithInventorySetupCode,
-} from '../inventory-bridge/pairing/browser/v1/scanOpsBrowserPairingClientV1';
-import { createScanOpsTestTransportClientV1 } from '../inventory-bridge/testTransport/v1';
+} from '../inventory-bridge/pairing/browser/v1/scanOpsBrowserPairingClientV1.js';
+import { createScanOpsTestTransportClientV1 } from '../inventory-bridge/testTransport/v1/index.js';
 
 export const LIVE_CONNECTION_RESULT_KEY = 'invyra_scanops_phase39_0b_connection_result_v1';
 
