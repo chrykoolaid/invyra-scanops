@@ -4,7 +4,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
-  Database,
   HeartPulse,
   Link2,
   Loader2,
@@ -120,7 +119,7 @@ function connectionState(profile, result, networkMode) {
   return {
     key: 'disconnected',
     title: 'Inventory not connected',
-    helper: 'Use the short setup code shown by Inventory Desktop.',
+    helper: 'Use the six-digit pairing code shown by Inventory Desktop.',
     icon: Unplug,
     tone: 'neutral',
   };
@@ -233,7 +232,7 @@ export default function SyncHandoff() {
     try { retryAllSyncEvents(); } finally { setBusy(''); }
   };
 
-  const codeReady = /^\d{6}$/.test(setupCode) && host.trim() && /^\d+$/.test(port);
+  const codeReady = Boolean(/^\d{6}$/.test(setupCode) && host.trim() && /^\d+$/.test(port));
 
   return (
     <div className="min-h-screen bg-background px-4 py-4 pb-28" data-scanops-scroll>
@@ -274,7 +273,7 @@ export default function SyncHandoff() {
             <h2 className="text-base font-black text-foreground">Connection controls</h2>
             <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">The scanner is connected. Test it again only when troubleshooting.</p>
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <button type="button" className={BTN_PRIMARY} disabled={Boolean(busy)} onClick={testConnection}>
+              <button type="button" aria-label="Run Connection Test" className={BTN_PRIMARY} disabled={Boolean(busy)} onClick={testConnection}>
                 {busy === 'test' ? 'Testing…' : 'Test connection'}
               </button>
               <button type="button" className={BTN_SECONDARY} disabled={Boolean(busy)} onClick={disconnect}>Disconnect</button>
@@ -301,7 +300,7 @@ export default function SyncHandoff() {
                 <div className="mt-4 space-y-3">
                   <Field label="Inventory address" helper="Use 127.0.0.1 when both apps run on this computer." value={host} onChange={setHost} placeholder="127.0.0.1" />
                   <Field label="Bridge port" helper="The default pilot port is 8788." value={port} onChange={(value) => setPort(value.replace(/\D/g, '').slice(0, 5))} placeholder="8788" inputMode="numeric" />
-                  <Field label="Six-digit setup code" helper="The code is single-use and expires after two minutes." value={setupCode} onChange={(value) => setSetupCode(value.replace(/\D/g, '').slice(0, 6))} placeholder="123456" inputMode="numeric" />
+                  <Field label="Six-digit pairing code" helper="The code is single-use and expires after two minutes." value={setupCode} onChange={(value) => setSetupCode(value.replace(/\D/g, '').slice(0, 6))} placeholder="123456" inputMode="numeric" />
                 </div>
 
                 <button type="button" className={`mt-4 ${BTN_PRIMARY}`} disabled={Boolean(busy) || !codeReady || networkMode === 'offline'} onClick={connect}>
@@ -356,7 +355,7 @@ export default function SyncHandoff() {
                 <Detail label="Trust expires" value={profile?.trustExpiresAt ? new Date(profile.trustExpiresAt).toLocaleString() : 'Not paired'} />
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <button type="button" className={BTN_SECONDARY} disabled={Boolean(busy) || !profile} onClick={testConnection}>
+                <button type="button" aria-label="Run Connection Test" className={BTN_SECONDARY} disabled={Boolean(busy) || !profile} onClick={testConnection}>
                   <HeartPulse className="mr-2 inline h-4 w-4" /> Test
                 </button>
                 <button type="button" className={BTN_SECONDARY} disabled={Boolean(busy) || !(summary.pending || summary.failed)} onClick={retryQueue}>
