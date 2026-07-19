@@ -56,7 +56,6 @@ jobs:
             src/lib/scanOpsLiveConnectivity.js \
             src/inventory-bridge/pairing/browser/v1/scanOpsBrowserPairingClientV1.js \
             --quiet \
-            --rule 'unused-imports/no-unused-imports: warn' \
             2>&1 | tee phase39-0b-lint.log
       - name: Record existing repository quality debt
         run: |
