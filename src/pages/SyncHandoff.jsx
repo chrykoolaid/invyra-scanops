@@ -10,7 +10,6 @@ import {
   LockKeyhole,
   MapPin,
   Network,
-  RefreshCw,
   ShieldAlert,
   ShieldCheck,
   Unplug,
@@ -63,7 +62,7 @@ function TabBar({ tabs, active, onChange }) {
   );
 }
 
-function Section({ icon: Icon, title, helper, badge, children }) {
+function Section({ icon: Icon, title, helper, badge = null, children = null }) {
   return (
     <section className="rounded-3xl border border-border bg-card p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -85,7 +84,7 @@ function Section({ icon: Icon, title, helper, badge, children }) {
   );
 }
 
-function Metric({ label, value, helper }) {
+function Metric({ label, value, helper = null }) {
   return (
     <div className="min-w-0 rounded-2xl bg-secondary/70 px-3 py-2">
       <p className="truncate text-[10px] font-black uppercase tracking-wider text-muted-foreground">{label}</p>
@@ -104,7 +103,7 @@ function InfoRow({ label, value }) {
   );
 }
 
-function Field({ label, helper, value, onChange, placeholder, inputMode }) {
+function Field({ label, helper, value, onChange, placeholder, inputMode = 'text' }) {
   return (
     <label className="block space-y-1.5">
       <span className="block text-xs font-black uppercase tracking-wider text-muted-foreground">{label}</span>
