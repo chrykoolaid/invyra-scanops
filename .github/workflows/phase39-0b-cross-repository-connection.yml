@@ -1,0 +1,114 @@
+name: Phase 39-0B Cross-Repository Connection
+
+on:
+  pull_request:
+    paths:
+      - 'src/inventory-bridge/pairing/browser/**'
+      - 'src/lib/scanOpsLiveConnectivity.js'
+      - 'src/pages/SyncHandoff.jsx'
+      - 'scripts/validate-phase39-0b-cross-repository-connection.mjs'
+      - '.github/workflows/phase39-0b-cross-repository-connection.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      INVENTORY_PHASE39_0B_SHA: 63d931eaf2ede8762088fe29c700205d7e4b9f6a
+    steps:
+      - name: Verify Inventory repository read token
+        env:
+          INVENTORY_REPO_READ_TOKEN: ${{ secrets.INVENTORY_REPO_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${INVENTORY_REPO_READ_TOKEN}" || {
+            echo "::error::INVENTORY_REPO_READ_TOKEN is required."
+            exit 1
+          }
+      - name: Checkout ScanOps candidate
+        uses: actions/checkout@v4
+        with:
+          path: scanops-repo
+          persist-credentials: false
+      - name: Checkout certified Inventory connection runtime
+        uses: actions/checkout@v4
+        with:
+          repository: chrykoolaid/invyra-base44
+          ref: ${{ env.INVENTORY_PHASE39_0B_SHA }}
+          token: ${{ secrets.INVENTORY_REPO_READ_TOKEN }}
+          path: scanops-repo/inventory-repo
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Verify pinned cross-repository commits
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          inventory_sha="$(git -C inventory-repo rev-parse HEAD)"
+          test "${inventory_sha}" = "${INVENTORY_PHASE39_0B_SHA}"
+          printf '{\n  "scanOpsCommit": "%s",\n  "inventoryCommit": "%s"\n}\n' \
+            "$(git rev-parse HEAD)" "${inventory_sha}" \
+            | tee phase39-0b-cross-repository-commits.json
+      - name: Re-certify Inventory connection runtime
+        working-directory: scanops-repo/inventory-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-phase39-0b-inventory-connection-setup.mjs \
+            | tee phase39-0b-inventory-connection-setup-report.json
+      - name: Re-certify ScanOps connection runtime
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          node scripts/run-phase39-0b-scanops-connection-certification.mjs \
+            | tee phase39-0b-scanops-connection-setup-report.json
+      - name: Run actual paired health connection
+        working-directory: scanops-repo
+        env:
+          INVENTORY_REPO_PATH: inventory-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-phase39-0b-cross-repository-connection.mjs \
+            | tee phase39-0b-cross-repository-connection-report.json
+      - name: Verify machine-readable cross-repository evidence
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          for report in \
+            phase39-0b-scanops-connection-setup-report.json \
+            phase39-0b-cross-repository-connection-report.json \
+            inventory-repo/phase39-0b-inventory-connection-setup-report.json; do
+            test -s "${report}"
+          done
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const reports = [
+            'phase39-0b-scanops-connection-setup-report.json',
+            'phase39-0b-cross-repository-connection-report.json',
+            'inventory-repo/phase39-0b-inventory-connection-setup-report.json',
+          ].map((path) => JSON.parse(readFileSync(path, 'utf8')));
+          for (const report of reports) {
+            if (report.passed !== true || report.failedChecks !== 0) {
+              throw new Error('A Phase 39-0B certification report failed.');
+            }
+            if (report.receivingIntegrationAuthorized !== false) {
+              throw new Error('Receiving must remain blocked during connection certification.');
+            }
+          }
+          NODE
+      - name: Upload Phase 39-0B cross-repository evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase39-0b-cross-repository-connection
+          path: |
+            scanops-repo/phase39-0b-cross-repository-commits.json
+            scanops-repo/phase39-0b-scanops-connection-setup-report.json
+            scanops-repo/phase39-0b-cross-repository-connection-report.json
+            scanops-repo/inventory-repo/phase39-0b-inventory-connection-setup-report.json
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,81 @@
+name: Phase 39-0B ScanOps Connection Setup
+
+on:
+  pull_request:
+    paths:
+      - 'src/inventory-bridge/pairing/browser/**'
+      - 'src/lib/scanOpsLiveConnectivity.js'
+      - 'src/pages/SyncHandoff.jsx'
+      - 'scripts/validate-phase39-0b-scanops-connection-setup.mjs'
+      - 'scripts/run-phase39-0b-scanops-connection-certification.mjs'
+      - '.github/workflows/phase39-0b-scanops-connection-setup.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validate browser pairing and real health test wiring
+        run: |
+          set -euo pipefail
+          node scripts/validate-scanops-bridge-canonical-contract-v1.mjs
+          node scripts/validate-scanops-bridge-canonical-adapter-v1.mjs
+          node scripts/validate-phase35a-scanops-test-transport.mjs
+          node scripts/validate-phase36a-scanops-ephemeral-pairing.mjs
+          node scripts/run-phase39-0b-scanops-connection-certification.mjs \
+            | tee phase39-0b-scanops-connection-setup-report.json
+      - name: Verify machine-readable evidence
+        run: |
+          set -euo pipefail
+          test -s phase39-0b-scanops-connection-setup-report.json
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const report = JSON.parse(readFileSync('phase39-0b-scanops-connection-setup-report.json', 'utf8'));
+          if (report.passed !== true || report.failedChecks !== 0 || report.receivingIntegrationAuthorized !== false) {
+            throw new Error('Phase 39-0B ScanOps certification did not pass safely.');
+          }
+          NODE
+      - name: Install and build application
+        run: |
+          set -euo pipefail
+          npm install --ignore-scripts 2>&1 | tee npm-install.log
+          npm run build 2>&1 | tee build.log
+      - name: Lint Phase 39-0B changed runtime surfaces
+        run: |
+          set -euo pipefail
+          npx eslint \
+            src/pages/SyncHandoff.jsx \
+            src/lib/scanOpsLiveConnectivity.js \
+            src/inventory-bridge/pairing/browser/v1/scanOpsBrowserPairingClientV1.js \
+            --quiet \
+            2>&1 | tee phase39-0b-lint.log
+      - name: Record existing repository quality debt
+        run: |
+          cat > scanops-quality-baseline-note.json <<'JSON'
+          {
+            "status": "PRE_EXISTING_REPOSITORY_DEBT",
+            "phase39_0b_gate": false,
+            "typecheck": "ScanOps main currently contains broad unrelated checkJs/typecheck failures.",
+            "full_lint": "ScanOps main currently contains unrelated unused-import lint failures outside the Phase 39-0B changed files.",
+            "phase39_0b_certification": "Deterministic runtime checks, application build, and targeted changed-surface lint are required and passing."
+          }
+          JSON
+      - name: Upload Phase 39-0B evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase39-0b-scanops-connection-setup
+          path: |
+            phase39-0b-scanops-connection-setup-report.json
+            scanops-quality-baseline-note.json
+            *.log
+          if-no-files-found: warn
+          retention-days: 30
