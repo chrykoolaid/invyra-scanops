@@ -1,0 +1,68 @@
+{
+  "phase": "39-0A",
+  "program": "ScanOps Inventory Module Integration Testing",
+  "repository": "chrykoolaid/invyra-scanops",
+  "companionRepository": "chrykoolaid/invyra-base44",
+  "inspectedAt": "2026-07-19",
+  "baseline": {
+    "scanOpsMain": "31f9e6605b95f5d8e907cf8dac2f01a13685d8d0",
+    "inventoryMain": "bbfd5ae270d06bcaf1a2d1d2441407c9c05adbb5",
+    "inventoryPhase38AMerge": "213ced228f128a0f3f9d5023e8865a66bf2c520d",
+    "openPullRequests": 0
+  },
+  "decisions": {
+    "currentOperatorConnectionReadiness": "FAIL",
+    "phase39_0BImplementationReadiness": "PASS",
+    "receivingIntegrationAuthorised": false,
+    "requiredNextPhase": "39-0B"
+  },
+  "findings": {
+    "scanOpsShellIsViteWebApplication": true,
+    "nativeHandheldRuntimePresent": false,
+    "syncHandoffStoresProfileLocally": true,
+    "syncHandoffPerformsRealHealthRequest": false,
+    "scanOpsConnectivityPerformsRealHealthRequest": false,
+    "phase35HealthClientPresent": true,
+    "phase35HealthClientWiredToUi": false,
+    "phase36PairingClientPresent": true,
+    "phase36PairingClientUsesNodeCrypto": true,
+    "phase36PairingClientWiredToUi": false,
+    "browserPairingAdapterPresent": false,
+    "phase37ReliableQueuePresent": true,
+    "phase38CountHandoffPresent": true,
+    "browserQueueUsesPhase37FilesystemDurability": false,
+    "hostedHttpsToPrivateHttpCertified": false
+  },
+  "approvedPilot": {
+    "environments": ["TEST", "TRAINING"],
+    "liveBlocked": true,
+    "productionBlocked": true,
+    "disabledByDefault": true,
+    "manualPrivateLanSetupRequired": true,
+    "qrPairingRequired": true,
+    "localDiscoveryMayBeDeferred": true,
+    "browserWebCryptoAdapterRequired": true,
+    "temporaryTrustInMemoryOnly": true,
+    "verifiedHealthRequiredForConnectedState": true
+  },
+  "secretStoragePolicy": {
+    "privateKeyInLocalStorage": false,
+    "pairingTokenInLocalStorage": false,
+    "pairingChallengeInLocalStorage": false,
+    "rawPairingQrInLocalStorage": false,
+    "nonSecretEndpointProfileMayBeStored": true
+  },
+  "mutationGuards": {
+    "inventoryMutationAuthorised": false,
+    "scanOpsBusinessMutationAuthorised": false,
+    "stockMutationAuthorised": false,
+    "ledgerMutationAuthorised": false,
+    "itemMasterMutationAuthorised": false,
+    "receivingMutationAuthorised": false,
+    "pricingMutationAuthorised": false,
+    "posMutationAuthorised": false,
+    "supplierMutationAuthorised": false,
+    "approvalBypassAuthorised": false
+  },
+  "evidenceDocument": "docs/bridge/PHASE_39_0A_RUNTIME_RECONCILIATION.md"
+}
