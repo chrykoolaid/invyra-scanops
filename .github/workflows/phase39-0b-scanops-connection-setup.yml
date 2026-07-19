@@ -3,6 +3,7 @@ name: Phase 39-0B ScanOps Connection Setup
 on:
   pull_request:
     paths:
+      - 'src/App.jsx'
       - 'src/inventory-bridge/pairing/browser/**'
       - 'src/lib/scanOpsLiveConnectivity.js'
       - 'src/pages/SyncHandoff.jsx'
@@ -52,6 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           npx eslint \
+            src/App.jsx \
             src/pages/SyncHandoff.jsx \
             src/lib/scanOpsLiveConnectivity.js \
             src/inventory-bridge/pairing/browser/v1/scanOpsBrowserPairingClientV1.js \
