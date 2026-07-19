@@ -46,15 +46,17 @@ jobs:
       - name: Install and validate application wiring
         run: |
           set -euo pipefail
-          npm install --ignore-scripts
-          npm run typecheck
-          npm run build
-          npm run lint
+          npm install --ignore-scripts 2>&1 | tee npm-install.log
+          npm run typecheck 2>&1 | tee typecheck.log
+          npm run build 2>&1 | tee build.log
+          npm run lint 2>&1 | tee lint.log
       - name: Upload Phase 39-0B evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: phase39-0b-scanops-connection-setup
-          path: phase39-0b-scanops-connection-setup-report.json
-          if-no-files-found: error
+          path: |
+            phase39-0b-scanops-connection-setup-report.json
+            *.log
+          if-no-files-found: warn
           retention-days: 30
