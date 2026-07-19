@@ -1,0 +1,59 @@
+name: Phase 39-0B ScanOps Connection Setup
+
+on:
+  pull_request:
+    paths:
+      - 'src/inventory-bridge/pairing/browser/**'
+      - 'src/lib/scanOpsLiveConnectivity.js'
+      - 'src/pages/SyncHandoff.jsx'
+      - 'scripts/validate-phase39-0b-scanops-connection-setup.mjs'
+      - '.github/workflows/phase39-0b-scanops-connection-setup.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validate browser pairing and real health test wiring
+        run: |
+          set -euo pipefail
+          node scripts/validate-scanops-bridge-canonical-contract-v1.mjs
+          node scripts/validate-scanops-bridge-canonical-adapter-v1.mjs
+          node scripts/validate-phase35a-scanops-test-transport.mjs
+          node scripts/validate-phase36a-scanops-ephemeral-pairing.mjs
+          node scripts/validate-phase39-0b-scanops-connection-setup.mjs \
+            | tee phase39-0b-scanops-connection-setup-report.json
+      - name: Verify machine-readable evidence
+        run: |
+          set -euo pipefail
+          test -s phase39-0b-scanops-connection-setup-report.json
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const report = JSON.parse(readFileSync('phase39-0b-scanops-connection-setup-report.json', 'utf8'));
+          if (report.passed !== true || report.failedChecks !== 0 || report.receivingIntegrationAuthorized !== false) {
+            throw new Error('Phase 39-0B ScanOps certification did not pass safely.');
+          }
+          NODE
+      - name: Install and validate application wiring
+        run: |
+          set -euo pipefail
+          npm install --ignore-scripts
+          npm run typecheck
+          npm run build
+          npm run lint
+      - name: Upload Phase 39-0B evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase39-0b-scanops-connection-setup
+          path: phase39-0b-scanops-connection-setup-report.json
+          if-no-files-found: error
+          retention-days: 30
