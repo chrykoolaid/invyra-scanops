@@ -1,0 +1,59 @@
+name: Phase 39-0A ScanOps Runtime Reconciliation
+
+on:
+  pull_request:
+    paths:
+      - 'docs/bridge/PHASE_39_0A_RUNTIME_RECONCILIATION.md'
+      - 'docs/bridge/phase39-0a-runtime-reconciliation.json'
+      - 'scripts/validate-phase39-0a-runtime-reconciliation.mjs'
+      - '.github/workflows/phase39-0a-runtime-reconciliation.yml'
+      - 'src/pages/SyncHandoff.jsx'
+      - 'src/lib/scanOpsConnectivity.js'
+      - 'src/inventory-bridge/testTransport/v1/**'
+      - 'src/inventory-bridge/pairing/v1/**'
+      - 'src/inventory-bridge/reliableDelivery/v1/**'
+      - 'src/inventory-bridge/countHandoff/v1/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Validate Phase 39-0A reconciliation
+        run: |
+          set -euo pipefail
+          node scripts/validate-phase39-0a-runtime-reconciliation.mjs \
+            | tee phase39-0a-scanops-runtime-reconciliation.json
+      - name: Verify machine-readable evidence
+        run: |
+          set -euo pipefail
+          test -s phase39-0a-scanops-runtime-reconciliation.json
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const report = JSON.parse(readFileSync('phase39-0a-scanops-runtime-reconciliation.json', 'utf8'));
+          if (report.passed !== true || report.failedChecks !== 0) {
+            throw new Error('Phase 39-0A ScanOps reconciliation did not pass.');
+          }
+          if (report.decisions.currentOperatorConnectionReadiness !== 'FAIL') {
+            throw new Error('Current connection readiness must remain FAIL until Phase 39-0B is implemented.');
+          }
+          if (report.decisions.receivingIntegrationAuthorised !== false) {
+            throw new Error('Receiving must remain blocked by Phase 39-0A.');
+          }
+          NODE
+      - name: Upload Phase 39-0A evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase39-0a-scanops-runtime-reconciliation
+          path: phase39-0a-scanops-runtime-reconciliation.json
+          if-no-files-found: error
+          retention-days: 30
