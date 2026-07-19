@@ -7,6 +7,7 @@ on:
       - 'src/lib/scanOpsLiveConnectivity.js'
       - 'src/pages/SyncHandoff.jsx'
       - 'scripts/validate-phase39-0b-scanops-connection-setup.mjs'
+      - 'scripts/run-phase39-0b-scanops-connection-certification.mjs'
       - '.github/workflows/phase39-0b-scanops-connection-setup.yml'
   workflow_dispatch:
 
@@ -29,7 +30,7 @@ jobs:
           node scripts/validate-scanops-bridge-canonical-adapter-v1.mjs
           node scripts/validate-phase35a-scanops-test-transport.mjs
           node scripts/validate-phase36a-scanops-ephemeral-pairing.mjs
-          node scripts/validate-phase39-0b-scanops-connection-setup.mjs \
+          node scripts/run-phase39-0b-scanops-connection-certification.mjs \
             | tee phase39-0b-scanops-connection-setup-report.json
       - name: Verify machine-readable evidence
         run: |
