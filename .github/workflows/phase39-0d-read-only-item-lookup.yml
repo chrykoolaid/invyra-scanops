@@ -9,6 +9,7 @@ on:
       - 'src/components/sync/ReadOnlyItemLookupPilot.jsx'
       - 'src/pages/SyncHandoff.jsx'
       - 'scripts/validate-phase39-0d-read-only-item-lookup.mjs'
+      - 'scripts/validate-phase39-0d-read-only-item-lookup-source-boundary.mjs'
       - 'docs/bridge/PHASE_39_0D_READ_ONLY_ITEM_LOOKUP.md'
       - 'docs/bridge/phase39-0d-read-only-item-lookup.certification.json'
       - '.github/workflows/phase39-0d-read-only-item-lookup.yml'
@@ -32,6 +33,9 @@ jobs:
 
       - name: Phase 39-0D ScanOps read-only lookup
         run: node scripts/validate-phase39-0d-read-only-item-lookup.mjs
+
+      - name: Phase 39-0D no-storage and no-mutation source boundary
+        run: node scripts/validate-phase39-0d-read-only-item-lookup-source-boundary.mjs
 
       - name: Canonical contract compatibility
         run: node scripts/validate-scanops-bridge-canonical-contract-v1.mjs
