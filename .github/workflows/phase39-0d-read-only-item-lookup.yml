@@ -1,0 +1,87 @@
+name: Phase 39-0D Read-Only Item Lookup
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/inventory-bridge/itemLookup/**'
+      - 'src/lib/scanOpsLiveConnectivity.js'
+      - 'src/components/sync/ReadOnlyItemLookupPilot.jsx'
+      - 'src/pages/SyncHandoff.jsx'
+      - 'scripts/validate-phase39-0d-read-only-item-lookup.mjs'
+      - 'docs/bridge/PHASE_39_0D_READ_ONLY_ITEM_LOOKUP.md'
+      - 'docs/bridge/phase39-0d-read-only-item-lookup.certification.json'
+      - '.github/workflows/phase39-0d-read-only-item-lookup.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Phase 39-0D ScanOps read-only lookup
+        run: node scripts/validate-phase39-0d-read-only-item-lookup.mjs
+
+      - name: Canonical contract compatibility
+        run: node scripts/validate-scanops-bridge-canonical-contract-v1.mjs
+
+      - name: Canonical adapter compatibility
+        run: node scripts/validate-scanops-bridge-canonical-adapter-v1.mjs
+
+      - name: Phase 35-A transport compatibility
+        run: node scripts/validate-phase35a-scanops-test-transport.mjs
+
+      - name: Phase 36-A pairing compatibility
+        run: node scripts/validate-phase36a-scanops-ephemeral-pairing.mjs
+
+      - name: Phase 39-0B connection compatibility
+        run: node scripts/validate-phase39-0b-scanops-connection-setup.mjs
+
+      - name: Install and build application
+        run: |
+          set -euo pipefail
+          npm install --ignore-scripts
+          npm run build
+
+      - name: Lint Phase 39-0D changed surfaces
+        run: |
+          set -euo pipefail
+          npx eslint \
+            src/inventory-bridge/itemLookup/v1/scanOpsItemLookupClientV1.js \
+            src/inventory-bridge/itemLookup/v1/validateScanOpsItemLookupReceiptV1.js \
+            src/lib/scanOpsLiveConnectivity.js \
+            src/components/sync/ReadOnlyItemLookupPilot.jsx \
+            src/pages/SyncHandoff.jsx \
+            --quiet
+
+      - name: Record repository quality baseline
+        run: |
+          cat > scanops-phase39-0d-quality-note.json <<'JSON'
+          {
+            "status": "TARGETED_PHASE_GATE",
+            "full_typecheck_gate": false,
+            "reason": "ScanOps main retains broad unrelated checkJs debt; Phase 39-0D requires deterministic certification, application build, and targeted changed-surface lint.",
+            "receiving_authorized": false,
+            "mutation_authority_added": false
+          }
+          JSON
+
+      - name: Upload Phase 39-0D evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase39-0d-scanops-read-only-item-lookup
+          path: scanops-phase39-0d-quality-note.json
+          if-no-files-found: warn
+          retention-days: 30
