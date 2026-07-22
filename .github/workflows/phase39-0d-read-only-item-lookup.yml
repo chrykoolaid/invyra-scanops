@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'src/inventory-bridge/itemLookup/**'
+      - 'src/inventory-bridge/pairing/browser/v1/scanOpsBrowserPairingClientV1.js'
       - 'src/lib/scanOpsLiveConnectivity.js'
       - 'src/components/sync/ReadOnlyItemLookupPilot.jsx'
       - 'src/pages/SyncHandoff.jsx'
@@ -64,6 +65,7 @@ jobs:
           npx eslint \
             src/inventory-bridge/itemLookup/v1/scanOpsItemLookupClientV1.js \
             src/inventory-bridge/itemLookup/v1/validateScanOpsItemLookupReceiptV1.js \
+            src/inventory-bridge/pairing/browser/v1/scanOpsBrowserPairingClientV1.js \
             src/lib/scanOpsLiveConnectivity.js \
             src/components/sync/ReadOnlyItemLookupPilot.jsx \
             src/pages/SyncHandoff.jsx \
