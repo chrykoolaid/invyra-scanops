@@ -37,6 +37,27 @@ function receiptBase(envelope) {
   };
 }
 
+function foundResult(envelope, mutationCounts = ZERO_MUTATIONS) {
+  const lookupType = envelope.payload.lookupType;
+  const lookupValue = envelope.payload.lookupValue;
+  return {
+    found: true,
+    code: 'ITEM_FOUND',
+    lookupType,
+    lookupValue,
+    item: {
+      canonicalItemId: 'item-phase39-0d',
+      sku: lookupType === 'SKU' ? lookupValue : 'SKU-PHASE39-0D',
+      itemName: 'Phase 39 Read-Only Item',
+      primaryBarcode: lookupType === 'BARCODE' ? lookupValue : '9300000000039',
+      lifecycleStatus: 'ACTIVE',
+      batchTracked: true,
+      expiryTracked: true,
+    },
+    mutationCounts,
+  };
+}
+
 function responseFor(envelope) {
   const base = receiptBase(envelope);
   const lookupType = envelope.payload.lookupType;
@@ -78,6 +99,16 @@ function responseFor(envelope) {
     }), { status: 503, headers: { 'Content-Type': 'application/json' } });
   }
 
+  if (lookupValue === 'MALICIOUS-MUTATION') {
+    return new Response(JSON.stringify({
+      ...base,
+      admissionStatus: 'ACCEPTED',
+      message: 'Malformed mutation evidence must be rejected.',
+      errors: [],
+      result: foundResult(envelope, { ...ZERO_MUTATIONS, scanops: 1 }),
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }
+
   const found = lookupValue !== 'MISSING-SKU-0390D';
   return new Response(JSON.stringify({
     ...base,
@@ -86,20 +117,12 @@ function responseFor(envelope) {
       ? 'Inventory completed the authoritative read-only item lookup.'
       : 'Inventory completed the authoritative read-only lookup and returned ITEM_NOT_FOUND.',
     errors: [],
-    result: {
-      found,
-      code: found ? 'ITEM_FOUND' : 'ITEM_NOT_FOUND',
+    result: found ? foundResult(envelope) : {
+      found: false,
+      code: 'ITEM_NOT_FOUND',
       lookupType,
       lookupValue,
-      item: found ? {
-        canonicalItemId: 'item-phase39-0d',
-        sku: lookupType === 'SKU' ? lookupValue : 'SKU-PHASE39-0D',
-        itemName: 'Phase 39 Read-Only Item',
-        primaryBarcode: lookupType === 'BARCODE' ? lookupValue : '9300000000039',
-        lifecycleStatus: 'ACTIVE',
-        batchTracked: true,
-        expiryTracked: true,
-      } : null,
+      item: null,
       mutationCounts: ZERO_MUTATIONS,
     },
   }), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -187,6 +210,14 @@ check('invalid_trust_is_rejected',
     && rejected.reason === 'DEVICE_NOT_TRUSTED',
   rejected);
 
+const malicious = await client.sendItemLookup(buildInput('malicious', 'MALICIOUS-MUTATION'));
+check('unexpected_or_nonzero_mutation_evidence_is_rejected',
+  malicious.ok === false
+    && malicious.status === 'REJECTED'
+    && malicious.receiptValid === false
+    && malicious.validationErrors.some((error) => error.field === 'result.mutationCounts.scanops'),
+  malicious);
+
 const invalid = await client.sendItemLookup(buildInput('invalid', '', { operatorId: '' }));
 check('invalid_input_blocked_before_dispatch',
   invalid.ok === false
@@ -208,6 +239,35 @@ check('live_lookup_blocked_before_dispatch',
     && liveBlocked.dispatchAttempted === false
     && liveBlocked.blockers.includes('ENVIRONMENT_BLOCKED'),
   liveBlocked);
+
+const publicHostClient = createScanOpsItemLookupClientV1({
+  configuration: { bridge_enabled: true, transport_enabled: true },
+  environment: 'TRAINING',
+  inventoryHost: 'inventory.example.com',
+  inventoryPort: 8788,
+  fetchAdapter: async () => { throw new Error('Public host must not dispatch.'); },
+});
+const publicHostBlocked = await publicHostClient.sendItemLookup(buildInput('public-host', 'SKU-PHASE39-0D'));
+check('public_inventory_host_blocked_before_dispatch',
+  publicHostBlocked.ok === false
+    && publicHostBlocked.dispatchAttempted === false
+    && publicHostBlocked.blockers.includes('INVENTORY_HOST_NOT_LOCAL'),
+  publicHostBlocked);
+
+const httpsClient = createScanOpsItemLookupClientV1({
+  configuration: { bridge_enabled: true, transport_enabled: true },
+  environment: 'TRAINING',
+  protocol: 'https',
+  inventoryHost: '127.0.0.1',
+  inventoryPort: 8788,
+  fetchAdapter: async () => { throw new Error('HTTPS lookup must not dispatch.'); },
+});
+const httpsBlocked = await httpsClient.sendItemLookup(buildInput('https', 'SKU-PHASE39-0D'));
+check('https_lookup_destination_blocked_before_dispatch',
+  httpsBlocked.ok === false
+    && httpsBlocked.dispatchAttempted === false
+    && httpsBlocked.blockers.includes('LOOKUP_PROTOCOL_NOT_LOCAL_HTTP'),
+  httpsBlocked);
 
 const timeoutClient = createScanOpsItemLookupClientV1({
   configuration: { bridge_enabled: true, transport_enabled: true },
@@ -232,7 +292,7 @@ check('timeout_is_explicit_and_non_mutating',
   timeout);
 
 check('scanops_never_receives_or_sends_inventory_credentials',
-  dispatched.length === 4
+  dispatched.length === 5
     && dispatched.every((entry) => {
       const text = JSON.stringify(entry);
       return !text.includes('accessToken')
