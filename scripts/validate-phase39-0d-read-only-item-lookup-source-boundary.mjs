@@ -2,6 +2,8 @@
 import { readFileSync } from 'node:fs';
 
 const client = readFileSync(new URL('../src/inventory-bridge/itemLookup/v1/scanOpsItemLookupClientV1.js', import.meta.url), 'utf8');
+const receiptValidator = readFileSync(new URL('../src/inventory-bridge/itemLookup/v1/validateScanOpsItemLookupReceiptV1.js', import.meta.url), 'utf8');
+const pairing = readFileSync(new URL('../src/inventory-bridge/pairing/browser/v1/scanOpsBrowserPairingClientV1.js', import.meta.url), 'utf8');
 const service = readFileSync(new URL('../src/lib/scanOpsLiveConnectivity.js', import.meta.url), 'utf8');
 const ui = readFileSync(new URL('../src/components/sync/ReadOnlyItemLookupPilot.jsx', import.meta.url), 'utf8');
 
@@ -12,6 +14,13 @@ const checks = {
   no_receiving_operation: !client.includes('RECEIVING_SUBMISSION'),
   no_mutation_calls: !client.includes('.create(') && !client.includes('.update(') && !client.includes('.delete('),
   trusted_lookup_service: service.includes('runLiveItemLookup') && service.includes('createScanOpsItemLookupClientV1'),
+  local_host_policy_reused: pairing.includes('export function isAllowedLocalInventoryHost')
+    && client.includes("import { isAllowedLocalInventoryHost }")
+    && client.includes("blockers.push('INVENTORY_HOST_NOT_LOCAL')")
+    && client.includes("blockers.push('LOOKUP_PROTOCOL_NOT_LOCAL_HTTP')"),
+  exact_mutation_evidence_required: receiptValidator.includes('ZERO_MUTATION_KEY_SET')
+    && receiptValidator.includes('Unexpected lookup mutation counter')
+    && receiptValidator.includes('must contain exactly the approved counters'),
   zero_mutation_ui: ui.includes('Zero mutations verified'),
 };
 
