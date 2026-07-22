@@ -49,6 +49,11 @@ Each request includes:
 
 No Inventory or Base44 credential is included.
 
+The lookup client independently reuses the pairing host policy before dispatch.
+Only local/private/`.local` Inventory hosts over plain local HTTP are permitted.
+Public hostnames and HTTPS destinations are blocked before an envelope or trust
+reference is sent.
+
 ## Displayed result
 
 For a found item, ScanOps may display:
@@ -70,8 +75,11 @@ automatically.
 - ScanOps performs no automatic retry.
 - Timeout is explicit and leaves the operator in control.
 - Canonical envelope and receipt correlation are mandatory.
-- The receipt must include all-zero mutation evidence.
+- The receipt must contain exactly the approved mutation counters.
+- Every approved mutation counter must be the numeric value `0`.
+- Missing, extra, non-numeric or nonzero mutation evidence rejects the receipt.
 - Invalid trust or scope is rejected.
+- Public and HTTPS lookup destinations are blocked before dispatch.
 - Receiving remains blocked.
 
 ## Automated certification
@@ -87,8 +95,9 @@ SCANOPS_READ_ONLY_LOOKUP_READY
 ```
 
 The validator covers envelope construction, found and not-found results,
-canonical correlation, zero mutations, unavailable authorisation, rejected
-trust, invalid input, blocked LIVE and timeout behaviour.
+canonical correlation, exact zero mutation evidence, malicious unexpected
+mutation counters, unavailable authorisation, rejected trust, invalid input,
+blocked LIVE, blocked public/HTTPS destinations and timeout behaviour.
 
 ## Required real acceptance after both repositories merge
 
