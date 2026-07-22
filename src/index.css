@@ -288,15 +288,16 @@ body {
  */
 .scanops-keyboard-fallback {
   box-sizing: border-box;
-  bottom: max(6.75rem, env(safe-area-inset-bottom)) !important;
-  max-height: min(10.5rem, 31dvh);
-  overflow: visible;
-  border-radius: 1rem;
+  bottom: env(safe-area-inset-bottom, 0px) !important;
+  max-height: min(13rem, 40dvh);
+  overflow: hidden;
+  border-radius: 0;
+  border-top: 1px solid hsl(var(--border));
 }
 
 .scanops-keyboard-fallback > div {
   max-height: 100%;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .scanops-kbd-key {

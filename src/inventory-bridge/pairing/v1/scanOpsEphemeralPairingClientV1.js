@@ -4,6 +4,7 @@ import {
   generateKeyPairSync,
   sign as signPayload,
 } from 'node:crypto';
+import { Buffer } from 'node:buffer';
 
 export const SCANOPS_EPHEMERAL_PAIRING_V1_PHASE = '36-A';
 export const SCANOPS_EPHEMERAL_PAIRING_V1_COMPONENT = 'scanops_ephemeral_pairing_client_v1';

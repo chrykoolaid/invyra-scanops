@@ -11,6 +11,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
+import process from 'node:process';
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
