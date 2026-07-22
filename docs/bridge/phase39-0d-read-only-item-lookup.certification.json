@@ -1,0 +1,29 @@
+{
+  "phase": "39-0D",
+  "repository": "chrykoolaid/invyra-scanops",
+  "companion_repository": "chrykoolaid/invyra-base44",
+  "baseline_commit": "9be72b8b9470cbbf3aced59bbb3e7dd7f2e772c6",
+  "certification_status": "PENDING_CI",
+  "operation": "LOOKUP_REQUEST",
+  "environments": ["TEST", "TRAINING"],
+  "live_authorized": false,
+  "production_authorized": false,
+  "trusted_device_required": true,
+  "operator_id_required": true,
+  "base44_credential_received": false,
+  "item_lookup_transport_authorized": true,
+  "receiving_integration_authorized": false,
+  "automatic_retry_added": false,
+  "queue_write_added": false,
+  "persistence_added": false,
+  "mutation_counts": {
+    "inventory": 0,
+    "stock": 0,
+    "ledger": 0,
+    "pricing": 0,
+    "purchase_order": 0,
+    "receiving": 0,
+    "item_master": 0,
+    "scanops": 0
+  }
+}
