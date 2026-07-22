@@ -1,5 +1,6 @@
 import { SCANOPS_BRIDGE_CONFIGURATION_DEFAULTS } from '../../config/bridgeConfigurationDefaults.js';
 import { buildCanonicalEnvelopeV1 } from '../../canonicalAdapter/v1/index.js';
+import { isAllowedLocalInventoryHost } from '../../pairing/browser/v1/scanOpsBrowserPairingClientV1.js';
 import {
   LOOKUP_OPERATION,
   validateScanOpsItemLookupReceiptV1,
@@ -59,6 +60,8 @@ function evaluateGate(configuration) {
   if (!configuration.transportEnabled) blockers.push('TRANSPORT_DISABLED');
   if (!ALLOWED_ENVIRONMENTS.includes(configuration.environment)) blockers.push('ENVIRONMENT_BLOCKED');
   if (!configuration.host) blockers.push('EXPLICIT_INVENTORY_HOST_REQUIRED');
+  else if (!isAllowedLocalInventoryHost(configuration.host)) blockers.push('INVENTORY_HOST_NOT_LOCAL');
+  if (configuration.protocol !== 'http') blockers.push('LOOKUP_PROTOCOL_NOT_LOCAL_HTTP');
   if (configuration.port === null) blockers.push('INVENTORY_PORT_REQUIRED');
   return Object.freeze({ allowed: blockers.length === 0, blockers: Object.freeze(blockers) });
 }
