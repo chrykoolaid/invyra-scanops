@@ -14,6 +14,7 @@ import {
   WifiOff,
   XCircle,
 } from 'lucide-react';
+import ReadOnlyItemLookupPilot from '../components/sync/ReadOnlyItemLookupPilot';
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from '../lib/scanOpsEvents';
 import { useScanOpsSession } from '../lib/scanOpsSession';
 import { getNetworkMode, getSyncSummary, retryAllSyncEvents } from '../lib/scanOpsSync';
@@ -317,6 +318,10 @@ export default function SyncHandoff() {
           </section>
         )}
 
+        {state.key === 'connected' && (
+          <ReadOnlyItemLookupPilot session={session} />
+        )}
+
         {(localError || (result && result.ok === false)) && (
           <section className="rounded-3xl border border-red-200 bg-red-50 p-4 text-red-900 shadow-sm">
             <div className="flex items-start gap-3">
@@ -374,7 +379,7 @@ export default function SyncHandoff() {
         </section>
 
         <section className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold leading-snug text-amber-900">
-          Connection setup and health testing only. Inventory remains the authority for stock, ledger, receiving, Item Master, pricing and approvals.
+          Connection setup and read-only item lookup only. Inventory remains the authority for stock, ledger, receiving, Item Master, pricing and approvals.
         </section>
       </div>
     </div>
