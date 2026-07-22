@@ -15,7 +15,7 @@ function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function isAllowedLocalHost(value) {
+export function isAllowedLocalInventoryHost(value) {
   const host = asText(value).toLowerCase();
   if (!host || /[\s/?#]/.test(host)) return false;
   if (host === 'localhost' || host === '[::1]') return true;
@@ -141,7 +141,7 @@ function validateOffer(offer, requestedHost, requestedPort) {
   const endpoint = offer?.pairingEndpoint;
   if (!isPlainObject(endpoint)) blockers.push('PAIRING_ENDPOINT_REQUIRED');
   if (asText(endpoint?.protocol).toLowerCase() !== 'http') blockers.push('PAIRING_PROTOCOL_INVALID');
-  if (!isAllowedLocalHost(endpoint?.host)) blockers.push('PAIRING_HOST_NOT_LOCAL');
+  if (!isAllowedLocalInventoryHost(endpoint?.host)) blockers.push('PAIRING_HOST_NOT_LOCAL');
   if (asText(endpoint?.host).toLowerCase() !== asText(requestedHost).toLowerCase()) blockers.push('PAIRING_HOST_MISMATCH');
   if (Number(endpoint?.port) !== Number(requestedPort)) blockers.push('PAIRING_PORT_MISMATCH');
   if (asText(endpoint?.path) !== PAIRING_CONFIRMATION_PATH) blockers.push('PAIRING_PATH_INVALID');
@@ -174,7 +174,7 @@ export async function pairWithInventorySetupCode(input = {}) {
   const deviceId = asText(input.deviceId);
   const sessionId = asText(input.sessionId);
 
-  if (!isAllowedLocalHost(host)) return blocked('INVENTORY_HOST_INVALID', 'Enter a private local Inventory IP address or hostname.');
+  if (!isAllowedLocalInventoryHost(host)) return blocked('INVENTORY_HOST_INVALID', 'Enter a private local Inventory IP address or hostname.');
   if (!Number.isInteger(port) || port <= 0 || port > 65_535) return blocked('INVENTORY_PORT_INVALID', 'Enter a valid Inventory bridge port.');
   if (!/^\d{6}$/.test(setupCode)) return blocked('PAIRING_CODE_INVALID', 'Enter the six-digit code shown by Inventory.');
   if (!deviceId || !sessionId) return blocked('SCANOPS_IDENTITY_REQUIRED', 'Device and session identity are required.');
