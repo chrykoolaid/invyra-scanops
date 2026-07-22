@@ -6,6 +6,7 @@ const HEALTH_OPERATION = 'DEVICE_HEALTH_PING';
 const ZERO_MUTATION_KEYS = Object.freeze([
   'inventory', 'stock', 'ledger', 'item_master', 'pricing', 'purchase_order', 'receiving',
 ]);
+const ZERO_MUTATION_KEY_SET = new Set(ZERO_MUTATION_KEYS);
 
 function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -61,10 +62,19 @@ function validateResult(result, envelope, errors) {
   if (!isPlainObject(result.mutationCounts)) {
     errors.push(makeError('Lookup mutation evidence is required.', 'result.mutationCounts'));
   } else {
+    const suppliedKeys = Object.keys(result.mutationCounts);
     for (const key of ZERO_MUTATION_KEYS) {
-      if (Number(result.mutationCounts[key]) !== 0) {
-        errors.push(makeError(`Lookup mutation count ${key} must remain zero.`, `result.mutationCounts.${key}`));
+      if (result.mutationCounts[key] !== 0) {
+        errors.push(makeError(`Lookup mutation count ${key} must be the number zero.`, `result.mutationCounts.${key}`));
       }
+    }
+    for (const key of suppliedKeys) {
+      if (!ZERO_MUTATION_KEY_SET.has(key)) {
+        errors.push(makeError(`Unexpected lookup mutation counter ${key} is not allowed.`, `result.mutationCounts.${key}`));
+      }
+    }
+    if (suppliedKeys.length !== ZERO_MUTATION_KEYS.length) {
+      errors.push(makeError('Lookup mutation evidence must contain exactly the approved counters.', 'result.mutationCounts'));
     }
   }
 }
