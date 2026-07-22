@@ -4,6 +4,7 @@ import {
   pairWithInventorySetupCode,
 } from '../inventory-bridge/pairing/browser/v1/scanOpsBrowserPairingClientV1.js';
 import { createScanOpsTestTransportClientV1 } from '../inventory-bridge/testTransport/v1/index.js';
+import { createScanOpsItemLookupClientV1 } from '../inventory-bridge/itemLookup/v1/index.js';
 
 export const LIVE_CONNECTION_RESULT_KEY = 'invyra_scanops_phase39_0b_connection_result_v1';
 
@@ -20,6 +21,7 @@ function sessionIdentity(session = {}) {
   return {
     deviceId: asText(session.deviceId || session.scannerId),
     sessionId: asText(session.sessionId || session.shiftId || `session-${session.deviceId || 'scanops'}`),
+    operatorId: asText(session.actorUserId || session.userId || session.operatorId),
   };
 }
 
@@ -28,6 +30,39 @@ function writeLastResult(result) {
     try { window.sessionStorage.setItem(LIVE_CONNECTION_RESULT_KEY, JSON.stringify(result)); } catch {}
   }
   return result;
+}
+
+function mixedContentBlocked() {
+  return typeof window !== 'undefined' && window.location.protocol === 'https:';
+}
+
+function validatePairedIdentity(profile, session = {}) {
+  if (!profile) {
+    return {
+      ok: false,
+      status: 'NOT_PAIRED',
+      reason: 'PAIRING_REQUIRED',
+      message: 'Pair this ScanOps device with Inventory before continuing.',
+    };
+  }
+  if (mixedContentBlocked()) {
+    return {
+      ok: false,
+      status: 'BLOCKED',
+      reason: 'MIXED_CONTENT_BLOCKED',
+      message: 'Open ScanOps from the controlled local HTTP pilot address. Hosted HTTPS ScanOps cannot call the private HTTP bridge.',
+    };
+  }
+  const identity = sessionIdentity(session);
+  if (identity.deviceId !== profile.deviceId) {
+    return {
+      ok: false,
+      status: 'IDENTITY_MISMATCH',
+      reason: 'DEVICE_ID_CHANGED',
+      message: 'The current device identity does not match the paired device. Pair again.',
+    };
+  }
+  return { ok: true, identity };
 }
 
 export function getLastLiveConnectionResult() {
@@ -76,35 +111,11 @@ export async function pairInventoryDesktop({ host, port, setupCode, session } = 
 
 export async function runLiveBridgeHealthTest(session = {}) {
   const profile = getBrowserPairedProfile();
-  if (!profile) {
+  const paired = validatePairedIdentity(profile, session);
+  if (!paired.ok) {
     return writeLastResult({
       kind: 'HEALTH_TEST',
-      ok: false,
-      status: 'NOT_PAIRED',
-      reason: 'PAIRING_REQUIRED',
-      message: 'Pair this ScanOps device with Inventory before running the connection test.',
-      checkedAt: new Date().toISOString(),
-    });
-  }
-  if (typeof window !== 'undefined' && window.location.protocol === 'https:') {
-    return writeLastResult({
-      kind: 'HEALTH_TEST',
-      ok: false,
-      status: 'BLOCKED',
-      reason: 'MIXED_CONTENT_BLOCKED',
-      message: 'Open ScanOps from the controlled local HTTP pilot address. Hosted HTTPS ScanOps cannot call the private HTTP bridge.',
-      checkedAt: new Date().toISOString(),
-    });
-  }
-
-  const identity = sessionIdentity(session);
-  if (identity.deviceId !== profile.deviceId) {
-    return writeLastResult({
-      kind: 'HEALTH_TEST',
-      ok: false,
-      status: 'IDENTITY_MISMATCH',
-      reason: 'DEVICE_ID_CHANGED',
-      message: 'The current device identity does not match the paired device. Pair again.',
+      ...paired,
       checkedAt: new Date().toISOString(),
     });
   }
@@ -157,4 +168,88 @@ export async function runLiveBridgeHealthTest(session = {}) {
     inventoryMutationAttempted: false,
     scanOpsMutationAttempted: false,
   });
+}
+
+export async function runLiveItemLookup({ lookupType, lookupValue, session } = {}) {
+  const profile = getBrowserPairedProfile();
+  const paired = validatePairedIdentity(profile, session);
+  if (!paired.ok) {
+    return {
+      kind: 'ITEM_LOOKUP',
+      ...paired,
+      checkedAt: new Date().toISOString(),
+      inventoryMutationAttempted: false,
+      scanOpsMutationAttempted: false,
+    };
+  }
+  const normalizedType = asText(lookupType).toUpperCase();
+  const normalizedValue = asText(lookupValue);
+  if (!['BARCODE', 'SKU'].includes(normalizedType) || !normalizedValue || normalizedValue.length > 128) {
+    return {
+      kind: 'ITEM_LOOKUP',
+      ok: false,
+      status: 'INVALID',
+      reason: 'ITEM_LOOKUP_INPUT_INVALID',
+      message: 'Choose Barcode or SKU and enter a valid value.',
+      checkedAt: new Date().toISOString(),
+      inventoryMutationAttempted: false,
+      scanOpsMutationAttempted: false,
+    };
+  }
+  if (!paired.identity.operatorId) {
+    return {
+      kind: 'ITEM_LOOKUP',
+      ok: false,
+      status: 'INVALID',
+      reason: 'SOURCE_OPERATOR_REQUIRED',
+      message: 'A signed-in ScanOps operator is required for item lookup.',
+      checkedAt: new Date().toISOString(),
+      inventoryMutationAttempted: false,
+      scanOpsMutationAttempted: false,
+    };
+  }
+
+  const client = createScanOpsItemLookupClientV1({
+    configuration: { bridge_enabled: true, transport_enabled: true },
+    environment: profile.environment,
+    inventoryHost: profile.inventoryHost,
+    inventoryPort: profile.inventoryPort,
+    timeoutMs: 4000,
+  });
+  const occurredAt = new Date().toISOString();
+  const result = await client.sendItemLookup({
+    envelopeId: makeId(`env:${profile.environment.toLowerCase()}:lookup`),
+    idempotencyKey: makeId(`idem:${profile.environment.toLowerCase()}:lookup`),
+    traceId: makeId(`trace:${profile.environment.toLowerCase()}:lookup`),
+    occurredAt,
+    deviceId: profile.deviceId,
+    storeId: profile.storeId,
+    sessionId: profile.sessionId,
+    operatorId: paired.identity.operatorId,
+    inventoryInstanceId: profile.inventoryInstanceId,
+    trustReference: profile.trustReference,
+    lookupType: normalizedType,
+    lookupValue: normalizedValue,
+  });
+
+  return {
+    kind: 'ITEM_LOOKUP',
+    ok: result.ok === true,
+    status: result.status,
+    reason: result.reason || null,
+    message: result.ok
+      ? result.status === 'FOUND'
+        ? 'Inventory returned the authoritative item details.'
+        : 'Inventory completed the read and returned ITEM_NOT_FOUND.'
+      : result.message || 'The Inventory item lookup could not be completed.',
+    checkedAt: new Date().toISOString(),
+    endpoint: result.endpoint || `http://${profile.inventoryHost}:${profile.inventoryPort}`,
+    traceId: result.receipt?.traceId || result.envelopeId || null,
+    receiptId: result.receipt?.receiptId || null,
+    admissionStatus: result.admissionStatus || null,
+    applicationStatus: result.applicationStatus || null,
+    result: result.result || null,
+    inventoryMutationAttempted: false,
+    scanOpsMutationAttempted: false,
+  };
 }
