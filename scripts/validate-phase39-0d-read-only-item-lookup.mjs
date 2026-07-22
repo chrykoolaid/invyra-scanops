@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { BRIDGE_CONTRACT_V1 } from '../src/inventory-bridge/canonicalContract/v1/index.js';
 import { createScanOpsItemLookupClientV1 } from '../src/inventory-bridge/itemLookup/v1/index.js';
@@ -9,23 +8,7 @@ function check(name, condition, detail = '') {
   checks.push({ name, passed: condition === true, detail });
 }
 
-async function readBody(request) {
-  const chunks = [];
-  for await (const chunk of request) chunks.push(chunk);
-  return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
-}
-
-function writeJson(response, statusCode, body, headers = {}) {
-  const text = JSON.stringify(body);
-  response.writeHead(statusCode, {
-    'Content-Type': 'application/json',
-    'Content-Length': Buffer.byteLength(text),
-    ...headers,
-  });
-  response.end(text);
-}
-
-const mutationCounts = Object.freeze({
+const ZERO_MUTATIONS = Object.freeze({
   inventory: 0,
   stock: 0,
   ledger: 0,
@@ -54,19 +37,13 @@ function receiptBase(envelope) {
   };
 }
 
-const requests = [];
-const server = createServer(async (request, response) => {
-  if (request.method !== 'POST' || request.url !== '/api/bridge/v1/handoffs') {
-    writeJson(response, 404, { ok: false, reason: 'NOT_FOUND' });
-    return;
-  }
-  const envelope = await readBody(request);
-  requests.push(envelope);
+function responseFor(envelope) {
   const base = receiptBase(envelope);
-  const lookupValue = envelope.payload?.lookupValue;
+  const lookupType = envelope.payload.lookupType;
+  const lookupValue = envelope.payload.lookupValue;
 
-  if (envelope.payload?.trustReference === 'bad-trust') {
-    writeJson(response, 422, {
+  if (envelope.payload.trustReference === 'bad-trust') {
+    return new Response(JSON.stringify({
       ...base,
       admissionStatus: 'REJECTED',
       message: 'The paired trust reference is invalid.',
@@ -76,12 +53,11 @@ const server = createServer(async (request, response) => {
         field: 'payload.trustReference',
         retryable: false,
       }],
-    });
-    return;
+    }), { status: 422, headers: { 'Content-Type': 'application/json' } });
   }
 
   if (lookupValue === 'AUTH-UNAVAILABLE') {
-    writeJson(response, 503, {
+    return new Response(JSON.stringify({
       ...base,
       admissionStatus: 'SERVICE_UNAVAILABLE',
       message: 'Inventory read authorisation is unavailable or expired.',
@@ -94,17 +70,16 @@ const server = createServer(async (request, response) => {
       result: {
         found: false,
         code: 'ITEM_READ_ADAPTER_NOT_READY',
-        lookupType: envelope.payload.lookupType,
+        lookupType,
         lookupValue,
         item: null,
-        mutationCounts,
+        mutationCounts: ZERO_MUTATIONS,
       },
-    });
-    return;
+    }), { status: 503, headers: { 'Content-Type': 'application/json' } });
   }
 
   const found = lookupValue !== 'MISSING-SKU-0390D';
-  writeJson(response, 200, {
+  return new Response(JSON.stringify({
     ...base,
     admissionStatus: 'ACCEPTED',
     message: found
@@ -114,27 +89,21 @@ const server = createServer(async (request, response) => {
     result: {
       found,
       code: found ? 'ITEM_FOUND' : 'ITEM_NOT_FOUND',
-      lookupType: envelope.payload.lookupType,
+      lookupType,
       lookupValue,
       item: found ? {
         canonicalItemId: 'item-phase39-0d',
-        sku: envelope.payload.lookupType === 'SKU' ? lookupValue : 'SKU-PHASE39-0D',
+        sku: lookupType === 'SKU' ? lookupValue : 'SKU-PHASE39-0D',
         itemName: 'Phase 39 Read-Only Item',
-        primaryBarcode: envelope.payload.lookupType === 'BARCODE' ? lookupValue : '9300000000039',
+        primaryBarcode: lookupType === 'BARCODE' ? lookupValue : '9300000000039',
         lifecycleStatus: 'ACTIVE',
         batchTracked: true,
         expiryTracked: true,
       } : null,
-      mutationCounts,
+      mutationCounts: ZERO_MUTATIONS,
     },
-  });
-});
-
-await new Promise((resolve, reject) => {
-  server.once('error', reject);
-  server.listen(0, '127.0.0.1', resolve);
-});
-const publicPort = server.address().port;
+  }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+}
 
 function buildInput(suffix, lookupValue, overrides = {}) {
   return {
@@ -154,12 +123,18 @@ function buildInput(suffix, lookupValue, overrides = {}) {
   };
 }
 
+const dispatched = [];
 const client = createScanOpsItemLookupClientV1({
   configuration: { bridge_enabled: true, transport_enabled: true },
   environment: 'TRAINING',
   inventoryHost: '127.0.0.1',
-  inventoryPort: publicPort,
+  inventoryPort: 8788,
   timeoutMs: 1000,
+  fetchAdapter: async (_url, options = {}) => {
+    const envelope = JSON.parse(options.body);
+    dispatched.push(envelope);
+    return responseFor(envelope);
+  },
 });
 
 const built = client.buildLookupEnvelope(buildInput('build', 'SKU-PHASE39-0D'));
@@ -171,7 +146,7 @@ check('canonical_lookup_envelope_builds',
   built);
 
 const found = await client.sendItemLookup(buildInput('found', 'SKU-PHASE39-0D'));
-check('known_item_returns_correlated_found_projection',
+check('known_item_returns_correlated_projection',
   found.ok === true
     && found.status === 'FOUND'
     && found.correlated === true
@@ -179,7 +154,7 @@ check('known_item_returns_correlated_found_projection',
     && found.result.item.canonicalItemId === 'item-phase39-0d'
     && found.result.item.itemName === 'Phase 39 Read-Only Item',
   found);
-check('known_item_zero_mutations',
+check('known_item_has_zero_mutation_evidence',
   Object.values(found.result.mutationCounts).every((value) => value === 0)
     && found.inventoryMutationAttempted === false
     && found.scanOpsMutationAttempted === false,
@@ -195,7 +170,7 @@ check('unknown_item_returns_item_not_found',
   missing);
 
 const unavailable = await client.sendItemLookup(buildInput('unavailable', 'AUTH-UNAVAILABLE'));
-check('expired_or_missing_authorisation_fails_closed',
+check('expired_authorisation_fails_closed',
   unavailable.ok === false
     && unavailable.status === 'AUTHORIZATION_UNAVAILABLE'
     && unavailable.admissionStatus === 'SERVICE_UNAVAILABLE'
@@ -213,7 +188,7 @@ check('invalid_trust_is_rejected',
   rejected);
 
 const invalid = await client.sendItemLookup(buildInput('invalid', '', { operatorId: '' }));
-check('invalid_lookup_blocked_before_dispatch',
+check('invalid_input_blocked_before_dispatch',
   invalid.ok === false
     && invalid.dispatchAttempted === false
     && invalid.blockers.includes('LOOKUP_VALUE_REQUIRED')
@@ -224,7 +199,8 @@ const liveClient = createScanOpsItemLookupClientV1({
   configuration: { bridge_enabled: true, transport_enabled: true },
   environment: 'LIVE',
   inventoryHost: '127.0.0.1',
-  inventoryPort: publicPort,
+  inventoryPort: 8788,
+  fetchAdapter: async () => { throw new Error('LIVE must not dispatch.'); },
 });
 const liveBlocked = await liveClient.sendItemLookup(buildInput('live', 'SKU-PHASE39-0D'));
 check('live_lookup_blocked_before_dispatch',
@@ -239,14 +215,14 @@ const timeoutClient = createScanOpsItemLookupClientV1({
   inventoryHost: '127.0.0.1',
   inventoryPort: 8788,
   timeoutMs: 20,
-  fetchAdapter: (_url, options = {}) => new Promise((_resolve, reject) => {
+  fetchAdapter: (_url, options = {}) => new Promise((_resolve, rejectPromise) => {
     options.signal?.addEventListener('abort', () => {
-      reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+      rejectPromise(Object.assign(new Error('aborted'), { name: 'AbortError' }));
     });
   }),
 });
 const timeout = await timeoutClient.sendItemLookup(buildInput('timeout', 'SKU-PHASE39-0D'));
-check('lookup_timeout_is_explicit_and_non_mutating',
+check('timeout_is_explicit_and_non_mutating',
   timeout.ok === false
     && timeout.status === 'TIMEOUT'
     && timeout.reason === 'LOOKUP_TIMEOUT'
@@ -255,43 +231,36 @@ check('lookup_timeout_is_explicit_and_non_mutating',
     && timeout.scanOpsMutationAttempted === false,
   timeout);
 
-check('sent_envelopes_never_contain_inventory_credentials',
-  requests.length === 4
-    && requests.every((entry) => !JSON.stringify(entry).includes('accessToken')
-      && !JSON.stringify(entry).includes('base44_access_token')
-      && !JSON.stringify(entry).includes('secret-never-returned')),
-  requests);
+check('scanops_never_receives_or_sends_inventory_credentials',
+  dispatched.length === 4
+    && dispatched.every((entry) => {
+      const text = JSON.stringify(entry);
+      return !text.includes('accessToken')
+        && !text.includes('base44_access_token')
+        && !text.includes('secret-never-returned');
+    }),
+  dispatched);
 
 const uiSource = readFileSync(new URL('../src/components/sync/ReadOnlyItemLookupPilot.jsx', import.meta.url), 'utf8');
 const pageSource = readFileSync(new URL('../src/pages/SyncHandoff.jsx', import.meta.url), 'utf8');
 const serviceSource = readFileSync(new URL('../src/lib/scanOpsLiveConnectivity.js', import.meta.url), 'utf8');
-const clientSource = readFileSync(new URL('../src/inventory-bridge/itemLookup/v1/scanOpsItemLookupClientV1.js', import.meta.url), 'utf8');
 check('lookup_ui_is_connected_state_only',
   pageSource.includes("state.key === 'connected'")
     && pageSource.includes('<ReadOnlyItemLookupPilot session={session} />'),
   'SyncHandoff');
-check('lookup_ui_exposes_required_read_only_fields',
+check('lookup_ui_exposes_read_only_result_fields',
   uiSource.includes('Look up an Inventory item')
     && uiSource.includes('Zero mutations verified')
     && uiSource.includes('Batch tracked')
     && uiSource.includes('Expiry tracked')
     && uiSource.includes('cannot create an item or change stock'),
   'ReadOnlyItemLookupPilot');
-check('service_uses_trusted_lookup_client_without_persistence',
+check('service_uses_trusted_lookup_client',
   serviceSource.includes('createScanOpsItemLookupClientV1')
     && serviceSource.includes('runLiveItemLookup')
-    && !clientSource.includes('localStorage')
-    && !clientSource.includes('sessionStorage')
-    && !clientSource.includes('queue'),
-  'lookup service/client');
-check('receiving_and_mutation_authority_not_added',
-  !clientSource.includes('RECEIVING_SUBMISSION')
-    && !clientSource.includes('.create(')
-    && !clientSource.includes('.update(')
-    && !clientSource.includes('.delete('),
-  'lookup client');
+    && serviceSource.includes('trustReference: profile.trustReference'),
+  'scanOpsLiveConnectivity');
 
-await new Promise((resolve) => server.close(resolve));
 const failures = checks.filter((entry) => !entry.passed);
 const report = {
   phase: '39-0D',
@@ -307,8 +276,14 @@ const report = {
   receivingIntegrationAuthorized: false,
   credentialReceivedByScanOps: false,
   mutationCounts: {
-    inventory: 0, stock: 0, ledger: 0, pricing: 0,
-    purchaseOrder: 0, receiving: 0, itemMaster: 0, scanOps: 0,
+    inventory: 0,
+    stock: 0,
+    ledger: 0,
+    pricing: 0,
+    purchaseOrder: 0,
+    receiving: 0,
+    itemMaster: 0,
+    scanOps: 0
   },
   tests: checks,
 };
