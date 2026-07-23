@@ -3,9 +3,14 @@
   "repository": "chrykoolaid/invyra-scanops",
   "companion_repository": "chrykoolaid/invyra-base44",
   "branch_creation_baseline": "29555d12712b3173460cbdac2085ccea97236f78",
-  "certified_head": null,
-  "certification_status": "PENDING_CI",
-  "dedicated_workflow_run": null,
+  "certified_head": "cb3d5492b4d085adc43f661d76985d0c4714e973",
+  "certification_status": "PASS",
+  "dedicated_workflow_run": 30013139820,
+  "compatibility_workflow_runs": {
+    "phase39_0d_read_only_item_lookup": 30013139827,
+    "phase39_0b_connection_setup": 30013139823,
+    "phase39_0b_cross_repository_connection": 30013140129
+  },
   "operation": "LOOKUP_REQUEST",
   "operational_route": "/scan",
   "lookup_modes": ["BARCODE", "SKU"],
@@ -23,6 +28,9 @@
   "queue_write_added": false,
   "persistence_added": false,
   "receiving_integration_authorized": false,
+  "build_passed": true,
+  "targeted_lint_passed": true,
+  "prior_connection_and_lookup_certifications_green": true,
   "mutation_counts": {
     "inventory": 0,
     "stock": 0,
