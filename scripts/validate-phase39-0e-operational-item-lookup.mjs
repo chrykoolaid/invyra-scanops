@@ -34,16 +34,12 @@ const PROFILE = Object.freeze({
 });
 const SESSION = Object.freeze({
   actorUserId: 'staff-001',
-  deviceId: 'HH-SCANOPS-001',
-  sessionId: 'SESSION-001',
-  storeId: 'STORE-001',
-  environment: 'TRAINING',
+  deviceId: PROFILE.deviceId,
+  sessionId: PROFILE.sessionId,
+  storeId: PROFILE.storeId,
+  environment: PROFILE.environment,
 });
-const CONNECTED_RESULT = Object.freeze({
-  kind: 'HEALTH_TEST',
-  ok: true,
-  status: 'CONNECTED',
-});
+const CONNECTED_RESULT = Object.freeze({ kind: 'HEALTH_TEST', ok: true, status: 'CONNECTED' });
 
 function receiptBase(envelope) {
   const timestamp = new Date(NOW_MS).toISOString();
@@ -85,12 +81,12 @@ function itemResult(envelope, mutationCounts = ZERO_MUTATIONS) {
   };
 }
 
-function rejectedReceipt(envelope, code, message) {
+function rejectedReceipt(envelope, code, message, field = 'scope') {
   return new Response(JSON.stringify({
     ...receiptBase(envelope),
     admissionStatus: 'REJECTED',
     message,
-    errors: [{ code, message, field: 'scope', retryable: false }],
+    errors: [{ code, message, field, retryable: false }],
   }), { status: 422, headers: { 'Content-Type': 'application/json' } });
 }
 
@@ -100,10 +96,15 @@ function responseFor(envelope) {
   const base = receiptBase(envelope);
 
   if (envelope.target.inventoryInstanceId !== PROFILE.inventoryInstanceId) {
-    return rejectedReceipt(envelope, 'INVENTORY_INSTANCE_MISMATCH', 'The target Inventory instance is not allowed.');
+    return rejectedReceipt(
+      envelope,
+      'PAYLOAD_INVALID',
+      'The target Inventory instance is not allowed.',
+      'target.inventoryInstanceId',
+    );
   }
   if (envelope.source.storeId !== PROFILE.storeId || envelope.environment !== PROFILE.environment) {
-    return rejectedReceipt(envelope, 'LOOKUP_SCOPE_MISMATCH', 'The lookup scope does not match Inventory.');
+    return rejectedReceipt(envelope, 'STORE_NOT_ALLOWED', 'The lookup scope does not match Inventory.');
   }
   if (value === 'REVOKED-TRUST') {
     return rejectedReceipt(envelope, 'DEVICE_NOT_TRUSTED', 'The paired-device trust has been revoked.');
@@ -195,90 +196,53 @@ function buildInput(suffix, lookupType, lookupValue, overrides = {}) {
   };
 }
 
-const connected = resolveLiveItemLookupAvailability({
-  profile: PROFILE,
-  connectionResult: CONNECTED_RESULT,
-  session: SESSION,
-  nowMs: NOW_MS,
-});
-check('connected_trusted_scope_is_operational',
-  connected.connected === true && connected.status === 'CONNECTED', connected);
+function availability(profile = PROFILE, connectionResult = CONNECTED_RESULT, session = SESSION) {
+  return resolveLiveItemLookupAvailability({ profile, connectionResult, session, nowMs: NOW_MS });
+}
 
-const disconnected = resolveLiveItemLookupAvailability({
-  profile: null,
-  connectionResult: null,
-  session: SESSION,
-  nowMs: NOW_MS,
-});
+const connected = availability();
+check('connected_trusted_scope_is_operational', connected.connected === true && connected.status === 'CONNECTED');
+
+const disconnected = availability(null, null);
 check('disconnected_scanops_does_not_authorize_dispatch',
   disconnected.connected === false
     && disconnected.reason === 'PAIRING_REQUIRED'
     && disconnected.dispatchAttempted === false,
-  disconnected);
+  disconnected.reason);
 
-const unverified = resolveLiveItemLookupAvailability({
-  profile: PROFILE,
-  connectionResult: { kind: 'PAIRING', ok: true, status: 'PAIRED' },
-  session: SESSION,
-  nowMs: NOW_MS,
-});
+const unverified = availability(PROFILE, { kind: 'PAIRING', ok: true, status: 'PAIRED' });
 check('paired_but_unverified_connection_fails_closed',
   unverified.connected === false
     && unverified.reason === 'INVENTORY_CONNECTION_NOT_VERIFIED'
     && unverified.dispatchAttempted === false,
-  unverified);
+  unverified.reason);
 
-const expiredTrust = resolveLiveItemLookupAvailability({
-  profile: { ...PROFILE, trustExpiresAt: new Date(NOW_MS - 1).toISOString() },
-  connectionResult: CONNECTED_RESULT,
-  session: SESSION,
-  nowMs: NOW_MS,
-});
+const expiredTrust = availability({ ...PROFILE, trustExpiresAt: new Date(NOW_MS - 1).toISOString() });
 check('expired_device_trust_fails_closed_before_dispatch',
   expiredTrust.connected === false
     && expiredTrust.reason === 'DEVICE_TRUST_EXPIRED'
     && expiredTrust.dispatchAttempted === false,
-  expiredTrust);
+  expiredTrust.reason);
 
-const wrongEnvironment = resolveLiveItemLookupAvailability({
-  profile: PROFILE,
-  connectionResult: CONNECTED_RESULT,
-  session: { ...SESSION, environment: 'TEST' },
-  nowMs: NOW_MS,
-});
+const wrongEnvironment = availability(PROFILE, CONNECTED_RESULT, { ...SESSION, environment: 'TEST' });
 check('wrong_environment_scope_is_rejected',
-  wrongEnvironment.connected === false
-    && wrongEnvironment.reason === 'ENVIRONMENT_SCOPE_MISMATCH',
-  wrongEnvironment);
+  wrongEnvironment.connected === false && wrongEnvironment.reason === 'ENVIRONMENT_SCOPE_MISMATCH',
+  wrongEnvironment.reason);
 
-const wrongStore = resolveLiveItemLookupAvailability({
-  profile: PROFILE,
-  connectionResult: CONNECTED_RESULT,
-  session: { ...SESSION, storeId: 'STORE-OTHER' },
-  nowMs: NOW_MS,
-});
+const wrongStore = availability(PROFILE, CONNECTED_RESULT, { ...SESSION, storeId: 'STORE-OTHER' });
 check('wrong_store_scope_is_rejected',
-  wrongStore.connected === false && wrongStore.reason === 'STORE_SCOPE_MISMATCH', wrongStore);
+  wrongStore.connected === false && wrongStore.reason === 'STORE_SCOPE_MISMATCH',
+  wrongStore.reason);
 
-const wrongSession = resolveLiveItemLookupAvailability({
-  profile: PROFILE,
-  connectionResult: CONNECTED_RESULT,
-  session: { ...SESSION, sessionId: 'SESSION-OTHER' },
-  nowMs: NOW_MS,
-});
+const wrongSession = availability(PROFILE, CONNECTED_RESULT, { ...SESSION, sessionId: 'SESSION-OTHER' });
 check('wrong_paired_session_is_rejected',
-  wrongSession.connected === false && wrongSession.reason === 'SESSION_SCOPE_MISMATCH', wrongSession);
+  wrongSession.connected === false && wrongSession.reason === 'SESSION_SCOPE_MISMATCH',
+  wrongSession.reason);
 
-const missingInstance = resolveLiveItemLookupAvailability({
-  profile: { ...PROFILE, inventoryInstanceId: '' },
-  connectionResult: CONNECTED_RESULT,
-  session: SESSION,
-  nowMs: NOW_MS,
-});
+const missingInstance = availability({ ...PROFILE, inventoryInstanceId: '' });
 check('missing_inventory_instance_scope_is_rejected',
-  missingInstance.connected === false
-    && missingInstance.reason === 'INVENTORY_INSTANCE_SCOPE_REQUIRED',
-  missingInstance);
+  missingInstance.connected === false && missingInstance.reason === 'INVENTORY_INSTANCE_SCOPE_REQUIRED',
+  missingInstance.reason);
 
 const dispatched = [];
 const client = createScanOpsItemLookupClientV1({
@@ -299,32 +263,28 @@ check('connected_barcode_lookup_returns_found_item',
   foundBarcode.ok === true
     && foundBarcode.status === 'FOUND'
     && foundBarcode.correlated === true
-    && foundBarcode.result.item.primaryBarcode === '9300000000039',
-  foundBarcode);
+    && foundBarcode.result.item.primaryBarcode === '9300000000039');
 
 const foundSku = await client.sendItemLookup(buildInput('sku-found', 'SKU', 'SKU-PHASE39-0E'));
 check('connected_exact_sku_lookup_returns_found_item',
   foundSku.ok === true
     && foundSku.status === 'FOUND'
     && foundSku.correlated === true
-    && foundSku.result.item.sku === 'SKU-PHASE39-0E',
-  foundSku);
+    && foundSku.result.item.sku === 'SKU-PHASE39-0E');
 
 const missingSku = await client.sendItemLookup(buildInput('sku-missing', 'SKU', 'MISSING-SKU-0390E'));
 check('unknown_sku_returns_item_not_found',
   missingSku.ok === true
     && missingSku.status === 'ITEM_NOT_FOUND'
     && missingSku.result.code === 'ITEM_NOT_FOUND'
-    && missingSku.result.item === null,
-  missingSku);
+    && missingSku.result.item === null);
 
 const missingBarcode = await client.sendItemLookup(buildInput('barcode-missing', 'BARCODE', 'MISSING-BARCODE-0390E'));
 check('unknown_barcode_returns_item_not_found',
   missingBarcode.ok === true
     && missingBarcode.status === 'ITEM_NOT_FOUND'
     && missingBarcode.result.lookupType === 'BARCODE'
-    && missingBarcode.result.item === null,
-  missingBarcode);
+    && missingBarcode.result.item === null);
 
 const authorizationUnavailable = await client.sendItemLookup(buildInput('auth-unavailable', 'SKU', 'AUTH-UNAVAILABLE'));
 check('expired_inventory_authorisation_fails_closed',
@@ -332,14 +292,14 @@ check('expired_inventory_authorisation_fails_closed',
     && authorizationUnavailable.status === 'AUTHORIZATION_UNAVAILABLE'
     && authorizationUnavailable.admissionStatus === 'SERVICE_UNAVAILABLE'
     && authorizationUnavailable.reason === 'ITEM_READ_ADAPTER_NOT_READY',
-  authorizationUnavailable);
+  authorizationUnavailable.reason);
 
 const revokedTrust = await client.sendItemLookup(buildInput('revoked-trust', 'SKU', 'REVOKED-TRUST'));
 check('revoked_device_trust_is_rejected',
   revokedTrust.ok === false
     && revokedTrust.status === 'REJECTED'
     && revokedTrust.reason === 'DEVICE_NOT_TRUSTED',
-  revokedTrust);
+  revokedTrust.reason);
 
 const wrongInventoryInstance = await client.sendItemLookup(buildInput('wrong-instance', 'SKU', 'SKU-PHASE39-0E', {
   inventoryInstanceId: 'inventory-other-001',
@@ -347,8 +307,9 @@ const wrongInventoryInstance = await client.sendItemLookup(buildInput('wrong-ins
 check('wrong_inventory_instance_is_rejected',
   wrongInventoryInstance.ok === false
     && wrongInventoryInstance.status === 'REJECTED'
-    && wrongInventoryInstance.reason === 'INVENTORY_INSTANCE_MISMATCH',
-  wrongInventoryInstance);
+    && wrongInventoryInstance.receiptValid === true
+    && wrongInventoryInstance.reason === 'PAYLOAD_INVALID',
+  wrongInventoryInstance.reason);
 
 const duplicateInput = buildInput('duplicate', 'SKU', 'SKU-DUPLICATE-0390E');
 const duplicateFirst = await client.sendItemLookup(duplicateInput);
@@ -359,16 +320,14 @@ check('duplicate_request_remains_correlated_and_read_only',
     && duplicateFirst.receipt.envelopeId === duplicateSecond.receipt.envelopeId
     && duplicateFirst.receipt.idempotencyKey === duplicateSecond.receipt.idempotencyKey
     && Object.values(duplicateFirst.result.mutationCounts).every((value) => value === 0)
-    && Object.values(duplicateSecond.result.mutationCounts).every((value) => value === 0),
-  { duplicateFirst, duplicateSecond });
+    && Object.values(duplicateSecond.result.mutationCounts).every((value) => value === 0));
 
 const malformed = await client.sendItemLookup(buildInput('malformed', 'SKU', 'MALFORMED-RECEIPT'));
 check('malformed_or_uncorrelated_receipt_is_rejected',
   malformed.ok === false
     && malformed.status === 'REJECTED'
     && malformed.receiptValid === false
-    && malformed.correlated === false,
-  malformed);
+    && malformed.correlated === false);
 
 const nonzeroMutation = await client.sendItemLookup(buildInput('nonzero', 'SKU', 'NONZERO-MUTATION'));
 const extraMutation = await client.sendItemLookup(buildInput('extra', 'SKU', 'EXTRA-MUTATION'));
@@ -376,8 +335,7 @@ check('unexpected_or_nonzero_mutation_evidence_is_rejected',
   nonzeroMutation.ok === false
     && nonzeroMutation.receiptValid === false
     && extraMutation.ok === false
-    && extraMutation.receiptValid === false,
-  { nonzeroMutation, extraMutation });
+    && extraMutation.receiptValid === false);
 
 const publicHostClient = createScanOpsItemLookupClientV1({
   configuration: { bridge_enabled: true, transport_enabled: true },
@@ -390,8 +348,7 @@ const publicHost = await publicHostClient.sendItemLookup(buildInput('public-host
 check('public_destination_is_blocked_before_dispatch',
   publicHost.ok === false
     && publicHost.dispatchAttempted === false
-    && publicHost.blockers.includes('INVENTORY_HOST_NOT_LOCAL'),
-  publicHost);
+    && publicHost.blockers.includes('INVENTORY_HOST_NOT_LOCAL'));
 
 const httpsClient = createScanOpsItemLookupClientV1({
   configuration: { bridge_enabled: true, transport_enabled: true },
@@ -405,8 +362,7 @@ const httpsDestination = await httpsClient.sendItemLookup(buildInput('https', 'S
 check('https_destination_is_blocked_before_dispatch',
   httpsDestination.ok === false
     && httpsDestination.dispatchAttempted === false
-    && httpsDestination.blockers.includes('LOOKUP_PROTOCOL_NOT_LOCAL_HTTP'),
-  httpsDestination);
+    && httpsDestination.blockers.includes('LOOKUP_PROTOCOL_NOT_LOCAL_HTTP'));
 
 const timeoutClient = createScanOpsItemLookupClientV1({
   configuration: { bridge_enabled: true, transport_enabled: true },
@@ -427,8 +383,7 @@ check('timeout_is_explicit_and_non_mutating',
     && timeout.reason === 'LOOKUP_TIMEOUT'
     && timeout.timeoutTriggered === true
     && timeout.inventoryMutationAttempted === false
-    && timeout.scanOpsMutationAttempted === false,
-  timeout);
+    && timeout.scanOpsMutationAttempted === false);
 
 check('no_lookup_credential_or_inventory_token_reaches_scanops',
   dispatched.length > 0 && dispatched.every((envelope) => {
@@ -437,8 +392,7 @@ check('no_lookup_credential_or_inventory_token_reaches_scanops',
       && !serialized.includes('base44_access_token')
       && !serialized.includes('Authorization')
       && !serialized.includes('Bearer ');
-  }),
-  dispatched);
+  }));
 
 const scanSource = readFileSync(new URL('../src/pages/Scan.jsx', import.meta.url), 'utf8');
 const serviceSource = readFileSync(new URL('../src/lib/scanOpsLiveConnectivity.js', import.meta.url), 'utf8');
@@ -447,16 +401,14 @@ check('operational_scan_uses_existing_live_lookup_service',
   scanSource.includes('runLiveItemLookup')
     && scanSource.includes('getLiveItemLookupAvailability')
     && serviceSource.includes('createScanOpsItemLookupClientV1')
-    && serviceSource.includes('trustReference: profile.trustReference'),
-  'Scan.jsx and scanOpsLiveConnectivity.js');
+    && serviceSource.includes('trustReference: profile.trustReference'));
 
 check('barcode_and_exact_sku_are_the_only_operational_modes',
   scanSource.includes('runLookup("BARCODE", barcode)')
     && scanSource.includes('runLookup("SKU", skuValue)')
     && scanSource.includes('Item name and PLU search are not available in this certified phase.')
     && !scanSource.includes('lookupType: "PLU"')
-    && !scanSource.includes('lookupType: "NAME"'),
-  'Scan.jsx');
+    && !scanSource.includes('lookupType: "NAME"'));
 
 check('local_cache_and_mock_lookup_are_retired_from_scan_path',
   !scanSource.includes('resolveInventoryIdentity')
@@ -465,8 +417,7 @@ check('local_cache_and_mock_lookup_are_retired_from_scan_path',
     && !scanSource.includes('inventorySystemAdapter')
     && !scanSource.includes('MOCK_INVENTORY_ITEMS')
     && !scanSource.includes('navigate(`/product/')
-    && !scanSource.includes('navigate("/product/'),
-  'Scan.jsx');
+    && !scanSource.includes('navigate("/product/'));
 
 check('disconnected_authorisation_and_not_found_states_are_explicit',
   scanSource.includes('Inventory not connected')
@@ -475,23 +426,20 @@ check('disconnected_authorisation_and_not_found_states_are_explicit',
     && scanSource.includes('Inventory Desktop must be reauthorised')
     && scanSource.includes('Item not found')
     && scanSource.includes('ITEM_NOT_FOUND')
-    && scanSource.includes('Zero mutations verified'),
-  'Scan.jsx');
+    && scanSource.includes('Zero mutations verified'));
 
 check('lookup_results_are_not_persisted_queued_or_automatically_retried',
   !scanSource.includes('localStorage')
     && !scanSource.includes('sessionStorage')
     && !scanSource.includes('enqueue')
     && !scanSource.includes('retryAllSyncEvents')
-    && !serviceSource.includes('RECEIVING_SUBMISSION'),
-  'operational lookup source');
+    && !serviceSource.includes('RECEIVING_SUBMISSION'));
 
 check('sensitive_price_and_cost_fields_are_not_rendered',
   !scanSource.includes('currentPrice')
     && !scanSource.includes('pricePerKg')
     && !scanSource.includes('unitCost')
-    && !scanSource.includes('costPrice'),
-  'Scan.jsx');
+    && !scanSource.includes('costPrice'));
 
 const failures = checks.filter((entry) => !entry.passed);
 const report = {
