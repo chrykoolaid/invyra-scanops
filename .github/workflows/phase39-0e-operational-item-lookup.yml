@@ -33,7 +33,9 @@ jobs:
           node-version: '24'
 
       - name: Phase 39-0E operational item lookup
-        run: node scripts/validate-phase39-0e-operational-item-lookup.mjs
+        run: |
+          set -o pipefail
+          node scripts/validate-phase39-0e-operational-item-lookup.mjs | tail -n 180
 
       - name: Phase 39-0D read-only lookup compatibility
         run: node scripts/validate-phase39-0d-read-only-item-lookup.mjs
