@@ -34,8 +34,11 @@ jobs:
 
       - name: Phase 39-0E operational item lookup
         run: |
-          set -o pipefail
-          node scripts/validate-phase39-0e-operational-item-lookup.mjs | tail -n 180
+          set +e
+          node scripts/validate-phase39-0e-operational-item-lookup.mjs > scanops-phase39-0e-validator-output.txt 2>&1
+          status=$?
+          tail -n 180 scanops-phase39-0e-validator-output.txt
+          exit "$status"
 
       - name: Phase 39-0D read-only lookup compatibility
         run: node scripts/validate-phase39-0d-read-only-item-lookup.mjs
@@ -92,6 +95,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: phase39-0e-scanops-operational-item-lookup
-          path: scanops-phase39-0e-quality-note.json
+          path: |
+            scanops-phase39-0e-validator-output.txt
+            scanops-phase39-0e-quality-note.json
           if-no-files-found: warn
           retention-days: 30
