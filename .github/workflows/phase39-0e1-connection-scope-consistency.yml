@@ -1,0 +1,55 @@
+name: Phase 39-0E.1 Connection Scope Consistency
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/App.jsx'
+      - 'src/components/scanner/PairingScopeSynchronizer.jsx'
+      - 'src/lib/scanOpsLiveConnectivity.js'
+      - 'src/lib/scanOpsSession.js'
+      - 'src/pages/Scan.jsx'
+      - 'src/pages/SyncHandoff.jsx'
+      - 'scripts/validate-phase39-0e1-connection-scope-consistency.mjs'
+      - '.github/workflows/phase39-0e1-connection-scope-consistency.yml'
+      - 'docs/bridge/PHASE_39_0E1_CONNECTION_SCOPE_CONSISTENCY.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Phase 39-0E.1 connection scope consistency
+        run: node scripts/validate-phase39-0e1-connection-scope-consistency.mjs
+
+      - name: Phase 39-0E operational lookup compatibility
+        run: node scripts/validate-phase39-0e-operational-item-lookup.mjs
+
+      - name: Phase 39-0B connection compatibility
+        run: node scripts/validate-phase39-0b-scanops-connection-setup.mjs
+
+      - name: Install and build application
+        run: |
+          set -euo pipefail
+          npm install --ignore-scripts
+          npm run build
+
+      - name: Lint changed runtime surfaces
+        run: |
+          set -euo pipefail
+          npx eslint \
+            src/App.jsx \
+            src/components/scanner/PairingScopeSynchronizer.jsx \
+            --quiet

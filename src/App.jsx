@@ -43,6 +43,7 @@ import RoleGate from './components/scanner/RoleGate';
 import AppEscapeHeader from './components/scanner/AppEscapeHeader';
 import OfflineBanner from './components/scanner/OfflineBanner';
 import BottomNavigation from './components/scanner/BottomNavigation';
+import PairingScopeSynchronizer from './components/scanner/PairingScopeSynchronizer';
 
 
 const ScrollToTopOnRouteChange = () => {
@@ -143,6 +144,7 @@ const AuthenticatedApp = () => {
   return (
     <div className="scanops-root-shell" data-scanops-app-escape-active={appEscapeMeta ? "true" : "false"}>
       <ScrollToTopOnRouteChange />
+      <PairingScopeSynchronizer />
       <OfflineBanner />
       <div className="scanops-route-host">
         {appEscapeMeta && <AppEscapeHeader {...appEscapeMeta} />}
