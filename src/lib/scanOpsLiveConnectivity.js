@@ -9,6 +9,7 @@ import { createScanOpsItemLookupClientV1 } from '../inventory-bridge/itemLookup/
 export const LIVE_CONNECTION_RESULT_KEY = 'invyra_scanops_phase39_0b_connection_result_v1';
 
 const ALLOWED_OPERATIONAL_ENVIRONMENTS = Object.freeze(['TEST', 'TRAINING']);
+const ALLOWED_ITEM_READ_ROLES = Object.freeze(['staff', 'supervisor', 'manager', 'admin', 'owner']);
 
 function asText(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -25,6 +26,10 @@ function sessionIdentity(session = {}) {
     sessionId: asText(session.sessionId || session.shiftId || `session-${session.deviceId || 'scanops'}`),
     operatorId: asText(session.actorUserId || session.userId || session.operatorId),
   };
+}
+
+function sessionRole(session = {}) {
+  return asText(session.actorRole || session.role).toLowerCase();
 }
 
 function writeLastResult(result) {
@@ -143,6 +148,86 @@ function validateItemLookupIdentity(profile, session = {}, nowMs = Date.now()) {
   }
 
   return { ok: true, identity: paired.identity };
+}
+
+function validateGovernedItemReadRole(session = {}) {
+  const operatorRole = sessionRole(session);
+  if (!ALLOWED_ITEM_READ_ROLES.includes(operatorRole)) {
+    return validationFailure(
+      'INVALID',
+      'ITEM_READ_ROLE_BLOCKED',
+      'The signed-in ScanOps role is not permitted for Inventory item search or item view.',
+    );
+  }
+  return { ok: true, operatorRole };
+}
+
+function createLiveItemClient(profile) {
+  return createScanOpsItemLookupClientV1({
+    configuration: { bridge_enabled: true, transport_enabled: true },
+    environment: profile.environment,
+    inventoryHost: profile.inventoryHost,
+    inventoryPort: profile.inventoryPort,
+    timeoutMs: 4000,
+  });
+}
+
+function baseReadFailure(kind, failure) {
+  return {
+    kind,
+    ok: false,
+    status: failure.status,
+    reason: failure.reason,
+    message: failure.message,
+    checkedAt: new Date().toISOString(),
+    dispatchAttempted: false,
+    inventoryMutationAttempted: false,
+    scanOpsMutationAttempted: false,
+  };
+}
+
+function mapLiveReadResult(result, profile, kind) {
+  const authorizationUnavailable = result.status === 'AUTHORIZATION_UNAVAILABLE';
+  const trustRejected = result.reason === 'DEVICE_NOT_TRUSTED'
+    || result.reason === 'TRUST_REFERENCE_INVALID'
+    || result.reason === 'TRUST_REFERENCE_EXPIRED';
+  let successMessage = 'Inventory completed the authoritative read-only item request.';
+  if (kind === 'ITEM_SEARCH_REQUEST') {
+    successMessage = result.status === 'SEARCH_RESULTS'
+      ? 'Inventory returned authoritative item-name search candidates.'
+      : 'Inventory completed the item-name search and found no matching items.';
+  } else if (kind === 'ITEM_VIEW_REQUEST') {
+    successMessage = result.status === 'ITEM_VIEW_READY'
+      ? 'Inventory returned the authoritative operational item view.'
+      : 'Inventory completed the item view and returned ITEM_NOT_FOUND.';
+  }
+
+  return {
+    kind,
+    ok: result.ok === true,
+    status: result.status,
+    reason: result.reason || null,
+    message: authorizationUnavailable
+      ? 'Inventory read authorisation unavailable. Inventory Desktop must be reauthorised.'
+      : trustRejected
+        ? 'The Inventory connection is no longer trusted. Open Sync & Connectivity and pair again.'
+        : result.ok
+          ? successMessage
+          : result.message || 'The Inventory item request could not be completed.',
+    checkedAt: new Date().toISOString(),
+    endpoint: result.endpoint || `http://${profile.inventoryHost}:${profile.inventoryPort}`,
+    traceId: result.receipt?.traceId || result.envelopeId || null,
+    receiptId: result.receipt?.receiptId || null,
+    admissionStatus: result.admissionStatus || null,
+    applicationStatus: result.applicationStatus || null,
+    result: result.result || null,
+    dispatchAttempted: result.dispatchAttempted === true,
+    receiptValid: result.receiptValid === true,
+    correlated: result.correlated === true,
+    timeoutTriggered: result.timeoutTriggered === true,
+    inventoryMutationAttempted: false,
+    scanOpsMutationAttempted: false,
+  };
 }
 
 export function getLastLiveConnectionResult() {
@@ -306,44 +391,20 @@ export async function runLiveBridgeHealthTest(session = {}) {
 
 export async function runLiveItemLookup({ lookupType, lookupValue, session } = {}) {
   const availability = getLiveItemLookupAvailability(session);
-  if (!availability.connected) {
-    return {
-      kind: 'ITEM_LOOKUP',
-      ok: false,
-      status: availability.status,
-      reason: availability.reason,
-      message: availability.message,
-      checkedAt: new Date().toISOString(),
-      dispatchAttempted: false,
-      inventoryMutationAttempted: false,
-      scanOpsMutationAttempted: false,
-    };
-  }
+  if (!availability.connected) return baseReadFailure('ITEM_LOOKUP', availability);
 
   const { profile, identity } = availability;
   const normalizedType = asText(lookupType).toUpperCase();
   const normalizedValue = asText(lookupValue);
   if (!['BARCODE', 'SKU'].includes(normalizedType) || !normalizedValue || normalizedValue.length > 128) {
-    return {
-      kind: 'ITEM_LOOKUP',
-      ok: false,
-      status: 'INVALID',
-      reason: 'ITEM_LOOKUP_INPUT_INVALID',
-      message: 'Scan a barcode or enter an exact SKU.',
-      checkedAt: new Date().toISOString(),
-      dispatchAttempted: false,
-      inventoryMutationAttempted: false,
-      scanOpsMutationAttempted: false,
-    };
+    return baseReadFailure('ITEM_LOOKUP', validationFailure(
+      'INVALID',
+      'ITEM_LOOKUP_INPUT_INVALID',
+      'Scan a barcode or enter an exact SKU.',
+    ));
   }
 
-  const client = createScanOpsItemLookupClientV1({
-    configuration: { bridge_enabled: true, transport_enabled: true },
-    environment: profile.environment,
-    inventoryHost: profile.inventoryHost,
-    inventoryPort: profile.inventoryPort,
-    timeoutMs: 4000,
-  });
+  const client = createLiveItemClient(profile);
   const occurredAt = new Date().toISOString();
   const result = await client.sendItemLookup({
     envelopeId: makeId(`env:${profile.environment.toLowerCase()}:lookup`),
@@ -360,37 +421,83 @@ export async function runLiveItemLookup({ lookupType, lookupValue, session } = {
     lookupValue: normalizedValue,
   });
 
-  const authorizationUnavailable = result.status === 'AUTHORIZATION_UNAVAILABLE';
-  const trustRejected = result.reason === 'DEVICE_NOT_TRUSTED'
-    || result.reason === 'TRUST_REFERENCE_INVALID'
-    || result.reason === 'TRUST_REFERENCE_EXPIRED';
+  const mapped = mapLiveReadResult(result, profile, 'ITEM_LOOKUP');
+  if (mapped.ok) {
+    mapped.message = mapped.status === 'FOUND'
+      ? 'Inventory returned the authoritative item details.'
+      : 'Inventory completed the read and returned ITEM_NOT_FOUND.';
+  }
+  return mapped;
+}
 
-  return {
-    kind: 'ITEM_LOOKUP',
-    ok: result.ok === true,
-    status: result.status,
-    reason: result.reason || null,
-    message: authorizationUnavailable
-      ? 'Inventory read authorisation unavailable. Inventory Desktop must be reauthorised.'
-      : trustRejected
-        ? 'The Inventory connection is no longer trusted. Open Sync & Connectivity and pair again.'
-        : result.ok
-          ? result.status === 'FOUND'
-            ? 'Inventory returned the authoritative item details.'
-            : 'Inventory completed the read and returned ITEM_NOT_FOUND.'
-          : result.message || 'The Inventory item lookup could not be completed.',
-    checkedAt: new Date().toISOString(),
-    endpoint: result.endpoint || `http://${profile.inventoryHost}:${profile.inventoryPort}`,
-    traceId: result.receipt?.traceId || result.envelopeId || null,
-    receiptId: result.receipt?.receiptId || null,
-    admissionStatus: result.admissionStatus || null,
-    applicationStatus: result.applicationStatus || null,
-    result: result.result || null,
-    dispatchAttempted: result.dispatchAttempted === true,
-    receiptValid: result.receiptValid === true,
-    correlated: result.correlated === true,
-    timeoutTriggered: result.timeoutTriggered === true,
-    inventoryMutationAttempted: false,
-    scanOpsMutationAttempted: false,
-  };
+export async function runLiveItemSearch({ query, page = 1, limit = 20, session } = {}) {
+  const availability = getLiveItemLookupAvailability(session);
+  if (!availability.connected) return baseReadFailure('ITEM_SEARCH_REQUEST', availability);
+  const role = validateGovernedItemReadRole(session);
+  if (!role.ok) return baseReadFailure('ITEM_SEARCH_REQUEST', role);
+
+  const normalizedQuery = asText(query);
+  if (!normalizedQuery || normalizedQuery.length > 128 || /[\x00-\x1F\x7F]/.test(normalizedQuery)) {
+    return baseReadFailure('ITEM_SEARCH_REQUEST', validationFailure(
+      'INVALID',
+      'ITEM_SEARCH_QUERY_INVALID',
+      'Enter an item name of up to 128 characters.',
+    ));
+  }
+
+  const { profile, identity } = availability;
+  const client = createLiveItemClient(profile);
+  const occurredAt = new Date().toISOString();
+  const result = await client.sendItemSearch({
+    envelopeId: makeId(`env:${profile.environment.toLowerCase()}:item-search`),
+    idempotencyKey: makeId(`idem:${profile.environment.toLowerCase()}:item-search`),
+    traceId: makeId(`trace:${profile.environment.toLowerCase()}:item-search`),
+    occurredAt,
+    deviceId: profile.deviceId,
+    storeId: profile.storeId,
+    sessionId: profile.sessionId,
+    operatorId: identity.operatorId,
+    operatorRole: role.operatorRole,
+    inventoryInstanceId: profile.inventoryInstanceId,
+    trustReference: profile.trustReference,
+    query: normalizedQuery,
+    page,
+    limit,
+  });
+  return mapLiveReadResult(result, profile, 'ITEM_SEARCH_REQUEST');
+}
+
+export async function runLiveItemView({ canonicalItemId, session } = {}) {
+  const availability = getLiveItemLookupAvailability(session);
+  if (!availability.connected) return baseReadFailure('ITEM_VIEW_REQUEST', availability);
+  const role = validateGovernedItemReadRole(session);
+  if (!role.ok) return baseReadFailure('ITEM_VIEW_REQUEST', role);
+
+  const normalizedItemId = asText(canonicalItemId);
+  if (!normalizedItemId || normalizedItemId.length > 128) {
+    return baseReadFailure('ITEM_VIEW_REQUEST', validationFailure(
+      'INVALID',
+      'ITEM_VIEW_ID_INVALID',
+      'Select a valid Inventory item before opening the operational view.',
+    ));
+  }
+
+  const { profile, identity } = availability;
+  const client = createLiveItemClient(profile);
+  const occurredAt = new Date().toISOString();
+  const result = await client.sendItemView({
+    envelopeId: makeId(`env:${profile.environment.toLowerCase()}:item-view`),
+    idempotencyKey: makeId(`idem:${profile.environment.toLowerCase()}:item-view`),
+    traceId: makeId(`trace:${profile.environment.toLowerCase()}:item-view`),
+    occurredAt,
+    deviceId: profile.deviceId,
+    storeId: profile.storeId,
+    sessionId: profile.sessionId,
+    operatorId: identity.operatorId,
+    operatorRole: role.operatorRole,
+    inventoryInstanceId: profile.inventoryInstanceId,
+    trustReference: profile.trustReference,
+    canonicalItemId: normalizedItemId,
+  });
+  return mapLiveReadResult(result, profile, 'ITEM_VIEW_REQUEST');
 }
