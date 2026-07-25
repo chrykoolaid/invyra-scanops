@@ -45,6 +45,8 @@ import AppEscapeHeader from './components/scanner/AppEscapeHeader';
 import OfflineBanner from './components/scanner/OfflineBanner';
 import BottomNavigation from './components/scanner/BottomNavigation';
 import PairingScopeSynchronizer from './components/scanner/PairingScopeSynchronizer';
+import SessionLockOverlay from './components/scanner/SessionLockOverlay';
+import { useScanOpsIdleGuard } from './lib/scanOpsSessionControl';
 
 
 const ScrollToTopOnRouteChange = () => {
@@ -121,9 +123,10 @@ const roleGated = (element, requiredRole, title) => (
 )
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, logout } = useAuth();
   const location = useLocation();
   const appEscapeMeta = getAppEscapeMeta(location.pathname);
+  useScanOpsIdleGuard({ onAutoSignOut: () => logout(true) });
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
@@ -193,6 +196,7 @@ const AuthenticatedApp = () => {
         </div>
       </div>
       <BottomNavigation />
+      <SessionLockOverlay />
     </div>
   );
 };
