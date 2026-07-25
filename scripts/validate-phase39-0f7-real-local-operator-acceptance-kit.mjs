@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 const INVENTORY_BASELINE = 'de4ceca8d137d8acf409031cf986c858a792606d';
-const SCANOPS_BASELINE = 'be87402cb2c65b6e899de9b088cf9c2b9df2ac22';
+const SCANOPS_BASELINE = '47891e62941af3be939ab9ac9f4e5bfa28c94242';
 const recorderPath = 'scripts/run-phase39-0f7-real-local-operator-acceptance.mjs';
 const templatePath = 'evidence/phase39-0f7-local-operator-acceptance.template.json';
 const docsPath = 'docs/bridge/PHASE_39_0F7_REAL_LOCAL_OPERATOR_ACCEPTANCE.md';
@@ -93,6 +93,7 @@ for (const required of [
   'AUTHORIZATION_UNAVAILABLE',
   'node scripts/run-phase39-0f7-real-local-operator-acceptance.mjs --record',
   'does not certify acceptance by itself',
+  SCANOPS_BASELINE,
 ]) assert.ok(docs.includes(required), `Runbook missing instruction: ${required}`);
 
 const incomplete = spawnSync(process.execPath, [recorderPath, '--validate', templatePath], {
@@ -120,7 +121,7 @@ try {
 }
 
 console.log(JSON.stringify({
-  phase: '39-0F7',
+  phase: '39-0F7.1',
   passed: true,
   readiness: 'READY_FOR_REAL_LOCAL_OPERATOR_EXECUTION',
   humanAcceptancePassed: false,

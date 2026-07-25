@@ -1,5 +1,11 @@
 # Phase 39-0F7 — Real Local Operator Acceptance
 
+## Baseline refresh
+
+Phase 39-0F7.1 refreshes the ScanOps execution baseline only. It does not add bridge behaviour or certify the human result.
+
+The refreshed ScanOps baseline includes later Waste, session-lock and settings work. Those commits do not change the certified item-search or item-view client, but the real operator acceptance must run against the exact current product baseline rather than the earlier Phase 39-0F7 merge point.
+
 ## Purpose
 
 Phase 39-0F7 must be completed by a human operator using the visible ScanOps `/scan` interface and an actual Inventory catalogue through the local TEST or TRAINING bridge.
@@ -13,7 +19,7 @@ Inventory main:
 de4ceca8d137d8acf409031cf986c858a792606d
 
 ScanOps main:
-be87402cb2c65b6e899de9b088cf9c2b9df2ac22
+47891e62941af3be939ab9ac9f4e5bfa28c94242
 ```
 
 Do not execute the acceptance against different commits without updating and re-certifying this kit.
@@ -92,7 +98,7 @@ npm run dev -- --host 0.0.0.0
 Confirm the commit is:
 
 ```text
-be87402cb2c65b6e899de9b088cf9c2b9df2ac22
+47891e62941af3be939ab9ac9f4e5bfa28c94242
 ```
 
 Open ScanOps from the controlled local HTTP address. Pair it from **Sync & Connectivity**, then run the trusted connection test. Continue only when the connected state is visible.
@@ -105,7 +111,8 @@ Open `/scan` and confirm:
 
 - **Scan / SKU** is visible;
 - **Search name** is visible;
-- the new bold-blocks shell remains readable at handheld width;
+- the bold-blocks shell remains readable at handheld width;
+- the later session controls do not obstruct the item lookup workflow;
 - no action occurs automatically on page load.
 
 Screenshot label: `connected`.

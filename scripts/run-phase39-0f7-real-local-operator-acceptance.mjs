@@ -6,7 +6,7 @@ import { stdin as input, stdout as output } from 'node:process';
 
 const PHASE = '39-0F7';
 const INVENTORY_BASELINE = 'de4ceca8d137d8acf409031cf986c858a792606d';
-const SCANOPS_BASELINE = 'be87402cb2c65b6e899de9b088cf9c2b9df2ac22';
+const SCANOPS_BASELINE = '47891e62941af3be939ab9ac9f4e5bfa28c94242';
 const TEMPLATE_PATH = new URL('../evidence/phase39-0f7-local-operator-acceptance.template.json', import.meta.url);
 const ALLOWED_ENVIRONMENTS = new Set(['TEST', 'TRAINING']);
 const ALLOWED_ROLES = new Set(['staff', 'supervisor', 'manager', 'admin', 'owner']);
