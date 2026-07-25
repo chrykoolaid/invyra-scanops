@@ -1,12 +1,20 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ClipboardList, PackagePlus, RotateCcw, ScanLine, Trash2 } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  Edit3,
+  Loader2,
+  PackageSearch,
+  ScanLine,
+  Search,
+  ShieldCheck,
+  Trash2,
+} from "lucide-react";
 import PageHeader from "../components/scanner/PageHeader";
-import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
 import {
   EmptyState,
-  ItemSummaryCard,
-  MetricPill,
   OperatorAlert,
   PageShell,
   SectionCard,
@@ -14,362 +22,601 @@ import {
   TextInputField,
   WorkflowMain,
 } from "../components/scanner/WorkflowPrimitives";
-import { resolveInventoryIdentity, ensureInventoryLoaded } from "../lib/inventorySystemAdapter";
+import {
+  getLiveItemLookupAvailability,
+  runLiveItemLookup,
+  runLiveItemSearch,
+} from "../lib/scanOpsLiveConnectivity";
+import { useScanOpsSession } from "../lib/scanOpsSession";
 import { writeWasteRecord } from "../lib/scanOpsRecordWriter";
-import { getDefaultExpiryDate, getDefaultLotBatch } from "../lib/scanOpsItemAttributes";
-import { GOVERNED_ACTIONS, canPerformScanOpsAction, recordGovernedAction, useScanOpsGovernanceContext } from "../lib/scanOpsGovernance";
-import { createWasteReviewDraft, filterWasteReviews, getWasteReviews, getWasteReviewReason, submitWasteReview, WASTE_REVIEW_REASON_OPTIONS } from "../lib/scanOpsWasteReview";
+import {
+  GOVERNED_ACTIONS,
+  canPerformScanOpsAction,
+  recordGovernedAction,
+  useScanOpsGovernanceContext,
+} from "../lib/scanOpsGovernance";
+import {
+  createWasteReviewDraft,
+  getWasteReviewReason,
+  submitWasteReview,
+  WASTE_REVIEW_REASON_OPTIONS,
+} from "../lib/scanOpsWasteReview";
 
-const STOCK_OUT_TYPES = [
-  { id: "wastage_damage", label: "Waste / Damage", helper: "Damaged, broken, contaminated", defaultReason: "damaged_in_handling", reasonIds: ["damaged_in_handling", "packaging_broken", "spillage", "contamination_risk"] },
-  { id: "expired_spoiled", label: "Expired / Spoiled", helper: "Expired, spoiled, temperature issue", defaultReason: "expired_out_of_date", reasonIds: ["expired_out_of_date", "spoiled_rotten", "temperature_issue"] },
-  { id: "store_use", label: "Store Use", helper: "Business consumption or sampling", defaultReason: "store_use", reasonIds: ["store_use", "production_use", "sampling_promos", "training_use"] },
-  { id: "suspected_theft_loss", label: "Theft / Loss", helper: "Missing, tampered, suspected theft", defaultReason: "theft_suspected_theft", noteRequired: true, reasonIds: ["theft_suspected_theft", "seal_tampering", "missing_stock"] },
-  { id: "unknown_shrinkage", label: "Unknown Loss", helper: "Unexplained stock loss", defaultReason: "unknown_loss", noteRequired: true, reasonIds: ["unknown_loss", "count_discrepancy", "high_value_discrepancy"] },
-];
+const SCREEN = Object.freeze({
+  QUEUE: "QUEUE",
+  RESULTS: "RESULTS",
+  DETAILS: "DETAILS",
+  RECEIPT: "RECEIPT",
+});
 
-function itemName(item) {
-  return item?.name || item?.item_name || "Scanned item";
+const WASTE_REASON_IDS = new Set([
+  "damaged_in_handling",
+  "packaging_broken",
+  "spillage",
+  "contamination_risk",
+  "expired_out_of_date",
+  "spoiled_rotten",
+  "temperature_issue",
+  "theft_suspected_theft",
+  "seal_tampering",
+  "missing_stock",
+  "unknown_loss",
+  "count_discrepancy",
+  "high_value_discrepancy",
+]);
+
+const REASON_OPTIONS = WASTE_REVIEW_REASON_OPTIONS.filter((option) => WASTE_REASON_IDS.has(option.id));
+const NOTE_REQUIRED_REASONS = new Set([
+  "theft_suspected_theft",
+  "missing_stock",
+  "unknown_loss",
+  "count_discrepancy",
+  "high_value_discrepancy",
+  "seal_tampering",
+]);
+
+const BUTTON_PRIMARY = "min-h-12 w-full rounded-2xl bg-primary px-4 text-sm font-black text-primary-foreground active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40";
+const BUTTON_SECONDARY = "min-h-12 w-full rounded-2xl border border-border bg-card px-4 text-sm font-black text-foreground active:bg-secondary disabled:cursor-not-allowed disabled:opacity-40";
+
+function text(value) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
-function itemUnit(item) {
-  return item?.unitType || item?.unit_type || "each";
+function mapAuthoritativeItem(raw = {}) {
+  return {
+    id: raw.canonicalItemId || raw.canonical_item_id || raw.id || null,
+    canonicalItemId: raw.canonicalItemId || raw.canonical_item_id || raw.id || null,
+    name: raw.itemName || raw.item_name || raw.name || "Inventory item",
+    item_name: raw.itemName || raw.item_name || raw.name || "Inventory item",
+    sku: raw.sku || null,
+    barcode: raw.primaryBarcode || raw.primary_barcode || raw.barcode || null,
+    brand: raw.brand || null,
+    packSize: raw.packSize || raw.pack_size || null,
+    unitType: raw.unitOfMeasure || raw.unit_of_measure || raw.uom || "each",
+    unit_type: raw.unitOfMeasure || raw.unit_of_measure || raw.uom || "each",
+    lifecycleStatus: raw.lifecycleStatus || raw.lifecycle_status || "ACTIVE",
+    lifecycle_status: raw.lifecycleStatus || raw.lifecycle_status || "ACTIVE",
+    batchTracked: raw.batchTracked ?? raw.batch_tracked ?? false,
+    expiryTracked: raw.expiryTracked ?? raw.expiry_tracked ?? false,
+  };
 }
 
-function itemAvailable(item) {
-  return item?.stockOnHand ?? item?.stock_on_hand ?? item?.available ?? item?.availableStock ?? item?.shelfStock ?? item?.shelf_stock ?? "—";
+function isWeightedUnit(unit) {
+  const normalized = text(unit).toLowerCase();
+  return ["kg", "kilogram", "kilograms", "g", "gram", "grams", "weight"].includes(normalized);
 }
 
-function primaryScanValue(item) {
-  return item?.barcode || item?.gtin || item?.sku || item?.plu || item?.scaleCode || item?.name || "";
+function itemSecondary(item) {
+  return [item.brand, item.packSize, item.unitType].filter(Boolean).join(" · ") || "Inventory item";
 }
 
-function WasteSessionCard({ queue }) {
-  const reviewCount = queue.filter((entry) => entry.reasonCode?.includes("theft") || entry.reasonCode?.includes("unknown") || entry.reasonCode?.includes("discrepancy")).length;
-  const totalQty = queue.reduce((sum, entry) => sum + Number(entry.quantity || 0), 0);
+function ConnectionRequired({ availability, onOpenConnectivity }) {
   return (
-    <SectionCard>
+    <SectionCard className="border-amber-200 bg-amber-50 text-amber-950">
       <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-          <Trash2 className="h-5 w-5" />
-        </span>
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">Waste Session</p>
-          <h2 className="mt-1 text-base font-black text-foreground">Stock-out evidence</h2>
-          <p className="mt-1 text-xs font-bold text-muted-foreground">Scan → classify → quantity → queue → submit</p>
+          <p className="text-lg font-black">Inventory connection required</p>
+          <p className="mt-1 text-sm font-bold opacity-85">
+            {availability?.message || "Connect and verify this scanner before searching for an item."}
+          </p>
         </div>
       </div>
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        <MetricPill label="Items" value={queue.length} />
-        <MetricPill label="Qty" value={totalQty} />
-        <MetricPill label="Review" value={reviewCount} />
-      </div>
+      <button type="button" className={`mt-4 ${BUTTON_PRIMARY}`} onClick={onOpenConnectivity}>
+        Open Sync &amp; Connectivity
+      </button>
     </SectionCard>
   );
 }
 
-function TypeButton({ type, active, onClick }) {
+function SearchField({ value, onChange, onSubmit, busy, inputRef }) {
+  return (
+    <form onSubmit={onSubmit} className="rounded-2xl border border-border bg-card p-2 shadow-sm">
+      <label className="relative block">
+        <Search className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground" />
+        <input
+          ref={inputRef}
+          value={value}
+          onChange={(event) => onChange(event.target.value.slice(0, 128))}
+          placeholder="Search item or scan barcode"
+          autoComplete="off"
+          className="h-12 w-full rounded-xl bg-background pl-10 pr-24 text-base font-bold text-foreground outline-none ring-1 ring-input focus:ring-2 focus:ring-primary/30"
+        />
+        <button
+          type="submit"
+          disabled={busy || !text(value)}
+          className="absolute right-1.5 top-1.5 h-9 rounded-lg bg-primary px-3 text-xs font-black text-primary-foreground disabled:opacity-40"
+        >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Search"}
+        </button>
+      </label>
+    </form>
+  );
+}
+
+function QuantityInput({ row, onChange }) {
+  const weighted = isWeightedUnit(row.item.unitType);
+  const invalid = row.quantity === "" || Number(row.quantity) <= 0 || (!weighted && !Number.isInteger(Number(row.quantity)));
+  return (
+    <div className="w-28 shrink-0 text-right">
+      <div className={`flex h-11 items-center rounded-xl border bg-background ${invalid ? "border-amber-400" : "border-input"}`}>
+        <input
+          aria-label={`Quantity for ${row.item.name}`}
+          value={row.quantity}
+          onChange={(event) => {
+            const next = event.target.value.replace(weighted ? /[^0-9.]/g : /[^0-9]/g, "");
+            if ((next.match(/\./g) || []).length > 1) return;
+            onChange(next);
+          }}
+          inputMode={weighted ? "decimal" : "numeric"}
+          className="min-w-0 flex-1 bg-transparent px-2 text-right text-lg font-black outline-none"
+          placeholder="0"
+        />
+        <span className="pr-2 text-[10px] font-black text-muted-foreground">{row.item.unitType}</span>
+      </div>
+      {invalid && <p className="mt-1 text-[10px] font-black text-amber-700">Qty required</p>}
+    </div>
+  );
+}
+
+function QueueRow({ row, selected, onSelect, onQuantityChange }) {
   return (
     <button
       type="button"
-      onClick={onClick}
-      className={`min-h-16 rounded-2xl border px-3 py-3 text-left active:scale-[0.99] ${active ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary/50 text-foreground"}`}
+      onClick={onSelect}
+      className={`w-full rounded-2xl border p-3 text-left transition ${selected ? "border-primary bg-primary/5 ring-2 ring-primary/15" : "border-border bg-card"}`}
     >
-      <span className="block text-sm font-black">{type.label}</span>
-      <span className="mt-1 block text-[11px] font-bold leading-snug opacity-80">{type.helper}</span>
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="break-words text-sm font-black text-foreground">{row.item.name}</p>
+          <p className="mt-1 text-xs font-bold text-muted-foreground">{itemSecondary(row.item)}</p>
+          <p className="mt-2 text-xs font-black text-foreground">{row.reasonLabel}</p>
+        </div>
+        <div onClick={(event) => event.stopPropagation()}>
+          <QuantityInput row={row} onChange={onQuantityChange} />
+        </div>
+      </div>
     </button>
   );
 }
 
-function WasteKeypad({ value, onChange }) {
-  const append = (digit) => onChange(String(value || "") === "0" ? digit : `${value || ""}${digit}`);
-  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "CLR", "0", "⌫"];
+function SearchResults({ result, onBack, onSelect }) {
+  const candidates = Array.isArray(result?.result?.results) ? result.result.results : [];
   return (
-    <div className="grid grid-cols-3 gap-1 rounded-3xl bg-secondary/60 p-1">
-      {keys.map((key) => (
-        <button
-          key={key}
-          type="button"
-          onClick={() => {
-            if (key === "CLR") onChange("");
-            else if (key === "⌫") onChange(String(value || "").slice(0, -1));
-            else append(key);
-          }}
-          className="min-h-14 rounded-2xl bg-background px-3 text-lg font-black text-foreground active:scale-[0.98] active:bg-primary/10"
-        >
-          {key}
-        </button>
-      ))}
-    </div>
+    <>
+      <button type="button" onClick={onBack} className="inline-flex min-h-11 items-center gap-2 text-sm font-black text-primary">
+        <ArrowLeft className="h-4 w-4" /> Back to Waste
+      </button>
+      <SectionCard>
+        <p className="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">Search Results</p>
+        <h2 className="mt-1 text-xl font-black text-foreground">Choose an item</h2>
+        <p className="mt-1 text-sm font-bold text-muted-foreground">Nothing is selected automatically.</p>
+        <div className="mt-4 divide-y divide-border overflow-hidden rounded-2xl border border-border">
+          {candidates.map((candidate) => {
+            const item = mapAuthoritativeItem(candidate);
+            const inactive = text(item.lifecycleStatus).toUpperCase() !== "ACTIVE";
+            return (
+              <button
+                type="button"
+                key={item.canonicalItemId || `${item.sku}-${item.name}`}
+                disabled={inactive}
+                onClick={() => onSelect(item)}
+                className="flex min-h-20 w-full items-center gap-3 bg-background px-4 py-3 text-left disabled:opacity-55"
+              >
+                <PackageSearch className="h-5 w-5 shrink-0 text-primary" />
+                <span className="min-w-0 flex-1">
+                  <span className="block break-words text-sm font-black text-foreground">{item.name}</span>
+                  <span className="mt-1 block text-xs font-bold text-muted-foreground">{itemSecondary(item)}</span>
+                  {(item.sku || item.barcode) && <span className="mt-1 block text-[10px] font-bold text-muted-foreground">{item.sku || item.barcode}</span>}
+                </span>
+                <span className={`rounded-full px-2 py-1 text-[10px] font-black ${inactive ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800"}`}>
+                  {inactive ? "Inactive" : "Select"}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </SectionCard>
+    </>
   );
 }
 
-function QueueCard({ review }) {
+function WasteDetails({ draft, onChange, onCancel, onAdd, editing }) {
+  const reason = getWasteReviewReason(draft.reasonCode);
+  const noteRequired = NOTE_REQUIRED_REASONS.has(draft.reasonCode);
   return (
-    <div className="rounded-2xl bg-secondary/60 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="break-words text-sm font-black text-foreground">{review.itemName}</p>
-          <p className="mt-1 text-xs font-bold text-muted-foreground">Qty {review.quantity} {review.unitOfMeasure} · {review.reasonLabel}</p>
-          <p className="mt-1 text-xs font-semibold text-muted-foreground">{review.syncStatus || "Ready for review queue"}</p>
-        </div>
-        <span className="shrink-0 rounded-full bg-primary/10 px-2 py-1 text-[10px] font-black text-primary">Queued</span>
+    <>
+      <button type="button" onClick={onCancel} className="inline-flex min-h-11 items-center gap-2 text-sm font-black text-primary">
+        <ArrowLeft className="h-4 w-4" /> Back to Waste
+      </button>
+      <SectionCard>
+        <p className="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">Waste Details</p>
+        <h2 className="mt-1 break-words text-xl font-black text-foreground">{draft.item.name}</h2>
+        <p className="mt-1 text-sm font-bold text-muted-foreground">
+          {isWeightedUnit(draft.item.unitType) ? `Per ${draft.item.unitType}` : "Per Unit"}
+        </p>
+      </SectionCard>
+      <SectionCard className="space-y-3">
+        <TouchSelect
+          label="Waste reason"
+          value={draft.reasonCode}
+          onChange={(reasonCode) => onChange({ ...draft, reasonCode })}
+          options={REASON_OPTIONS}
+          helper={reason.helper}
+        />
+        <TextInputField
+          label={noteRequired ? "Notes required" : "Notes (optional)"}
+          value={draft.notes}
+          onChange={(notes) => onChange({ ...draft, notes })}
+          placeholder={noteRequired ? "Briefly describe what was observed" : "Optional note"}
+        />
+      </SectionCard>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" className={BUTTON_SECONDARY} onClick={onCancel}>Cancel</button>
+        <button
+          type="button"
+          className={BUTTON_PRIMARY}
+          disabled={!draft.reasonCode || (noteRequired && !text(draft.notes))}
+          onClick={onAdd}
+        >
+          {editing ? "Save Changes" : "Add Waste"}
+        </button>
       </div>
-    </div>
+    </>
   );
 }
 
 export default function WasteOperator() {
+  const session = useScanOpsSession();
   const governance = useScanOpsGovernanceContext();
-  const [scanValue, setScanValue] = useState("");
-  const [item, setItem] = useState(null);
-  const [stockOutType, setStockOutType] = useState("wastage_damage");
-  const [quantity, setQuantity] = useState("1");
-  const [reasonCode, setReasonCode] = useState("damaged_in_handling");
-  const [expiryDate, setExpiryDate] = useState("");
-  const [batchLot, setBatchLot] = useState("");
-  const [shelfLocation, setShelfLocation] = useState("");
-  const [evidenceNote, setEvidenceNote] = useState("");
-  const [reviews, setReviews] = useState([]);
-  const [operatorError, setOperatorError] = useState(null);
-  const [lastSaved, setLastSaved] = useState(null);
+  const searchInputRef = useRef(null);
+  const scannerBuffer = useRef("");
+  const scannerTimer = useRef(null);
+  const [screen, setScreen] = useState(SCREEN.QUEUE);
+  const [query, setQuery] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [searchResult, setSearchResult] = useState(null);
+  const [queue, setQueue] = useState([]);
+  const [selectedId, setSelectedId] = useState(null);
+  const [draft, setDraft] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [message, setMessage] = useState(null);
+  const [receipt, setReceipt] = useState(null);
+  const [availability, setAvailability] = useState(() => getLiveItemLookupAvailability(session));
 
-  const currentType = STOCK_OUT_TYPES.find((type) => type.id === stockOutType) || STOCK_OUT_TYPES[0];
-  const reason = getWasteReviewReason(reasonCode);
-  const unit = itemUnit(item || {});
-  const queue = useMemo(() => filterWasteReviews(reviews, "draft"), [reviews]);
-  const reasonOptions = useMemo(() => WASTE_REVIEW_REASON_OPTIONS.filter((option) => new Set(currentType.reasonIds).has(option.id)), [currentType]);
+  const selectedRow = queue.find((row) => row.id === selectedId) || null;
+  const queueValid = queue.length > 0 && queue.every((row) => {
+    const quantity = Number(row.quantity);
+    return quantity > 0 && (isWeightedUnit(row.item.unitType) || Number.isInteger(quantity)) && row.reasonCode;
+  });
+  const totalQuantity = useMemo(() => queue.reduce((sum, row) => sum + Number(row.quantity || 0), 0), [queue]);
 
-  const refreshReviews = () => setReviews(getWasteReviews());
-
-  useEffect(() => {
-    ensureInventoryLoaded();
-    refreshReviews();
+  const focusSearch = useCallback(() => {
+    window.setTimeout(() => searchInputRef.current?.focus(), 50);
   }, []);
 
-  const resetItem = () => {
-    setItem(null);
-    setScanValue("");
-    setQuantity("1");
-    setEvidenceNote("");
-    setOperatorError(null);
+  useEffect(() => {
+    const refresh = () => setAvailability(getLiveItemLookupAvailability(session));
+    refresh();
+    const interval = window.setInterval(refresh, 5000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [session]);
+
+  const openDetails = useCallback((item, row = null) => {
+    setDraft({
+      item,
+      reasonCode: row?.reasonCode || "damaged_in_handling",
+      notes: row?.notes || "",
+    });
+    setEditingId(row?.id || null);
+    setScreen(SCREEN.DETAILS);
+    setMessage(null);
+  }, []);
+
+  const runExactBarcode = useCallback(async (barcode) => {
+    if (!availability.connected || busy || !text(barcode)) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const result = await runLiveItemLookup({ lookupType: "BARCODE", lookupValue: text(barcode), session });
+      if (result.ok && result.status === "FOUND" && result.result?.item) {
+        openDetails(mapAuthoritativeItem(result.result.item));
+      } else {
+        setMessage({ tone: "warning", title: "Item not found", helper: result.message || "Scan again or search by item name." });
+        focusSearch();
+      }
+    } finally {
+      setBusy(false);
+    }
+  }, [availability.connected, busy, focusSearch, openDetails, session]);
+
+  useEffect(() => {
+    if (screen !== SCREEN.QUEUE || !availability.connected) return undefined;
+    const flush = () => {
+      const barcode = text(scannerBuffer.current);
+      scannerBuffer.current = "";
+      if (barcode) runExactBarcode(barcode);
+    };
+    const onKeyDown = (event) => {
+      const target = event.target;
+      const typing = target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+      if (typing || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key === "Enter") {
+        if (scannerBuffer.current) {
+          event.preventDefault();
+          window.clearTimeout(scannerTimer.current);
+          flush();
+        }
+      } else if (event.key.length === 1) {
+        scannerBuffer.current += event.key;
+        window.clearTimeout(scannerTimer.current);
+        scannerTimer.current = window.setTimeout(flush, 120);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      window.clearTimeout(scannerTimer.current);
+      scannerBuffer.current = "";
+    };
+  }, [availability.connected, runExactBarcode, screen]);
+
+  const searchItems = async (event) => {
+    event.preventDefault();
+    const searchQuery = text(query);
+    if (!availability.connected || busy || !searchQuery) return;
+    setBusy(true);
+    setMessage(null);
+    setSearchResult(null);
+    try {
+      const result = await runLiveItemSearch({ query: searchQuery, page: 1, limit: 20, session });
+      setSearchResult(result);
+      if (result.ok && result.status === "SEARCH_RESULTS") {
+        setScreen(SCREEN.RESULTS);
+      } else {
+        setMessage({
+          tone: result.status === "NO_RESULTS" ? "info" : "warning",
+          title: result.status === "NO_RESULTS" ? "No matching items" : "Search needs attention",
+          helper: result.message || "Try another item name.",
+        });
+        focusSearch();
+      }
+    } catch (error) {
+      setMessage({ tone: "warning", title: "Search failed", helper: error?.message || "Inventory search could not be completed." });
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const selectType = (type) => {
-    setStockOutType(type.id);
-    setReasonCode(type.defaultReason);
-    setOperatorError(null);
+  const addOrUpdateQueue = () => {
+    if (!draft) return;
+    const reason = getWasteReviewReason(draft.reasonCode);
+    if (editingId) {
+      setQueue((rows) => rows.map((row) => row.id === editingId
+        ? { ...row, item: draft.item, reasonCode: draft.reasonCode, reasonLabel: reason.label, notes: draft.notes }
+        : row));
+      setSelectedId(editingId);
+      setMessage({ tone: "success", title: "Waste item updated", helper: "Quantity remains available in the queue." });
+    } else {
+      const id = `waste-row-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      setQueue((rows) => [...rows, {
+        id,
+        item: draft.item,
+        reasonCode: draft.reasonCode,
+        reasonLabel: reason.label,
+        notes: draft.notes,
+        quantity: "",
+      }]);
+      setSelectedId(id);
+      setMessage({ tone: "success", title: "Waste item added", helper: "Enter the quantity in the queue, then scan the next item." });
+    }
+    setDraft(null);
+    setEditingId(null);
+    setQuery("");
+    setScreen(SCREEN.QUEUE);
+    focusSearch();
   };
 
-  const scan = (value) => {
-    const input = typeof value === "object" ? primaryScanValue(value) : String(value || "").trim();
-    const found = typeof value === "object" ? value : resolveInventoryIdentity(input);
-    if (!found) {
-      setOperatorError({ title: "Item not found", helper: "Scan again or use barcode, SKU, PLU, or item name." });
-      setLastSaved(null);
-      return;
-    }
-
-    const defaultType = found?.wasteReviewRequired || found?.expiry_status === "Expired" || found?.freshness_default === "needs_supervisor_review" ? "expired_spoiled" : stockOutType;
-    const nextType = STOCK_OUT_TYPES.find((type) => type.id === defaultType) || STOCK_OUT_TYPES[0];
-
-    setOperatorError(null);
-    setLastSaved(null);
-    setItem(found);
-    setScanValue(primaryScanValue(found));
-    setQuantity("1");
-    setStockOutType(nextType.id);
-    setReasonCode(nextType.defaultReason);
-    setExpiryDate(getDefaultExpiryDate(found));
-    setBatchLot(getDefaultLotBatch(found));
-    setShelfLocation(found?.shelfLocation || found?.location || found?.aisle || found?.shelf || "");
-    setEvidenceNote("");
+  const editSelected = () => {
+    if (selectedRow) openDetails(selectedRow.item, selectedRow);
   };
 
-  const addToQueue = () => {
-    if (!item) {
-      setOperatorError({ title: "Item required", helper: "Scan an item before adding waste evidence." });
-      return;
-    }
-    if (quantity === "" || Number.isNaN(Number(quantity)) || Number(quantity) <= 0) {
-      setOperatorError({ title: "Quantity missing", helper: "Enter a valid affected quantity before adding." });
-      return;
-    }
-    if (!reasonCode) {
-      setOperatorError({ title: "Reason required", helper: "Choose a reason before adding this item." });
-      return;
-    }
-    if (currentType.noteRequired && !evidenceNote.trim()) {
-      setOperatorError({ title: "Note required", helper: `${currentType.label} needs a short note for review.` });
-      return;
-    }
+  const deleteSelected = () => {
+    if (!selectedRow) return;
+    setQueue((rows) => rows.filter((row) => row.id !== selectedRow.id));
+    setSelectedId(null);
+    setMessage({ tone: "info", title: "Item removed", helper: `${selectedRow.item.name} was removed from this draft queue.` });
+    focusSearch();
+  };
 
+  const submitBatch = () => {
+    if (!queueValid) {
+      setMessage({ tone: "warning", title: "Complete the queue", helper: "Every item needs a valid quantity before submission." });
+      return;
+    }
     const permission = canPerformScanOpsAction(GOVERNED_ACTIONS.WASTE_SUBMIT, governance);
     if (!permission.allowed) {
       recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", null, permission);
-      setOperatorError({ title: "Permission required", helper: permission.reason || "This stock-out action is blocked for the current role." });
+      setMessage({ tone: "warning", title: "Permission required", helper: permission.reason || "Waste submission is blocked for this role." });
       return;
     }
 
-    recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", null, permission, { eventLabel: "Waste item added to operator queue" });
-    const review = createWasteReviewDraft({ item, reasonCode, quantity: Number(quantity), expiryDate, batchLot, shelfLocation, evidenceNote });
-    writeWasteRecord({ item, reasonCode, quantity: Number(quantity), expiryDate, batchLot, evidenceNote, status: "draft", reviewId: review.reviewId });
-    refreshReviews();
-    setLastSaved(review);
-    resetItem();
+    const submitted = queue.map((row) => {
+      const review = createWasteReviewDraft({
+        item: row.item,
+        reasonCode: row.reasonCode,
+        quantity: Number(row.quantity),
+        expiryDate: "",
+        batchLot: "",
+        shelfLocation: "",
+        evidenceNote: row.notes,
+      });
+      writeWasteRecord({
+        item: row.item,
+        reasonCode: row.reasonCode,
+        quantity: Number(row.quantity),
+        expiryDate: "",
+        batchLot: "",
+        evidenceNote: row.notes,
+        status: "draft",
+        reviewId: review.reviewId,
+      });
+      return submitWasteReview(review.reviewId);
+    }).filter(Boolean);
+
+    recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", null, permission, {
+      eventLabel: "Waste evidence batch submitted",
+      itemCount: submitted.length,
+    });
+    setReceipt({
+      reference: `WS-${Date.now().toString().slice(-8)}`,
+      itemCount: submitted.length,
+      totalQuantity,
+      status: "Pending Inventory review",
+    });
+    setQueue([]);
+    setSelectedId(null);
+    setMessage(null);
+    setScreen(SCREEN.RECEIPT);
   };
 
-  const submitSession = () => {
-    if (!queue.length) {
-      setOperatorError({ title: "Queue empty", helper: "Add at least one item before submitting." });
-      return;
-    }
-
-    const permission = canPerformScanOpsAction(GOVERNED_ACTIONS.WASTE_SUBMIT, governance);
-    if (!permission.allowed) {
-      recordGovernedAction(GOVERNED_ACTIONS.WASTE_SUBMIT, "Waste Review", null, permission);
-      setOperatorError({ title: "Permission required", helper: permission.reason || "This stock-out session is blocked for the current role." });
-      return;
-    }
-
-    const submitted = queue.map((review) => submitWasteReview(review.reviewId)).filter(Boolean);
-    refreshReviews();
-    setLastSaved({ itemName: `${submitted.length} item${submitted.length === 1 ? "" : "s"}`, sessionSubmitted: true });
-    setOperatorError(null);
+  const returnToFreshQueue = () => {
+    setReceipt(null);
+    setQuery("");
+    setScreen(SCREEN.QUEUE);
+    focusSearch();
   };
 
   return (
-    <PageShell unthemed>
+    <PageShell data-waste-reference-workflow>
       <PageHeader title="Waste" subtitle="Scan item, classify loss, queue evidence" />
-      <WorkflowHeader
-        title="Waste"
-        subtitle="Scan → classify → quantity → queue"
-        scanValue={scanValue}
-        onScanValueChange={setScanValue}
-        onScan={scan}
-        placeholder="Scan item barcode, SKU, PLU, or name..."
-        showHeaderChrome={false}
-      />
       <WorkflowMain>
-        {operatorError && (
-          <OperatorAlert
-            title={operatorError.title}
-            helper={operatorError.helper}
-            tone="warning"
-            actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]}
+        {!availability.connected ? (
+          <ConnectionRequired availability={availability} onOpenConnectivity={() => window.location.assign("/scanner-settings/sync")} />
+        ) : screen === SCREEN.RESULTS ? (
+          <SearchResults result={searchResult} onBack={() => { setScreen(SCREEN.QUEUE); focusSearch(); }} onSelect={openDetails} />
+        ) : screen === SCREEN.DETAILS && draft ? (
+          <WasteDetails
+            draft={draft}
+            onChange={setDraft}
+            onCancel={() => { setDraft(null); setEditingId(null); setScreen(SCREEN.QUEUE); focusSearch(); }}
+            onAdd={addOrUpdateQueue}
+            editing={Boolean(editingId)}
           />
-        )}
-
-        {lastSaved && (
-          <OperatorAlert
-            tone="success"
-            title={lastSaved.sessionSubmitted ? "Waste session submitted" : "Waste evidence queued"}
-            helper={lastSaved.sessionSubmitted ? `${lastSaved.itemName} submitted for review.` : `${lastSaved.itemName || "Item"} queued. Ready for next scan.`}
-          />
-        )}
-
-        <WasteSessionCard queue={queue} />
-
-        {item ? (
-          <>
-            <ItemSummaryCard item={item}>
-              <div className="grid grid-cols-3 gap-2">
-                <MetricPill label="Available" value={itemAvailable(item)} suffix={itemAvailable(item) === "—" ? "" : unit} />
-                <MetricPill label="Qty" value={quantity || "—"} suffix={quantity ? unit : ""} />
-                <MetricPill label="Type" value={currentType.label} />
-              </div>
-            </ItemSummaryCard>
-
-            <SectionCard className="space-y-3">
-              <div className="flex items-start gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                  <AlertTriangle className="h-5 w-5" />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">Classify Stock-Out</p>
-                  <h2 className="mt-1 text-base font-black text-foreground">What happened?</h2>
-                  <p className="mt-1 text-xs font-bold text-muted-foreground">Theft and unknown loss require a note.</p>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {STOCK_OUT_TYPES.map((type) => <TypeButton key={type.id} type={type} active={stockOutType === type.id} onClick={() => selectType(type)} />)}
-              </div>
-              <TouchSelect label="Reason" value={reasonCode} onChange={setReasonCode} options={reasonOptions} helper={reason.helper} />
-            </SectionCard>
-
-            <SectionCard className="space-y-3">
-              <div className="flex items-start gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                  <PackagePlus className="h-5 w-5" />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">Quantity Affected</p>
-                  <h2 className="mt-1 text-3xl font-black text-foreground">{quantity || "—"}</h2>
-                  <p className="mt-1 text-xs font-bold text-muted-foreground">Enter how many units are affected.</p>
-                </div>
-              </div>
-              <WasteKeypad value={quantity} onChange={setQuantity} />
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <TextInputField label="Shelf / location" value={shelfLocation} onChange={setShelfLocation} placeholder="Aisle / bay / shelf" />
-                <TextInputField label="Expiry" value={expiryDate} onChange={setExpiryDate} placeholder="YYYY-MM-DD" />
-                <TextInputField label="Lot / batch" value={batchLot} onChange={setBatchLot} placeholder="Batch if visible" />
-              </div>
-              <TextInputField
-                label={currentType.noteRequired ? "Note required" : "Note"}
-                value={evidenceNote}
-                onChange={setEvidenceNote}
-                placeholder={currentType.noteRequired ? "Required: describe what was observed..." : "Optional note, e.g. broken pack or expired on shelf"}
-              />
-            </SectionCard>
-
-            <StickyActions leftLabel="Clear Item" rightLabel="Add to Queue" onLeft={resetItem} onRight={addToQueue} rightDisabled={quantity === "" || Number(quantity) <= 0} />
-          </>
-        ) : (
-          <SectionCard className="border-primary/20 bg-primary/5">
+        ) : screen === SCREEN.RECEIPT && receipt ? (
+          <SectionCard className="border-emerald-200 bg-emerald-50 text-emerald-950">
             <div className="flex items-start gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
-                <ScanLine className="h-5 w-5" />
-              </span>
-              <div className="min-w-0">
-                <p className="text-lg font-black leading-tight text-foreground">Ready to record waste</p>
-                <p className="mt-1 text-sm font-bold leading-snug text-muted-foreground">Scan an item, classify the stock-out, then add it to the review queue.</p>
+              <CheckCircle2 className="mt-0.5 h-6 w-6 shrink-0" />
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.16em]">Batch Submitted</p>
+                <h2 className="mt-1 text-2xl font-black">{receipt.reference}</h2>
+                <p className="mt-2 text-sm font-bold">{receipt.itemCount} items · Qty {receipt.totalQuantity}</p>
+                <p className="mt-1 text-xs font-bold opacity-80">{receipt.status}</p>
               </div>
             </div>
+            <div className="mt-4 flex items-center gap-2 rounded-2xl bg-white/70 px-3 py-2 text-xs font-black">
+              <ShieldCheck className="h-4 w-4" /> Inventory remains the posting authority
+            </div>
+            <button type="button" className={`mt-4 ${BUTTON_PRIMARY}`} onClick={returnToFreshQueue}>Start New Waste Batch</button>
           </SectionCard>
+        ) : (
+          <>
+            <SearchField value={query} onChange={setQuery} onSubmit={searchItems} busy={busy} inputRef={searchInputRef} />
+
+            {message && (
+              <OperatorAlert
+                tone={message.tone}
+                title={message.title}
+                helper={message.helper}
+                actions={[{ label: "Dismiss", onClick: () => setMessage(null), variant: "primary" }]}
+              />
+            )}
+
+            <SectionCard className="border-primary/20 bg-primary/5">
+              <div className="flex items-start gap-3">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
+                  <ScanLine className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-lg font-black text-foreground">{queue.length ? `${queue.length} item${queue.length === 1 ? "" : "s"} in queue` : "Ready for waste"}</p>
+                  <p className="mt-1 text-sm font-bold text-muted-foreground">Scan or search, choose a reason, then enter quantity below.</p>
+                </div>
+              </div>
+            </SectionCard>
+
+            <div className="space-y-2">
+              {queue.length ? queue.map((row) => (
+                <QueueRow
+                  key={row.id}
+                  row={row}
+                  selected={selectedId === row.id}
+                  onSelect={() => setSelectedId(selectedId === row.id ? null : row.id)}
+                  onQuantityChange={(quantity) => setQueue((rows) => rows.map((entry) => entry.id === row.id ? { ...entry, quantity } : entry))}
+                />
+              )) : (
+                <EmptyState title="Queue empty" helper="Scan an item or search Inventory to begin." />
+              )}
+            </div>
+
+            <SectionCard className="py-3">
+              <div className="flex items-center justify-between gap-3 text-sm font-black">
+                <span>{queue.length} items</span>
+                <span>Qty {totalQuantity}</span>
+                <span className={queueValid ? "text-emerald-700" : "text-amber-700"}>{queueValid ? "Ready" : "Needs attention"}</span>
+              </div>
+            </SectionCard>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" className={BUTTON_SECONDARY} disabled={!selectedRow} onClick={editSelected}>
+                <Edit3 className="mr-2 inline h-4 w-4" /> Edit
+              </button>
+              <button type="button" className={BUTTON_SECONDARY} disabled={!selectedRow} onClick={deleteSelected}>
+                <Trash2 className="mr-2 inline h-4 w-4" /> Delete
+              </button>
+            </div>
+
+            <OperatorAlert
+              tone="info"
+              title="Evidence only"
+              helper="ScanOps submits waste evidence for governed Inventory review. It does not change stock, ledger, pricing, approvals, Item Master, POS, or orders."
+            />
+          </>
         )}
-
-        <SectionCard>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Current Queue</p>
-              <h2 className="mt-1 text-lg font-black text-foreground">{queue.length} item{queue.length === 1 ? "" : "s"}</h2>
-            </div>
-            <span className="rounded-full bg-secondary px-3 py-1 text-xs font-black text-muted-foreground">Draft</span>
-          </div>
-          <div className="mt-3 space-y-2">
-            {queue.length ? queue.map((review) => <QueueCard key={review.reviewId} review={review} />) : <EmptyState title="Queue empty" helper="Scan an item and add waste evidence before submitting." />}
-          </div>
-        </SectionCard>
-
-        <SectionCard className="space-y-2">
-          <div className="flex items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
-              <RotateCcw className="h-5 w-5" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-black text-foreground">Waste stays review-controlled</p>
-              <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">This handheld workflow captures stock-out evidence only. Inventory Desktop remains the posting, audit, and review layer.</p>
-            </div>
-          </div>
-        </SectionCard>
       </WorkflowMain>
-      <StickyActions
-        leftLabel="Refresh Queue"
-        rightLabel={queue.length ? `Submit Session (${queue.length})` : "Submit Session"}
-        onLeft={refreshReviews}
-        onRight={submitSession}
-        rightDisabled={!queue.length}
-      />
+
+      {availability.connected && screen === SCREEN.QUEUE && (
+        <StickyActions
+          leftLabel={selectedRow ? "Clear Selection" : "Refresh Connection"}
+          rightLabel={queue.length ? `Submit (${queue.length})` : "Submit"}
+          onLeft={() => selectedRow ? setSelectedId(null) : setAvailability(getLiveItemLookupAvailability(session))}
+          onRight={submitBatch}
+          rightDisabled={!queueValid || busy}
+        />
+      )}
     </PageShell>
   );
 }
