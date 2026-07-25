@@ -1,4 +1,4 @@
-name: Phase 39-0F7.1 Real Local Operator Acceptance Baseline
+name: Phase 39-0F7.2 Runtime-Equivalent Operator Runbook
 
 on:
   pull_request:
@@ -21,7 +21,8 @@ jobs:
     timeout-minutes: 45
     env:
       INVENTORY_PHASE39_0F4_SHA: de4ceca8d137d8acf409031cf986c858a792606d
-      SCANOPS_PHASE39_0F7_BASE_SHA: 47891e62941af3be939ab9ac9f4e5bfa28c94242
+      SCANOPS_APPLICATION_RUNTIME_BASELINE_SHA: 47891e62941af3be939ab9ac9f4e5bfa28c94242
+      SCANOPS_PHASE39_0F7_2_BRANCH_BASE_SHA: 7e923dc0ac174d76bb8841555df49436e98ab7ee
       SCANOPS_PHASE39_0F7_CERTIFIED_MERGE_SHA: 724ce11bc3db7dca6874863223ffb2a7fa8863ff
       PRIOR_CERTIFIED_ARTIFACT_ID: '8619017596'
       PRIOR_CERTIFIED_ARTIFACT_DIGEST: sha256:4d6e9fa8ace8fca2baf94668dfd3cb491d3740c7778b2d0c35a2221c5cf21eb4
@@ -41,14 +42,15 @@ jobs:
           cache: npm
           cache-dependency-path: scanops-repo/package-lock.json
 
-      - name: Verify pinned ScanOps baseline
+      - name: Verify Phase 39-0F7.2 branch baseline
         working-directory: scanops-repo
         run: |
           set -euo pipefail
-          base_sha="$(git merge-base HEAD origin/main)"
-          test "${base_sha}" = "${SCANOPS_PHASE39_0F7_BASE_SHA}"
-          printf '{\n  "scanOpsCandidate": "%s",\n  "scanOpsBase": "%s",\n  "inventory": "%s"\n}\n' \
-            "$(git rev-parse HEAD)" "${base_sha}" "${INVENTORY_PHASE39_0F4_SHA}" \
+          branch_base_sha="$(git merge-base HEAD origin/main)"
+          test "${branch_base_sha}" = "${SCANOPS_PHASE39_0F7_2_BRANCH_BASE_SHA}"
+          printf '{\n  "scanOpsCandidate": "%s",\n  "scanOpsBranchBase": "%s",\n  "scanOpsApplicationRuntimeBaseline": "%s",\n  "inventoryRuntimeBaseline": "%s"\n}\n' \
+            "$(git rev-parse HEAD)" "${branch_base_sha}" \
+            "${SCANOPS_APPLICATION_RUNTIME_BASELINE_SHA}" "${INVENTORY_PHASE39_0F4_SHA}" \
             | tee phase39-0f7-baselines.json
 
       - name: Install ScanOps dependencies
@@ -103,6 +105,18 @@ jobs:
           grep -q '"automaticSelectionAdded": false' "${f6_report}"
           grep -q '"receivingIntegrationAuthorized": false' "${f6_report}"
 
+      - name: Prove repository is application-runtime-equivalent
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          git diff --exit-code "${SCANOPS_APPLICATION_RUNTIME_BASELINE_SHA}"..HEAD -- . \
+            ':(exclude).github/workflows/phase39-0f7-real-local-operator-acceptance.yml' \
+            ':(exclude)docs/bridge/PHASE_39_0F7_REAL_LOCAL_OPERATOR_ACCEPTANCE.md' \
+            ':(exclude)evidence/phase39-0f7-local-operator-acceptance.template.json' \
+            ':(exclude)scripts/run-phase39-0f7-real-local-operator-acceptance.mjs' \
+            ':(exclude)scripts/validate-phase39-0f7-real-local-operator-acceptance-kit.mjs'
+          echo 'Repository is runtime-equivalent to the certified ScanOps application runtime baseline.'
+
       - name: Prove certified item-read surfaces are unchanged
         working-directory: scanops-repo
         run: |
@@ -122,7 +136,7 @@ jobs:
           fi
           echo 'Certified item-read runtime, UI, receipt and acceptance surfaces are unchanged.'
 
-      - name: Certify refreshed Phase 39-0F7 acceptance kit
+      - name: Certify Phase 39-0F7.2 acceptance kit
         working-directory: scanops-repo
         run: |
           set -euo pipefail
@@ -136,7 +150,7 @@ jobs:
           node scripts/validate-phase39-0f5-scanops-item-search-view.mjs \
             | tee phase39-0f5-scanops-item-search-view-report.txt
 
-      - name: Build latest ScanOps baseline
+      - name: Build runtime-equivalent ScanOps checkout
         working-directory: scanops-repo
         run: npm run build
 
@@ -144,7 +158,7 @@ jobs:
         working-directory: scanops-repo
         run: |
           set -euo pipefail
-          changed_typechecked_surfaces="$(git diff --name-only "${SCANOPS_PHASE39_0F7_BASE_SHA}"..HEAD -- \
+          changed_typechecked_surfaces="$(git diff --name-only "${SCANOPS_PHASE39_0F7_2_BRANCH_BASE_SHA}"..HEAD -- \
             jsconfig.json package.json package-lock.json \
             'src/components/**/*.js' 'src/pages/**/*.jsx' src/Layout.jsx)"
           if [ -n "${changed_typechecked_surfaces}" ]; then
@@ -152,8 +166,7 @@ jobs:
             printf '%s\n' "${changed_typechecked_surfaces}"
             npm run typecheck
           else
-            echo 'No jsconfig-covered application surface changed in Phase 39-0F7.1.'
-            echo 'The baseline refresh does not inherit responsibility for unrelated baseline typecheck debt.'
+            echo 'No jsconfig-covered application surface changed in Phase 39-0F7.2.'
           fi
 
       - name: Check acceptance script syntax
@@ -168,14 +181,15 @@ jobs:
           set -euo pipefail
           grep -q 'READY_FOR_REAL_LOCAL_OPERATOR_EXECUTION' phase39-0f7-acceptance-kit-report.txt
           grep -q '"humanAcceptancePassed": false' phase39-0f7-acceptance-kit-report.txt
+          grep -q '"runtimeEquivalentModelRequired": true' phase39-0f7-acceptance-kit-report.txt
           grep -q 'PHASE39_0F7_OPERATOR_ACCEPTANCE_KIT_READY' phase39-0f7-acceptance-kit-report.txt
           ! grep -q 'REAL_LOCAL_OPERATOR_ACCEPTANCE_CERTIFIED' phase39-0f7-acceptance-kit-report.txt
 
-      - name: Upload Phase 39-0F7.1 readiness evidence
+      - name: Upload Phase 39-0F7.2 readiness evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: phase39-0f7-1-real-local-operator-acceptance-baseline
+          name: phase39-0f7-2-runtime-equivalent-operator-runbook
           path: |
             scanops-repo/phase39-0f7-baselines.json
             scanops-repo/phase39-0f7-acceptance-kit-report.txt

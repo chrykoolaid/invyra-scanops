@@ -82,6 +82,18 @@ assert.ok(f6Source.includes('automaticSelectionAdded: false'));
 assert.ok(f6Source.includes('receivingIntegrationAuthorized: false'));
 
 for (const required of [
+  'Runtime-equivalent baseline model',
+  'application runtime baseline',
+  'runtime-equivalent',
+  'git diff --exit-code',
+  "':(exclude).github/workflows/phase39-0f7-real-local-operator-acceptance.yml'",
+  "':(exclude)docs/bridge/PHASE_39_0F7_REAL_LOCAL_OPERATOR_ACCEPTANCE.md'",
+  "':(exclude)evidence/phase39-0f7-local-operator-acceptance.template.json'",
+  "':(exclude)scripts/run-phase39-0f7-real-local-operator-acceptance.mjs'",
+  "':(exclude)scripts/validate-phase39-0f7-real-local-operator-acceptance-kit.mjs'",
+  'Do not require `git rev-parse HEAD` itself to equal',
+  'Execution repository HEAD:',
+  'Runtime equivalence check: PASS',
   'npm run bridge:pilot',
   'npm run dev',
   'Settings → Sync & Devices',
@@ -93,8 +105,11 @@ for (const required of [
   'AUTHORIZATION_UNAVAILABLE',
   'node scripts/run-phase39-0f7-real-local-operator-acceptance.mjs --record',
   'does not certify acceptance by itself',
+  INVENTORY_BASELINE,
   SCANOPS_BASELINE,
 ]) assert.ok(docs.includes(required), `Runbook missing instruction: ${required}`);
+assert.ok(!docs.includes('ScanOps main:\n47891e62941af3be939ab9ac9f4e5bfa28c94242'),
+  'Runbook must not mislabel the application runtime baseline as the current repository HEAD.');
 
 const incomplete = spawnSync(process.execPath, [recorderPath, '--validate', templatePath], {
   encoding: 'utf8',
@@ -121,10 +136,13 @@ try {
 }
 
 console.log(JSON.stringify({
-  phase: '39-0F7.1',
+  phase: '39-0F7.2',
   passed: true,
   readiness: 'READY_FOR_REAL_LOCAL_OPERATOR_EXECUTION',
   humanAcceptancePassed: false,
+  runtimeEquivalentModelRequired: true,
+  inventoryRuntimeBaseline: INVENTORY_BASELINE,
+  scanOpsRuntimeBaseline: SCANOPS_BASELINE,
   liveAuthorized: false,
   productionAuthorized: false,
   receivingIntegrationAuthorized: false,

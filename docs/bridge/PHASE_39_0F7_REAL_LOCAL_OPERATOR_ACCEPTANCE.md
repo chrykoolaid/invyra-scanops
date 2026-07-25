@@ -1,10 +1,20 @@
 # Phase 39-0F7 — Real Local Operator Acceptance
 
-## Baseline refresh
+## Runtime-equivalent baseline model
 
-Phase 39-0F7.1 refreshes the ScanOps execution baseline only. It does not add bridge behaviour or certify the human result.
+Phase 39-0F7.2 corrects the operator checkout instructions without changing the acceptance evidence, bridge behaviour, or human pass criteria.
 
-The refreshed ScanOps baseline includes later Waste, session-lock and settings work. Those commits do not change the certified item-search or item-view client, but the real operator acceptance must run against the exact current product baseline rather than the earlier Phase 39-0F7 merge point.
+The ScanOps evidence remains pinned to this certified **application runtime baseline**:
+
+```text
+47891e62941af3be939ab9ac9f4e5bfa28c94242
+```
+
+The repository `main` commit may be newer because the Phase 39-0F7 acceptance kit itself adds documentation, evidence templates, validation scripts, and CI. A newer repository HEAD is permitted only when it is **runtime-equivalent** to the application runtime baseline.
+
+Runtime-equivalent means that every repository path outside the five Phase 39-0F7 acceptance-kit files is unchanged from `47891e62941af3be939ab9ac9f4e5bfa28c94242`.
+
+If the runtime-equivalence command reports any difference, stop. Do not perform or record the human acceptance until the kit is refreshed and repository-certified again.
 
 ## Purpose
 
@@ -15,14 +25,16 @@ The repository workflow certifies that the acceptance kit is safe and complete. 
 ## Locked baselines
 
 ```text
-Inventory main:
+Inventory authoritative runtime:
 de4ceca8d137d8acf409031cf986c858a792606d
 
-ScanOps main:
+ScanOps application runtime baseline:
 47891e62941af3be939ab9ac9f4e5bfa28c94242
 ```
 
-Do not execute the acceptance against different commits without updating and re-certifying this kit.
+The Inventory repository must remain at the exact locked commit.
+
+ScanOps may run from a newer `main` only when the runtime-equivalence check below passes with no output and exit code `0`.
 
 ## Locked architecture
 
@@ -58,7 +70,7 @@ npm ci
 npm run dev -- --host 0.0.0.0
 ```
 
-Confirm the commit is:
+Confirm the commit is exactly:
 
 ```text
 de4ceca8d137d8acf409031cf986c858a792606d
@@ -81,7 +93,7 @@ In Inventory, open **Settings → Sync & Devices** and:
 5. Start the public listener.
 6. Generate a temporary pairing code.
 
-Never place a password, callback credential, token or pairing code in screenshots or evidence.
+Never place a password, callback credential, token, or pairing code in screenshots or evidence.
 
 ## Start ScanOps locally
 
@@ -91,15 +103,25 @@ From the ScanOps repository:
 git checkout main
 git pull --ff-only
 git rev-parse HEAD
+
+git diff --exit-code 47891e62941af3be939ab9ac9f4e5bfa28c94242..HEAD -- . \
+  ':(exclude).github/workflows/phase39-0f7-real-local-operator-acceptance.yml' \
+  ':(exclude)docs/bridge/PHASE_39_0F7_REAL_LOCAL_OPERATOR_ACCEPTANCE.md' \
+  ':(exclude)evidence/phase39-0f7-local-operator-acceptance.template.json' \
+  ':(exclude)scripts/run-phase39-0f7-real-local-operator-acceptance.mjs' \
+  ':(exclude)scripts/validate-phase39-0f7-real-local-operator-acceptance-kit.mjs'
+
 npm ci
 npm run dev -- --host 0.0.0.0
 ```
 
-Confirm the commit is:
+The `git diff --exit-code` command must:
 
-```text
-47891e62941af3be939ab9ac9f4e5bfa28c94242
-```
+- print nothing;
+- exit with code `0`;
+- prove the checked-out `main` is runtime-equivalent to the certified application runtime baseline.
+
+Do not require `git rev-parse HEAD` itself to equal `47891e62941af3be939ab9ac9f4e5bfa28c94242`. Record the actual repository HEAD in the operator notes for traceability. The evidence field `baselines.scanOps` must remain the certified application runtime baseline, not the later acceptance-kit merge commit.
 
 Open ScanOps from the controlled local HTTP address. Pair it from **Sync & Connectivity**, then run the trusted connection test. Continue only when the connected state is visible.
 
@@ -177,7 +199,7 @@ Screenshot label: `no-results`.
 
 ### 7. Blocked role
 
-Confirm a role outside staff, supervisor, manager, admin or owner is blocked before dispatch. Do not alter the production role model solely for this test.
+Confirm a role outside staff, supervisor, manager, admin, or owner is blocked before dispatch. Do not alter the production role model solely for this test.
 
 ### 8. Authorisation-clear failure
 
@@ -214,6 +236,13 @@ node scripts/run-phase39-0f7-real-local-operator-acceptance.mjs --record evidenc
 
 The recorder does not contact either application and does not store secrets. It records human observations only.
 
+In the operator notes, include:
+
+```text
+Execution repository HEAD: <output of git rev-parse HEAD>
+Runtime equivalence check: PASS
+```
+
 Validate the result:
 
 ```bash
@@ -244,14 +273,25 @@ Store screenshots outside the repository when they contain business catalogue in
 
 ## Pass boundary
 
-Phase 39-0F7 passes only when the exact locked commits are used, TEST or TRAINING is active, actual catalogue records are shown, active and inactive results are explicitly selected, no-results clears stale candidates, authorisation clear fails closed, all usability checks pass, all screenshot references exist, and every mutation counter remains zero.
+Phase 39-0F7 passes only when:
+
+- Inventory uses the exact locked runtime commit;
+- ScanOps is runtime-equivalent to the certified application runtime baseline;
+- TEST or TRAINING is active;
+- actual catalogue records are shown;
+- active and inactive results are explicitly selected;
+- no-results clears stale candidates;
+- authorisation clear fails closed;
+- all usability checks pass;
+- all screenshot references exist;
+- every mutation counter remains zero.
 
 ## Locked exclusions
 
 - LIVE disabled.
 - PRODUCTION disabled.
 - Receiving integration blocked.
-- No Inventory, stock, ledger, Item Master, pricing, purchase-order, Receiving or ScanOps mutation.
+- No Inventory, stock, ledger, Item Master, pricing, purchase-order, Receiving, or ScanOps mutation.
 - No automatic selection.
 - No automatic retry.
 - No queue write.
