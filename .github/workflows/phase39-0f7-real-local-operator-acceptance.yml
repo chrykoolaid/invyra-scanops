@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   certify:
@@ -21,31 +22,16 @@ jobs:
     env:
       INVENTORY_PHASE39_0F4_SHA: de4ceca8d137d8acf409031cf986c858a792606d
       SCANOPS_PHASE39_0F7_BASE_SHA: 47891e62941af3be939ab9ac9f4e5bfa28c94242
+      SCANOPS_PHASE39_0F7_CERTIFIED_MERGE_SHA: 724ce11bc3db7dca6874863223ffb2a7fa8863ff
+      PRIOR_CERTIFIED_ARTIFACT_ID: '8619017596'
+      PRIOR_CERTIFIED_ARTIFACT_DIGEST: sha256:4d6e9fa8ace8fca2baf94668dfd3cb491d3740c7778b2d0c35a2221c5cf21eb4
+      PRIOR_CERTIFIED_HEAD_SHA: ca94aeb9b9478e84fc86d596bf0c8fbab2a11912
     steps:
-      - name: Verify Inventory repository read token
-        env:
-          INVENTORY_REPO_READ_TOKEN: ${{ secrets.INVENTORY_REPO_READ_TOKEN }}
-        run: |
-          set -euo pipefail
-          test -n "${INVENTORY_REPO_READ_TOKEN}" || {
-            echo "::error::INVENTORY_REPO_READ_TOKEN is required."
-            exit 1
-          }
-
       - name: Checkout ScanOps candidate
         uses: actions/checkout@v4
         with:
           path: scanops-repo
           fetch-depth: 0
-          persist-credentials: false
-
-      - name: Checkout certified Inventory item-read runtime
-        uses: actions/checkout@v4
-        with:
-          repository: chrykoolaid/invyra-base44
-          ref: ${{ env.INVENTORY_PHASE39_0F4_SHA }}
-          token: ${{ secrets.INVENTORY_REPO_READ_TOKEN }}
-          path: scanops-repo/inventory-repo
           persist-credentials: false
 
       - name: Set up Node
@@ -55,39 +41,93 @@ jobs:
           cache: npm
           cache-dependency-path: scanops-repo/package-lock.json
 
-      - name: Verify pinned baselines
+      - name: Verify pinned ScanOps baseline
         working-directory: scanops-repo
         run: |
           set -euo pipefail
-          inventory_sha="$(git -C inventory-repo rev-parse HEAD)"
           base_sha="$(git merge-base HEAD origin/main)"
-          test "${inventory_sha}" = "${INVENTORY_PHASE39_0F4_SHA}"
           test "${base_sha}" = "${SCANOPS_PHASE39_0F7_BASE_SHA}"
           printf '{\n  "scanOpsCandidate": "%s",\n  "scanOpsBase": "%s",\n  "inventory": "%s"\n}\n' \
-            "$(git rev-parse HEAD)" "${base_sha}" "${inventory_sha}" \
+            "$(git rev-parse HEAD)" "${base_sha}" "${INVENTORY_PHASE39_0F4_SHA}" \
             | tee phase39-0f7-baselines.json
 
       - name: Install ScanOps dependencies
         working-directory: scanops-repo
         run: npm ci
 
-      - name: Install Inventory dependencies
-        working-directory: scanops-repo/inventory-repo
-        run: npm ci
+      - name: Recover immutable Phase 39-0F7 cross-repository evidence
+        working-directory: scanops-repo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p prior-certification
+          metadata_url="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${PRIOR_CERTIFIED_ARTIFACT_ID}"
+          archive_url="${metadata_url}/zip"
+          curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "${metadata_url}" > prior-certification/artifact-metadata.json
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const metadata = JSON.parse(readFileSync('prior-certification/artifact-metadata.json', 'utf8'));
+          assert.equal(metadata.id, Number(process.env.PRIOR_CERTIFIED_ARTIFACT_ID));
+          assert.equal(metadata.expired, false);
+          assert.equal(metadata.digest, process.env.PRIOR_CERTIFIED_ARTIFACT_DIGEST);
+          assert.equal(metadata.workflow_run?.head_sha, process.env.PRIOR_CERTIFIED_HEAD_SHA);
+          NODE
+          curl -fsSL -L \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "${archive_url}" -o prior-certification/certified-evidence.zip
+          unzip -q prior-certification/certified-evidence.zip -d prior-certification/evidence
 
-      - name: Certify Phase 39-0F7 acceptance kit
+      - name: Verify inherited Inventory and cross-repository certification
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          inventory_report='prior-certification/evidence/inventory-repo/phase39-0f4-inventory-item-read-binding-report.txt'
+          f6_report='prior-certification/evidence/phase39-0f6-cross-repository-item-read-acceptance-report.txt'
+          baseline_report='prior-certification/evidence/phase39-0f7-baselines.json'
+          test -f "${inventory_report}"
+          test -f "${f6_report}"
+          test -f "${baseline_report}"
+          grep -q '"passed": true' "${inventory_report}"
+          grep -q '"readiness": "INVENTORY_ITEM_READ_BINDING_READY"' "${inventory_report}"
+          grep -q "\"inventory\": \"${INVENTORY_PHASE39_0F4_SHA}\"" "${baseline_report}"
+          grep -q '"passed": true' "${f6_report}"
+          grep -q '"readiness": "READY_FOR_REAL_LOCAL_OPERATOR_ACCEPTANCE"' "${f6_report}"
+          grep -q '"automaticSelectionAdded": false' "${f6_report}"
+          grep -q '"receivingIntegrationAuthorized": false' "${f6_report}"
+
+      - name: Prove certified item-read surfaces are unchanged
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          changed_item_read_surfaces="$(git diff --name-only "${SCANOPS_PHASE39_0F7_CERTIFIED_MERGE_SHA}"..HEAD -- \
+            src/pages/Scan.jsx \
+            src/lib/scanOpsLiveConnectivity.js \
+            src/inventory-bridge/itemLookup/v1/index.js \
+            src/inventory-bridge/itemLookup/v1/scanOpsItemLookupClientV1.js \
+            src/inventory-bridge/itemLookup/v1/validateScanOpsItemLookupReceiptV1.js \
+            scripts/validate-phase39-0f5-scanops-item-search-view.mjs \
+            scripts/validate-phase39-0f6-cross-repository-item-read-acceptance.mjs)"
+          if [ -n "${changed_item_read_surfaces}" ]; then
+            echo 'Certified item-read surfaces changed after Phase 39-0F7:'
+            printf '%s\n' "${changed_item_read_surfaces}"
+            exit 1
+          fi
+          echo 'Certified item-read runtime, UI, receipt and acceptance surfaces are unchanged.'
+
+      - name: Certify refreshed Phase 39-0F7 acceptance kit
         working-directory: scanops-repo
         run: |
           set -euo pipefail
           node scripts/validate-phase39-0f7-real-local-operator-acceptance-kit.mjs \
             | tee phase39-0f7-acceptance-kit-report.txt
-
-      - name: Re-certify Inventory Phase 39-0F4 binding
-        working-directory: scanops-repo/inventory-repo
-        run: |
-          set -euo pipefail
-          node scripts/validate-phase39-0f4-item-read-binding.mjs \
-            | tee phase39-0f4-inventory-item-read-binding-report.txt
 
       - name: Re-certify ScanOps Phase 39-0F5 visible workflow
         working-directory: scanops-repo
@@ -95,15 +135,6 @@ jobs:
           set -euo pipefail
           node scripts/validate-phase39-0f5-scanops-item-search-view.mjs \
             | tee phase39-0f5-scanops-item-search-view-report.txt
-
-      - name: Re-certify Phase 39-0F6 cross-repository harness
-        working-directory: scanops-repo
-        env:
-          INVENTORY_REPO_PATH: inventory-repo
-        run: |
-          set -euo pipefail
-          node scripts/validate-phase39-0f6-cross-repository-item-read-acceptance.mjs \
-            | tee phase39-0f6-cross-repository-item-read-acceptance-report.txt
 
       - name: Build latest ScanOps baseline
         working-directory: scanops-repo
@@ -149,8 +180,9 @@ jobs:
             scanops-repo/phase39-0f7-baselines.json
             scanops-repo/phase39-0f7-acceptance-kit-report.txt
             scanops-repo/phase39-0f5-scanops-item-search-view-report.txt
-            scanops-repo/phase39-0f6-cross-repository-item-read-acceptance-report.txt
-            scanops-repo/inventory-repo/phase39-0f4-inventory-item-read-binding-report.txt
+            scanops-repo/prior-certification/artifact-metadata.json
+            scanops-repo/prior-certification/evidence/inventory-repo/phase39-0f4-inventory-item-read-binding-report.txt
+            scanops-repo/prior-certification/evidence/phase39-0f6-cross-repository-item-read-acceptance-report.txt
             scanops-repo/evidence/phase39-0f7-local-operator-acceptance.template.json
             scanops-repo/docs/bridge/PHASE_39_0F7_REAL_LOCAL_OPERATOR_ACCEPTANCE.md
           if-no-files-found: error
