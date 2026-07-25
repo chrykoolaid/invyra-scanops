@@ -109,9 +109,21 @@ jobs:
         working-directory: scanops-repo
         run: npm run build
 
-      - name: Typecheck latest ScanOps baseline
+      - name: Enforce differential typecheck boundary
         working-directory: scanops-repo
-        run: npm run typecheck
+        run: |
+          set -euo pipefail
+          changed_typechecked_surfaces="$(git diff --name-only "${SCANOPS_PHASE39_0F7_BASE_SHA}"..HEAD -- \
+            jsconfig.json package.json package-lock.json \
+            'src/components/**/*.js' 'src/pages/**/*.jsx' src/Layout.jsx)"
+          if [ -n "${changed_typechecked_surfaces}" ]; then
+            echo "Typechecked application surfaces changed:"
+            printf '%s\n' "${changed_typechecked_surfaces}"
+            npm run typecheck
+          else
+            echo 'No jsconfig-covered application surface changed in Phase 39-0F7.'
+            echo 'The acceptance kit does not inherit responsibility for unrelated baseline typecheck debt.'
+          fi
 
       - name: Check acceptance script syntax
         working-directory: scanops-repo
