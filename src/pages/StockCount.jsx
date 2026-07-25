@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { MapPin, ScanBarcode, ChevronDown } from "lucide-react";
 import AttributeEvidenceFields from "../components/scanner/AttributeEvidenceFields";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import PageHeader from "../components/scanner/PageHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
-import { DoneCard, EmptyState, FieldError, InfoLine, ItemSummaryCard, MetricPill, OperatorAlert, PageShell, QuantityStepper, SectionCard, StickyActions, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
+import { ItemSummaryCard, OperatorAlert, QuantityStepper, TextInputField, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import {
@@ -85,15 +86,54 @@ function expectedLabel(value, unit = "each") {
 }
 
 function statusTone(status) {
-  if ([STOCK_COUNT_STATUSES.APPROVED, STOCK_COUNT_STATUSES.CLOSED, STOCK_COUNT_VARIANCE_STATUSES.ACCEPTED, STOCK_COUNT_VARIANCE_STATUSES.NO_VARIANCE].includes(status)) return "bg-accent/10 text-accent";
-  if ([STOCK_COUNT_STATUSES.RECOUNT_REQUIRED, STOCK_COUNT_VARIANCE_STATUSES.RECOUNT_REQUESTED].includes(status)) return "bg-destructive/10 text-destructive";
-  if ([STOCK_COUNT_STATUSES.REVIEW_REQUIRED, STOCK_COUNT_STATUSES.SUBMITTED, STOCK_COUNT_VARIANCE_STATUSES.REVIEW_REQUIRED, STOCK_COUNT_VARIANCE_STATUSES.EXPECTED_UNAVAILABLE].includes(status)) return "bg-primary/10 text-primary";
-  if ([STOCK_COUNT_STATUSES.CANCELLED, STOCK_COUNT_VARIANCE_STATUSES.REJECTED].includes(status)) return "bg-secondary text-muted-foreground";
-  return "bg-secondary text-muted-foreground";
+  if ([STOCK_COUNT_STATUSES.APPROVED, STOCK_COUNT_STATUSES.CLOSED, STOCK_COUNT_VARIANCE_STATUSES.ACCEPTED, STOCK_COUNT_VARIANCE_STATUSES.NO_VARIANCE].includes(status)) return "bg-emerald-500 text-[#0a0a0a]";
+  if ([STOCK_COUNT_STATUSES.RECOUNT_REQUIRED, STOCK_COUNT_VARIANCE_STATUSES.RECOUNT_REQUESTED].includes(status)) return "bg-red-500 text-white";
+  if ([STOCK_COUNT_STATUSES.REVIEW_REQUIRED, STOCK_COUNT_STATUSES.SUBMITTED, STOCK_COUNT_VARIANCE_STATUSES.REVIEW_REQUIRED, STOCK_COUNT_VARIANCE_STATUSES.EXPECTED_UNAVAILABLE].includes(status)) return "bg-emerald-950 text-emerald-400 border border-emerald-500";
+  if ([STOCK_COUNT_STATUSES.CANCELLED, STOCK_COUNT_VARIANCE_STATUSES.REJECTED].includes(status)) return "bg-gray-800 text-gray-400";
+  return "bg-emerald-950 text-emerald-400 border border-emerald-500";
+}
+
+function Block({ children, className = "", ...rest }) {
+  return <section className={`rounded-2xl border border-emerald-500 bg-[#0a0a0a] p-4 ${className}`} {...rest}>{children}</section>;
+}
+
+function BlockLabel({ children, className = "" }) {
+  return <p className={`text-[10px] font-black uppercase tracking-[0.18em] text-gray-400 ${className}`}>{children}</p>;
+}
+
+function BoldMiniMetric({ label, value, suffix = "" }) {
+  return (
+    <div className="rounded-xl border border-emerald-500/50 bg-[#0a0a0a] px-2 py-2 text-center">
+      <p className="font-mono text-lg font-black text-white">{value}{suffix ? ` ${suffix}` : ""}</p>
+      <BlockLabel className="mt-0.5">{label}</BlockLabel>
+    </div>
+  );
+}
+
+function BoldMetric({ label, value }) {
+  return (
+    <div className="flex flex-col items-center">
+      <span className="font-mono text-2xl font-black text-white">{value}</span>
+      <BlockLabel className="mt-0.5">{label}</BlockLabel>
+    </div>
+  );
 }
 
 function StatusBadge({ value }) {
-  return <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide ${statusTone(value)}`}>{value}</span>;
+  return <span className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wide ${statusTone(value)}`}>{value}</span>;
+}
+
+function BoldActions({ leftLabel, rightLabel, onLeft, onRight, rightDisabled = false, leftDisabled = false }) {
+  return (
+    <div className="scanops-sticky-actions grid grid-cols-2 gap-3">
+      <button type="button" disabled={leftDisabled} onClick={onLeft} className="min-h-12 rounded-2xl border border-emerald-500/60 px-3 text-sm font-black uppercase tracking-wide text-emerald-400 active:bg-emerald-950 disabled:opacity-40">
+        {leftLabel}
+      </button>
+      <button type="button" disabled={rightDisabled} onClick={onRight} className="min-h-12 rounded-2xl bg-emerald-500 px-3 text-sm font-black uppercase tracking-wide text-[#0a0a0a] active:scale-[0.98] disabled:opacity-40">
+        {rightLabel}
+      </button>
+    </div>
+  );
 }
 
 function CountTypeButton({ option, selected, onClick }) {
@@ -101,45 +141,88 @@ function CountTypeButton({ option, selected, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      className={`min-w-0 rounded-2xl border px-3 py-3 text-left active:scale-[0.99] ${selected ? "border-primary bg-primary/10" : "border-border bg-secondary/50"}`}
+      className={`min-w-0 rounded-2xl border px-3 py-3 text-left active:scale-[0.99] ${selected ? "border-emerald-500 bg-emerald-950" : "border-emerald-500/40 bg-[#0a0a0a]"}`}
     >
-      <span className="block text-sm font-black text-foreground">{option.title}</span>
-      <span className="mt-1 block text-xs font-semibold leading-snug text-muted-foreground">{option.caption}</span>
+      <span className="block text-sm font-black text-white">{option.title}</span>
+      <span className="mt-1 block text-xs font-semibold leading-snug text-gray-400">{option.caption}</span>
     </button>
   );
 }
 
-function SessionMetrics({ lines }) {
-  const summary = getSessionVarianceSummary(lines);
+function CurrentLocationBlock({ session }) {
+  const areaLabel = session?.area_label || session?.count_area_label || "Dairy / chilled";
   return (
-    <div className="grid grid-cols-3 gap-2">
-      <MetricPill label="Items" value={summary.countedItems} />
-      <MetricPill label="Variances" value={summary.varianceItems} />
-      <MetricPill label="Recounts" value={summary.recountRequired} />
-    </div>
+    <Block>
+      <BlockLabel>Current Location</BlockLabel>
+      <div className="mt-3 flex flex-col items-center text-center">
+        <MapPin className="h-10 w-10 text-emerald-500" />
+        <p className="mt-2 text-lg font-black text-white">{areaLabel}</p>
+        <p className="mt-1 text-xs font-semibold text-gray-400">Location is locked for this count session.</p>
+      </div>
+      <div className="mt-4">
+        <BlockLabel>Change Location</BlockLabel>
+        <div className="mt-2 flex items-center justify-between rounded-xl border border-emerald-500/60 bg-[#0a0a0a] px-3 py-2">
+          <span className="text-sm font-bold text-white">{areaLabel}</span>
+          <ChevronDown className="h-4 w-4 text-emerald-500" />
+        </div>
+      </div>
+    </Block>
+  );
+}
+
+function SessionProgressBlock({ summary, session }) {
+  const counted = summary.countedItems;
+  const filled = Math.min(counted, 6);
+  const statusText = counted === 0 ? "Ready to count. • Scan an item to begin this count session." : `${counted} counted • Scan next item or submit session.`;
+  return (
+    <Block>
+      <BlockLabel>Session Progress</BlockLabel>
+      <p className="mt-2 font-mono text-4xl font-black text-white">
+        {counted}<span className="ml-2 align-middle text-base font-black text-emerald-500">COUNTED</span>
+      </p>
+      <div className="mt-3 grid grid-cols-6 gap-1.5">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className={`h-2 rounded-full ${i < filled ? "bg-emerald-500" : "bg-gray-800"}`} />
+        ))}
+      </div>
+      <p className="mt-3 text-xs font-semibold text-white">{statusText}</p>
+    </Block>
+  );
+}
+
+function ReadyToCountBlock({ session }) {
+  const areaLabel = session?.area_label || session?.count_area_label || "this area";
+  return (
+    <Block className="flex items-center gap-3">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500 text-emerald-500">
+        <ScanBarcode className="h-5 w-5" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-black uppercase tracking-wide text-white">Ready to Count</p>
+        <p className="mt-0.5 text-xs font-semibold text-white">Scan an item in {areaLabel} to enter a physical count.</p>
+      </div>
+    </Block>
   );
 }
 
 function SessionHeaderCard({ session, lines }) {
   const summary = getSessionVarianceSummary(lines);
+  const status = session?.status || STOCK_COUNT_STATUSES.DRAFT;
   return (
-    <SectionCard className="space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="break-words text-base font-black leading-tight text-foreground">{session?.session_name || "Stock Count Session"}</p>
-          <p className="mt-1 text-xs font-bold text-muted-foreground">{session?.area_label || session?.count_area_label || "Area"} · {session?.department || "Department"}</p>
+    <Block>
+      <div className="flex items-center gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-base font-black uppercase tracking-wide text-emerald-500">{session?.session_name || "Count Stock"}</p>
+          <p className="mt-0.5 text-xs font-semibold text-white">Scan item, enter count, save, repeat</p>
         </div>
-        <StatusBadge value={session?.status || STOCK_COUNT_STATUSES.DRAFT} />
+        <BoldMetric label="Items" value={summary.countedItems} />
+        <BoldMetric label="Variances" value={summary.varianceItems} />
+        <div className="flex flex-col items-center gap-1">
+          <StatusBadge value={status} />
+          <BlockLabel>Status</BlockLabel>
+        </div>
       </div>
-      <SessionMetrics lines={lines} />
-      <div className="space-y-2">
-        <InfoLine label="Assigned to" value={session?.assigned_user_name || session?.assigned_user_id || "—"} />
-        <InfoLine label="Type" value={session?.count_type_label || "Quick Count"} />
-        <InfoLine label="Mode" value={session?.count_mode_label || "Unguided scan count"} />
-        <InfoLine label="Stock mutation" value="No direct adjustment" />
-        {summary.totalVariance !== 0 && <InfoLine label="Net diff" value={summary.totalVariance} />}
-      </div>
-    </SectionCard>
+    </Block>
   );
 }
 
@@ -147,27 +230,27 @@ function SessionCard({ session, lines, onOpen }) {
   const summary = getSessionVarianceSummary(lines);
   const actionLabel = [STOCK_COUNT_STATUSES.DRAFT, STOCK_COUNT_STATUSES.IN_PROGRESS].includes(session.status) ? "Continue Count" : "Open Session";
   return (
-    <SectionCard className="space-y-3">
+    <Block className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="break-words text-sm font-black text-foreground">{session.session_name}</p>
-          <p className="mt-1 text-xs font-bold text-muted-foreground">{session.area_label || session.count_area_label} · {session.department || "Store"}</p>
+          <p className="break-words text-sm font-black text-white">{session.session_name}</p>
+          <p className="mt-1 text-xs font-semibold text-gray-400">{session.area_label || session.count_area_label} · {session.department || "Store"}</p>
         </div>
         <StatusBadge value={session.status} />
       </div>
       <div className="grid grid-cols-3 gap-2">
-        <MetricPill label="Items" value={summary.countedItems} />
-        <MetricPill label="Variances" value={summary.varianceItems} />
-        <MetricPill label="Recount" value={summary.recountRequired} />
+        <BoldMiniMetric label="Items" value={summary.countedItems} />
+        <BoldMiniMetric label="Variances" value={summary.varianceItems} />
+        <BoldMiniMetric label="Recount" value={summary.recountRequired} />
       </div>
-      <div className="space-y-2">
-        <InfoLine label="Assigned" value={session.assigned_user_name || session.assigned_user_id || "—"} />
-        <InfoLine label="Updated" value={formatDateTime(session.submitted_at || session.started_at || session.created_at)} />
+      <div className="space-y-1">
+        <p className="text-xs font-semibold text-gray-400"><span className="text-gray-500">Assigned:</span> <span className="text-white">{session.assigned_user_name || session.assigned_user_id || "—"}</span></p>
+        <p className="text-xs font-semibold text-gray-400"><span className="text-gray-500">Updated:</span> <span className="text-white">{formatDateTime(session.submitted_at || session.started_at || session.created_at)}</span></p>
       </div>
-      <button type="button" onClick={() => onOpen(session)} className="min-h-11 w-full rounded-2xl bg-primary px-3 text-sm font-black text-primary-foreground active:scale-[0.98]">
+      <button type="button" onClick={() => onOpen(session)} className="min-h-11 w-full rounded-xl bg-emerald-500 px-3 text-sm font-black uppercase tracking-wide text-[#0a0a0a] active:scale-[0.98]">
         {actionLabel}
       </button>
-    </SectionCard>
+    </Block>
   );
 }
 
@@ -175,27 +258,27 @@ function CountLineSummaryCard({ line, onRemove = null, editable = false }) {
   const unit = lineUnit(line);
   const variance = line.variance_quantity ?? line.variance;
   return (
-    <SectionCard className="space-y-3">
+    <Block className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="break-words text-sm font-black text-foreground">{lineName(line)}</p>
-          {lineIdentity(line) && <p className="mt-1 break-all font-mono text-[11px] uppercase tracking-wide text-muted-foreground">{lineIdentity(line)}</p>}
-          {line.attribute_snapshot && <p className="mt-1 break-words text-xs font-semibold text-muted-foreground">{summarizeAttributeSnapshot(line.attribute_snapshot)}</p>}
+          <p className="break-words text-sm font-black text-white">{lineName(line)}</p>
+          {lineIdentity(line) && <p className="mt-1 break-all font-mono text-[11px] uppercase tracking-wide text-gray-400">{lineIdentity(line)}</p>}
+          {line.attribute_snapshot && <p className="mt-1 break-words text-xs font-semibold text-gray-400">{summarizeAttributeSnapshot(line.attribute_snapshot)}</p>}
         </div>
         <StatusBadge value={line.variance_status || STOCK_COUNT_VARIANCE_STATUSES.NO_VARIANCE} />
       </div>
       <div className="grid grid-cols-3 gap-2">
-        <MetricPill label="Expected" value={line.expected_quantity == null ? "—" : line.expected_quantity} suffix={line.expected_quantity == null ? "" : unit} />
-        <MetricPill label="Counted" value={line.counted_quantity} suffix={unit} />
-        <MetricPill label="Diff" value={variance == null ? "—" : variance} suffix={variance == null ? "" : unit} />
+        <BoldMiniMetric label="Expected" value={line.expected_quantity == null ? "—" : line.expected_quantity} suffix={line.expected_quantity == null ? "" : unit} />
+        <BoldMiniMetric label="Counted" value={line.counted_quantity} suffix={unit} />
+        <BoldMiniMetric label="Diff" value={variance == null ? "—" : variance} suffix={variance == null ? "" : unit} />
       </div>
-      {line.evidence_note && <InfoLine label="Note" value={line.evidence_note} />}
+      {line.evidence_note && <p className="text-xs font-semibold text-gray-400"><span className="text-gray-500">Note:</span> {line.evidence_note}</p>}
       {editable && onRemove && (
-        <button type="button" onClick={() => onRemove(line.id || line.count_line_id)} className="min-h-9 rounded-xl bg-secondary px-3 text-xs font-black text-muted-foreground active:bg-border">
+        <button type="button" onClick={() => onRemove(line.id || line.count_line_id)} className="min-h-9 rounded-xl border border-emerald-500/60 px-3 text-xs font-black uppercase tracking-wide text-emerald-400 active:bg-emerald-950">
           Remove line
         </button>
       )}
-    </SectionCard>
+    </Block>
   );
 }
 
@@ -204,18 +287,18 @@ function RecountEntry({ line, onSubmit }) {
   const [note, setNote] = useState("");
   const unit = lineUnit(line);
   return (
-    <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-3 space-y-3">
-      <p className="text-xs font-black uppercase tracking-wider text-primary">Recount required</p>
+    <Block className="space-y-3">
+      <p className="text-xs font-black uppercase tracking-[0.18em] text-emerald-500">Recount required</p>
       <div className="grid grid-cols-2 gap-2">
-        <MetricPill label="Original" value={line.counted_quantity} suffix={unit} />
-        <MetricPill label="Expected" value={line.expected_quantity == null ? "—" : line.expected_quantity} suffix={line.expected_quantity == null ? "" : unit} />
+        <BoldMiniMetric label="Original" value={line.counted_quantity} suffix={unit} />
+        <BoldMiniMetric label="Expected" value={line.expected_quantity == null ? "—" : line.expected_quantity} suffix={line.expected_quantity == null ? "" : unit} />
       </div>
       <QuantityStepper label="Recounted" value={quantity} onChange={setQuantity} unit={unit} min={0} />
       <TextInputField label="Evidence note" value={note} onChange={setNote} placeholder="Optional recount note" />
-      <button type="button" onClick={() => onSubmit(line, quantity, note)} className="min-h-11 w-full rounded-2xl bg-primary px-3 text-sm font-black text-primary-foreground active:scale-[0.98]">
+      <button type="button" onClick={() => onSubmit(line, quantity, note)} className="min-h-11 w-full rounded-2xl bg-emerald-500 px-3 text-sm font-black uppercase tracking-wide text-[#0a0a0a] active:scale-[0.98]">
         Submit Recount
       </button>
-    </div>
+    </Block>
   );
 }
 
@@ -225,43 +308,43 @@ function ReviewLine({ line, canReview, canRecount, onRequestRecount, onAccept, o
   const recounts = line.recounts || [];
   const reviewable = ![STOCK_COUNT_VARIANCE_STATUSES.NO_VARIANCE, STOCK_COUNT_VARIANCE_STATUSES.ACCEPTED].includes(line.variance_status);
   return (
-    <SectionCard className="space-y-3">
+    <Block className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="break-words text-sm font-black text-foreground">{lineName(line)}</p>
-          {lineIdentity(line) && <p className="mt-1 break-all font-mono text-[11px] uppercase tracking-wide text-muted-foreground">{lineIdentity(line)}</p>}
-          <p className="mt-1 text-xs font-bold text-muted-foreground">Expected {line.expected_quantity == null ? "unavailable" : line.expected_quantity} · Counted {line.counted_quantity} · Diff {variance == null ? "—" : variance}</p>
+          <p className="break-words text-sm font-black text-white">{lineName(line)}</p>
+          {lineIdentity(line) && <p className="mt-1 break-all font-mono text-[11px] uppercase tracking-wide text-gray-400">{lineIdentity(line)}</p>}
+          <p className="mt-1 text-xs font-semibold text-gray-400">Expected {line.expected_quantity == null ? "unavailable" : line.expected_quantity} · Counted {line.counted_quantity} · Diff {variance == null ? "—" : variance}</p>
         </div>
         <StatusBadge value={line.variance_status || STOCK_COUNT_VARIANCE_STATUSES.NO_VARIANCE} />
       </div>
       <div className="grid grid-cols-3 gap-2">
-        <MetricPill label="Expected" value={line.expected_quantity == null ? "—" : line.expected_quantity} suffix={line.expected_quantity == null ? "" : unit} />
-        <MetricPill label="Counted" value={line.counted_quantity} suffix={unit} />
-        <MetricPill label="Diff" value={variance == null ? "—" : variance} suffix={variance == null ? "" : unit} />
+        <BoldMiniMetric label="Expected" value={line.expected_quantity == null ? "—" : line.expected_quantity} suffix={line.expected_quantity == null ? "" : unit} />
+        <BoldMiniMetric label="Counted" value={line.counted_quantity} suffix={unit} />
+        <BoldMiniMetric label="Diff" value={variance == null ? "—" : variance} suffix={variance == null ? "" : unit} />
       </div>
-      {line.attribute_snapshot && <p className="break-words rounded-2xl bg-secondary/60 p-3 text-xs font-semibold text-muted-foreground">{summarizeAttributeSnapshot(line.attribute_snapshot)}</p>}
-      {line.condition_note && <InfoLine label="Condition" value={getOptionLabel(COUNT_CONDITION_NOTE_OPTIONS, line.condition_note)} />}
-      {line.evidence_note && <InfoLine label="Evidence note" value={line.evidence_note} />}
+      {line.attribute_snapshot && <p className="break-words rounded-xl border border-emerald-500/40 bg-[#0a0a0a] p-3 text-xs font-semibold text-gray-400">{summarizeAttributeSnapshot(line.attribute_snapshot)}</p>}
+      {line.condition_note && <p className="text-xs font-semibold text-gray-400"><span className="text-gray-500">Condition:</span> <span className="text-white">{getOptionLabel(COUNT_CONDITION_NOTE_OPTIONS, line.condition_note)}</span></p>}
+      {line.evidence_note && <p className="text-xs font-semibold text-gray-400"><span className="text-gray-500">Evidence note:</span> {line.evidence_note}</p>}
       {recounts.length > 0 && (
-        <div className="rounded-2xl bg-secondary/60 p-3 space-y-2">
-          <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Recount evidence</p>
+        <div className="rounded-xl border border-emerald-500/40 bg-[#0a0a0a] p-3 space-y-1">
+          <BlockLabel>Recount evidence</BlockLabel>
           {recounts.map((entry) => (
-            <InfoLine key={entry.id} label={`${entry.recount_quantity} ${unit}`} value={entry.evidence_note || formatDateTime(entry.created_at)} />
+            <p key={entry.id} className="text-xs font-semibold text-gray-400"><span className="text-white">{entry.recount_quantity} {unit}</span> — {entry.evidence_note || formatDateTime(entry.created_at)}</p>
           ))}
         </div>
       )}
       {line.variance_status === STOCK_COUNT_VARIANCE_STATUSES.RECOUNT_REQUESTED && canRecount && <RecountEntry line={line} onSubmit={onSubmitRecount} />}
       {canReview && reviewable && line.variance_status !== STOCK_COUNT_VARIANCE_STATUSES.RECOUNT_REQUESTED && (
         <div className="grid grid-cols-2 gap-2">
-          <button type="button" onClick={() => onRequestRecount(line)} className="min-h-10 rounded-xl bg-secondary px-3 text-xs font-black text-secondary-foreground active:bg-border">
+          <button type="button" onClick={() => onRequestRecount(line)} className="min-h-10 rounded-xl border border-emerald-500/60 px-3 text-xs font-black uppercase tracking-wide text-emerald-400 active:bg-emerald-950">
             Request Recount
           </button>
-          <button type="button" onClick={() => onAccept(line)} className="min-h-10 rounded-xl bg-primary px-3 text-xs font-black text-primary-foreground active:scale-[0.98]">
+          <button type="button" onClick={() => onAccept(line)} className="min-h-10 rounded-xl bg-emerald-500 px-3 text-xs font-black uppercase tracking-wide text-[#0a0a0a] active:scale-[0.98]">
             Accept Evidence
           </button>
         </div>
       )}
-    </SectionCard>
+    </Block>
   );
 }
 
@@ -696,20 +779,20 @@ export default function StockCount() {
 
   const renderLanding = () => (
     <>
-      <SectionCard className="space-y-3">
+      <Block className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-base font-black text-foreground">Active Sessions</p>
-            <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Open counts, add evidence, review variances.</p>
+            <p className="text-base font-black text-white">Active Sessions</p>
+            <p className="mt-1 text-xs font-semibold leading-snug text-gray-400">Open counts, add evidence, review variances.</p>
           </div>
           <StatusBadge value={actorSession.actorRole} />
         </div>
         <div className="grid grid-cols-3 gap-2">
-          <MetricPill label="Visible" value={visibleSessions.length} />
-          <MetricPill label="Review" value={visibleSessions.filter((session) => [STOCK_COUNT_STATUSES.REVIEW_REQUIRED, STOCK_COUNT_STATUSES.SUBMITTED].includes(session.status)).length} />
-          <MetricPill label="Recount" value={visibleSessions.filter((session) => session.status === STOCK_COUNT_STATUSES.RECOUNT_REQUIRED).length} />
+          <BoldMiniMetric label="Visible" value={visibleSessions.length} />
+          <BoldMiniMetric label="Review" value={visibleSessions.filter((session) => [STOCK_COUNT_STATUSES.REVIEW_REQUIRED, STOCK_COUNT_STATUSES.SUBMITTED].includes(session.status)).length} />
+          <BoldMiniMetric label="Recount" value={visibleSessions.filter((session) => session.status === STOCK_COUNT_STATUSES.RECOUNT_REQUIRED).length} />
         </div>
-      </SectionCard>
+      </Block>
       {visibleSessions.length ? (
         <div className="space-y-3">
           {visibleSessions.map((session) => (
@@ -717,13 +800,13 @@ export default function StockCount() {
           ))}
         </div>
       ) : (
-        <EmptyState title="No active count sessions." helper="Start a count session." />
+        <Block><p className="text-sm font-bold text-gray-400">No active count sessions. Start a count session.</p></Block>
       )}
       <div className="scanops-sticky-actions">
         <button
           type="button"
           onClick={() => setView("new")}
-          className="min-h-12 w-full rounded-2xl bg-primary px-3 text-sm font-black text-primary-foreground active:scale-[0.98]"
+          className="min-h-12 w-full rounded-2xl bg-emerald-500 px-3 text-sm font-black uppercase tracking-wide text-[#0a0a0a] active:scale-[0.98]"
         >
           Start New Count Session
         </button>
@@ -736,10 +819,10 @@ export default function StockCount() {
     return (
       <>
         {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} tone="warning" actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}
-        <SectionCard className="space-y-3">
+        <Block className="space-y-3">
           <TextInputField label="Session name" value={sessionName} onChange={setSessionName} placeholder="e.g. Dairy Morning Count" />
           <div>
-            <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Count type</p>
+            <BlockLabel>Count type</BlockLabel>
             <div className="mt-2 grid grid-cols-2 gap-2">
               {STOCK_COUNT_TYPE_OPTIONS.map((option) => (
                 <CountTypeButton key={option.id} option={option} selected={countType === option.id} onClick={() => setCountType(option.id)} />
@@ -748,14 +831,14 @@ export default function StockCount() {
           </div>
           <TouchSelect label="Area / location" value={area} onChange={setArea} options={STOCK_COUNT_AREA_OPTIONS} />
           <TouchSelect label="Count mode" value={countMode} onChange={setCountMode} options={STOCK_COUNT_MODE_OPTIONS} />
-        </SectionCard>
-        <SectionCard className="space-y-2">
-          <p className="text-sm font-black text-foreground">{selectedType.title}</p>
-          <InfoLine label="Creates" value="Controlled count session" />
-          <InfoLine label="Stock mutation" value="No direct adjustment" />
-          <InfoLine label="Review path" value="Submit → variance review → evidence acceptance" />
-        </SectionCard>
-        <StickyActions leftLabel="Back" rightLabel="Start Session" onLeft={() => setView("landing")} onRight={startNewSession} rightDisabled={!String(sessionName || "").trim()} />
+        </Block>
+        <Block className="space-y-1">
+          <p className="text-sm font-black text-white">{selectedType.title}</p>
+          <p className="text-xs font-semibold text-gray-400"><span className="text-gray-500">Creates:</span> Controlled count session</p>
+          <p className="text-xs font-semibold text-gray-400"><span className="text-gray-500">Stock mutation:</span> No direct adjustment</p>
+          <p className="text-xs font-semibold text-gray-400"><span className="text-gray-500">Review path:</span> Submit → variance review → evidence acceptance</p>
+        </Block>
+        <BoldActions leftLabel="Back" rightLabel="Start Session" onLeft={() => setView("landing")} onRight={startNewSession} rightDisabled={!String(sessionName || "").trim()} />
       </>
     );
   };
@@ -765,29 +848,44 @@ export default function StockCount() {
       <SessionHeaderCard session={activeSession} lines={lines} />
       {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} tone={operatorError.tone || "warning"} actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}
       {continuousScan && canAddCountEvidence && (
-        <div className="flex items-center gap-2 rounded-2xl bg-accent/10 px-3 py-2">
-          <span className="text-xs font-black text-accent">⚡ Continuous scan on</span>
-          <span className="text-xs font-semibold text-muted-foreground">— each new scan auto-saves the current count.</span>
-        </div>
+        <Block className="flex items-center gap-2">
+          <span className="text-xs font-black text-emerald-500">⚡ Continuous scan on</span>
+          <span className="text-xs font-semibold text-gray-400">— each new scan auto-saves the current count.</span>
+        </Block>
       )}
-      {lastSyncMessage && <SectionCard className="border-primary/20 bg-primary/5"><p className="text-sm font-black text-foreground">Saved locally</p><p className="mt-1 text-xs font-semibold text-muted-foreground">{lastSyncMessage}</p></SectionCard>}
-      {!canAddCountEvidence && <EmptyState title="Session is read-only." helper="This session is locked for handheld edits." />}
-      {!item && canAddCountEvidence && <EmptyState title="No item selected." helper={lines.length ? "Scan another item or review the session." : "Scan/search an item."} />}
+      {lastSyncMessage && (
+        <Block>
+          <p className="text-sm font-black text-white">Saved locally</p>
+          <p className="mt-1 text-xs font-semibold text-gray-400">{lastSyncMessage}</p>
+        </Block>
+      )}
+      {!canAddCountEvidence && (
+        <Block><p className="text-sm font-bold text-gray-400">Session is read-only. This session is locked for handheld edits.</p></Block>
+      )}
+      {canAddCountEvidence && (
+        <>
+          <CurrentLocationBlock session={activeSession} />
+          <SessionProgressBlock summary={summary} session={activeSession} />
+          {!item && <ReadyToCountBlock session={activeSession} />}
+        </>
+      )}
       {item && canAddCountEvidence && (
         <>
           <ItemSummaryCard item={item}>
             <div className="grid grid-cols-2 gap-2">
-              <MetricPill label="Expected" value={expected === null ? "Unavailable" : expected} suffix={expected === null ? "" : unit} />
-              <MetricPill label="Variance" value={variance === null ? "—" : variance} suffix={variance === null ? "" : unit} />
+              <BoldMiniMetric label="Expected" value={expected === null ? "Unavailable" : expected} suffix={expected === null ? "" : unit} />
+              <BoldMiniMetric label="Variance" value={variance === null ? "—" : variance} suffix={variance === null ? "" : unit} />
             </div>
           </ItemSummaryCard>
-          <SectionCard className="space-y-3">
+          <Block className="space-y-3">
             <QuantityStepper label="Counted" value={counted} onChange={(value) => { setCounted(value); if (operatorError?.title === "Count missing") setOperatorError(null); }} unit={unit} min={0} />
-            {(counted === "" || Number.isNaN(Number(counted)) || Number(counted) < 0) && <FieldError title="Count missing" helper="Enter a valid count before saving." />}
-            <div className="rounded-2xl bg-secondary/60 p-3 space-y-2">
-              <InfoLine label="System expected" value={expectedLabel(expected, unit)} />
-              <InfoLine label="Counted" value={`${counted} ${unit}`} />
-              <InfoLine label="Variance" value={variance === null ? "Review required" : `${variance} ${unit}`} />
+            {(counted === "" || Number.isNaN(Number(counted)) || Number(counted) < 0) && (
+              <p className="rounded-xl border border-red-500/60 bg-red-950/40 px-3 py-2 text-xs font-black text-red-400">Count missing. Enter a valid count before saving.</p>
+            )}
+            <div className="rounded-xl border border-emerald-500/40 bg-[#0a0a0a] p-3 space-y-1">
+              <p className="text-xs font-semibold text-gray-400"><span className="text-gray-500">System expected:</span> <span className="text-white">{expectedLabel(expected, unit)}</span></p>
+              <p className="text-xs font-semibold text-gray-400"><span className="text-gray-500">Counted:</span> <span className="text-white">{counted} {unit}</span></p>
+              <p className="text-xs font-semibold text-gray-400"><span className="text-gray-500">Variance:</span> <span className="text-white">{variance === null ? "Review required" : `${variance} ${unit}`}</span></p>
             </div>
             {variance !== 0 && <TouchSelect label="Variance reason" value={reason} onChange={setReason} options={STOCK_COUNT_VARIANCE_REASONS} />}
             <AttributeEvidenceFields
@@ -807,13 +905,13 @@ export default function StockCount() {
             />
             <TouchSelect label="Condition" value={conditionNote} onChange={setConditionNote} options={COUNT_CONDITION_NOTE_OPTIONS} />
             <TextInputField label="Evidence note" value={note} onChange={setNote} placeholder="Optional count note" />
-          </SectionCard>
+          </Block>
         </>
       )}
       <div className="space-y-3">
-        {lines.length ? lines.map((line) => <CountLineSummaryCard key={line.id || line.count_line_id} line={line} editable={canAddCountEvidence} onRemove={removeLine} />) : <EmptyState title="Current count is empty." helper="Scan an item and add count evidence before submitting." />}
+        {lines.length ? lines.map((line) => <CountLineSummaryCard key={line.id || line.count_line_id} line={line} editable={canAddCountEvidence} onRemove={removeLine} />) : null}
       </div>
-      <StickyActions
+      <BoldActions
         leftLabel={item ? "Cancel Item" : "Back"}
         rightLabel={item ? "Add Count Evidence" : "Submit Session"}
         onLeft={() => item ? resetItem() : goLanding()}
@@ -826,11 +924,11 @@ export default function StockCount() {
   const renderReview = () => (
     <>
       <SessionHeaderCard session={activeSession} lines={lines} />
-      <SectionCard className="space-y-2">
-        <p className="text-sm font-black text-foreground">Session Variances</p>
-        <p className="text-xs font-semibold leading-snug text-muted-foreground">{summary.countedItems} items · {summary.varianceItems} variance lines · handheld evidence only.</p>
-        <InfoLine label="Edit state" value={sessionReadOnly || activeSession?.status !== STOCK_COUNT_STATUSES.IN_PROGRESS ? "Read-only evidence" : "Counting in progress"} />
-      </SectionCard>
+      <Block className="space-y-1">
+        <p className="text-sm font-black text-white">Session Variances</p>
+        <p className="text-xs font-semibold text-gray-400">{summary.countedItems} items · {summary.varianceItems} variance lines · handheld evidence only.</p>
+        <p className="text-xs font-semibold text-gray-400"><span className="text-gray-500">Edit state:</span> <span className="text-white">{sessionReadOnly || activeSession?.status !== STOCK_COUNT_STATUSES.IN_PROGRESS ? "Read-only evidence" : "Counting in progress"}</span></p>
+      </Block>
       <div className="space-y-3">
         {lines.length ? lines.map((line) => (
           <ReviewLine
@@ -842,14 +940,14 @@ export default function StockCount() {
             onAccept={acceptEvidence}
             onSubmitRecount={submitRecount}
           />
-        )) : <EmptyState title="No evidence in this session." />}
+        )) : <Block><p className="text-sm font-bold text-gray-400">No evidence in this session.</p></Block>}
       </div>
       {activeSession?.status === STOCK_COUNT_STATUSES.APPROVED ? (
-        <StickyActions leftLabel="Back" rightLabel="Lock Evidence" onLeft={goLanding} onRight={closeSession} rightDisabled={!canClose} />
+        <BoldActions leftLabel="Back" rightLabel="Lock Evidence" onLeft={goLanding} onRight={closeSession} rightDisabled={!canClose} />
       ) : [STOCK_COUNT_STATUSES.CLOSED, STOCK_COUNT_STATUSES.CANCELLED].includes(activeSession?.status) ? (
-        <StickyActions leftLabel="Back" rightLabel="New Session" onLeft={goLanding} onRight={() => setView("new")} />
+        <BoldActions leftLabel="Back" rightLabel="New Session" onLeft={goLanding} onRight={() => setView("new")} />
       ) : (
-        <StickyActions
+        <BoldActions
           leftLabel="Back"
           rightLabel={canApprove ? "Accept Evidence" : "Review Only"}
           onLeft={goLanding}
@@ -862,21 +960,21 @@ export default function StockCount() {
 
   const renderClosed = () => (
     <>
-      <DoneCard
-        title="Evidence locked"
-        helper="Count evidence is locked locally. No stock adjusted here."
-        rows={[
-          { label: "Items counted", value: summary.countedItems },
-          { label: "Variance lines", value: summary.varianceItems },
-          { label: "Net difference", value: summary.totalVariance },
-        ]}
-      />
-      <StickyActions leftLabel="Back" rightLabel="New Session" onLeft={goLanding} onRight={() => setView("new")} />
+      <Block className="space-y-2">
+        <p className="text-base font-black text-emerald-500">Evidence locked</p>
+        <p className="text-xs font-semibold text-gray-400">Count evidence is locked locally. No stock adjusted here.</p>
+        <div className="mt-2 space-y-1">
+          <p className="text-xs font-semibold text-gray-400"><span className="text-gray-500">Items counted:</span> <span className="text-white">{summary.countedItems}</span></p>
+          <p className="text-xs font-semibold text-gray-400"><span className="text-gray-500">Variance lines:</span> <span className="text-white">{summary.varianceItems}</span></p>
+          <p className="text-xs font-semibold text-gray-400"><span className="text-gray-500">Net difference:</span> <span className="text-white">{summary.totalVariance}</span></p>
+        </div>
+      </Block>
+      <BoldActions leftLabel="Back" rightLabel="New Session" onLeft={goLanding} onRight={() => setView("new")} />
     </>
   );
 
   return (
-    <PageShell>
+    <div className="min-h-screen bg-[#0a0a0a] text-white flex flex-col overflow-x-hidden">
       <PageHeader
         title="Stock Count"
         subtitle={view === "landing" ? "Session workspace" : view === "new" ? "Start count session" : view === "review" ? "Variance review" : activeSession?.status || "Count stock by scan or search"}
@@ -901,6 +999,6 @@ export default function StockCount() {
         {view === "review" && renderReview()}
         {view === "closed" && renderClosed()}
       </WorkflowMain>
-    </PageShell>
+    </div>
   );
 }
