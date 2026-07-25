@@ -17,7 +17,6 @@ import {
   Radio,
   RefreshCw,
   ScanBarcode,
-  ShieldCheck,
   Smartphone,
   UserRound,
   Volume2,
@@ -39,76 +38,67 @@ import {
 } from "../lib/scanOpsConnectivity";
 
 const SETTINGS_TILES = [
-  { key: "device", icon: Smartphone, label: "Device", description: "Wi-Fi & battery", tone: "blue" },
-  { key: "scanner", icon: ScanBarcode, label: "Scanner", description: "Input & test", tone: "blue" },
-  { key: "printer", icon: Printer, label: "Printer", description: "Labels", tone: "blue" },
-  { key: "sync", icon: Database, label: "Sync", description: "Connectivity", tone: "purple" },
-  { key: "feedback", icon: BellRing, label: "Feedback", description: "Beep & haptics", tone: "cyan" },
-  { key: "accessibility", icon: Accessibility, label: "Accessibility", description: "Usability", tone: "green" },
-  { key: "session", icon: LockKeyhole, label: "Session", description: "User & timeout", tone: "amber" },
-  { key: "diagnostics", icon: Activity, label: "Diagnostics", description: "Tests", tone: "amber" },
-  { key: "about", icon: Info, label: "About", description: "Version", tone: "grey" },
+  { key: "device", icon: Smartphone, label: "Device", description: "Wi-Fi & battery" },
+  { key: "scanner", icon: ScanBarcode, label: "Scanner", description: "Input & test" },
+  { key: "printer", icon: Printer, label: "Printer", description: "Labels" },
+  { key: "sync", icon: Database, label: "Sync", description: "Connectivity" },
+  { key: "feedback", icon: BellRing, label: "Feedback", description: "Beep & haptics" },
+  { key: "accessibility", icon: Accessibility, label: "Accessibility", description: "Usability" },
+  { key: "session", icon: LockKeyhole, label: "Session", description: "User & timeout" },
+  { key: "diagnostics", icon: Activity, label: "Diagnostics", description: "Tests" },
+  { key: "about", icon: Info, label: "About", description: "Version" },
 ];
 
 const VALID_WORKSPACES = new Set(SETTINGS_TILES.map((tile) => tile.key));
 
-const toneClasses = {
-  blue: "bg-blue-950/95 text-blue-50 active:bg-blue-900",
-  green: "bg-emerald-950/95 text-emerald-50 active:bg-emerald-900",
-  purple: "bg-purple-950/95 text-purple-50 active:bg-purple-900",
-  cyan: "bg-cyan-950/95 text-cyan-50 active:bg-cyan-900",
-  grey: "bg-slate-800 text-slate-50 active:bg-slate-700",
-  amber: "bg-amber-900/95 text-amber-50 active:bg-amber-800",
-};
-
-function SettingsTile({ icon: Icon, label, description, tone = "grey", onClick }) {
+function SettingsTile({ icon: Icon, label, description, onClick }) {
   return (
-    <button type="button" onClick={onClick} className={`flex h-[92px] min-h-[92px] w-full flex-col items-center justify-center rounded-2xl border border-white/5 px-2 py-2.5 text-center transition-all duration-150 active:scale-[0.98] ${toneClasses[tone] || toneClasses.grey}`}>
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/10 text-current"><Icon className="h-4 w-4" /></span>
-      <span className="mt-1.5 min-w-0"><span className="block text-[12px] font-black leading-tight text-current">{label}</span><span className="mt-0.5 block text-[9.5px] font-bold leading-snug text-current/70">{description}</span></span>
+    <button type="button" onClick={onClick} className="flex h-[92px] min-h-[92px] w-full flex-col items-center justify-center rounded-2xl border border-border bg-card px-2 py-2.5 text-center transition-all duration-150 active:scale-[0.98]">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Icon className="h-4 w-4" /></span>
+      <span className="mt-1.5 min-w-0"><span className="block text-[12px] font-black leading-tight text-foreground">{label}</span><span className="mt-0.5 block text-[9.5px] font-bold leading-snug text-muted-foreground">{description}</span></span>
     </button>
   );
 }
 
 function WorkspaceShell({ icon: Icon, label, title, helper, children, onBack }) {
   return (
-    <section className="mt-2 rounded-2xl border border-white/10 bg-slate-900/80 p-3" aria-label={`${title} settings workspace`}>
-      <button type="button" onClick={onBack} className="mb-3 flex min-h-10 items-center gap-2 rounded-2xl bg-slate-800 px-3 text-xs font-black text-slate-100 active:bg-slate-700"><ArrowLeft className="h-4 w-4" /> Settings</button>
-      <div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-slate-100"><Icon className="h-5 w-5" /></span><div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{label}</p><h2 className="mt-1 text-base font-black text-slate-50">{title}</h2><p className="mt-1 text-xs font-bold leading-snug text-slate-400">{helper}</p></div></div>
+    <section className="mt-2 rounded-2xl border border-border bg-card p-3" aria-label={`${title} settings workspace`}>
+      <button type="button" onClick={onBack} className="mb-3 flex min-h-10 items-center gap-2 rounded-2xl bg-secondary px-3 text-xs font-black text-foreground active:bg-border"><ArrowLeft className="h-4 w-4" /> Settings</button>
+      <div className="flex items-start gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Icon className="h-5 w-5" /></span><div className="min-w-0"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-muted-foreground">{label}</p><h2 className="mt-1 text-base font-black text-foreground">{title}</h2><p className="mt-1 text-xs font-bold leading-snug text-muted-foreground">{helper}</p></div></div>
       <div className="mt-3 space-y-3">{children}</div>
     </section>
   );
 }
 
 function WorkspaceSection({ title, helper, children }) {
-  return <div className="rounded-2xl bg-slate-800/70 p-3"><p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{title}</p>{helper && <p className="mt-1 text-xs font-bold leading-snug text-slate-300">{helper}</p>}<div className="mt-3 space-y-2">{children}</div></div>;
+  return <div className="rounded-2xl bg-secondary/70 p-3"><p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">{title}</p>{helper && <p className="mt-1 text-xs font-bold leading-snug text-muted-foreground">{helper}</p>}<div className="mt-3 space-y-2">{children}</div></div>;
 }
 
 function InfoGrid({ rows }) {
-  return <div className="grid grid-cols-2 gap-2">{rows.map(([label, value]) => <div key={label} className="min-w-0 rounded-2xl bg-slate-900/80 px-3 py-2"><p className="truncate text-[9px] font-black uppercase tracking-wide text-slate-500">{label}</p><p className="mt-0.5 truncate text-xs font-black text-slate-50">{value || "—"}</p></div>)}</div>;
+  return <div className="grid grid-cols-2 gap-2">{rows.map(([label, value]) => <div key={label} className="min-w-0 rounded-2xl bg-background/60 px-3 py-2"><p className="truncate text-[9px] font-black uppercase tracking-wide text-muted-foreground">{label}</p><p className="mt-0.5 truncate text-xs font-black text-foreground">{value || "—"}</p></div>)}</div>;
 }
 
 function SettingRow({ icon: Icon = ChevronRight, title, helper, value, action, onClick, disabled = false }) {
-  return <button type="button" onClick={onClick} disabled={disabled || !onClick} className={`flex min-h-12 w-full items-center gap-3 rounded-2xl bg-slate-900/80 px-3 py-2 text-left ${onClick ? "active:bg-slate-700" : "cursor-default"} disabled:opacity-60`}><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/10 text-slate-100"><Icon className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block text-xs font-black text-slate-50">{title}</span>{helper && <span className="mt-0.5 block text-[10.5px] font-bold leading-snug text-slate-400">{helper}</span>}</span>{value && <span className="shrink-0 rounded-full bg-slate-800 px-2 py-1 text-[10px] font-black text-slate-200">{value}</span>}{action && <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" />}</button>;
+  return <button type="button" onClick={onClick} disabled={disabled || !onClick} className={`flex min-h-12 w-full items-center gap-3 rounded-2xl bg-background/60 px-3 py-2 text-left ${onClick ? "active:bg-border" : "cursor-default"} disabled:opacity-60`}><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Icon className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block text-xs font-black text-foreground">{title}</span>{helper && <span className="mt-0.5 block text-[10.5px] font-bold leading-snug text-muted-foreground">{helper}</span>}</span>{value && <span className="shrink-0 rounded-full bg-secondary px-2 py-1 text-[10px] font-black text-foreground">{value}</span>}{action && <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}</button>;
 }
 
 function ToggleRow({ icon: Icon, title, helper, checked, onToggle }) { return <SettingRow icon={Icon} title={title} helper={helper} value={checked ? "On" : "Off"} onClick={onToggle} />; }
 
 function ChoiceRow({ title, choices, value, onChange }) {
-  return <div className="rounded-2xl bg-slate-900/80 p-3"><p className="text-xs font-black text-slate-50">{title}</p><div className="mt-2 grid grid-cols-3 gap-2">{choices.map((choice) => <button key={choice} type="button" onClick={() => onChange(choice)} className={`min-h-10 rounded-xl px-2 text-[11px] font-black active:scale-[0.98] ${value === choice ? "bg-blue-600 text-white" : "bg-slate-800 text-slate-300"}`}>{choice}</button>)}</div></div>;
+  return <div className="rounded-2xl bg-background/60 p-3"><p className="text-xs font-black text-foreground">{title}</p><div className="mt-2 grid grid-cols-3 gap-2">{choices.map((choice) => <button key={choice} type="button" onClick={() => onChange(choice)} className={`min-h-10 rounded-xl px-2 text-[11px] font-black active:scale-[0.98] ${value === choice ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground"}`}>{choice}</button>)}</div></div>;
 }
 
-function PlannedList({ items }) { return <div className="rounded-2xl bg-slate-800/70 px-3 py-2"><p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Planned</p><p className="mt-1 text-xs font-bold leading-snug text-slate-300">{items.join(" · ")}</p></div>; }
+function PlannedList({ items }) { return <div className="rounded-2xl bg-secondary/70 px-3 py-2"><p className="text-[10px] font-black uppercase tracking-wide text-muted-foreground">Planned</p><p className="mt-1 text-xs font-bold leading-snug text-muted-foreground">{items.join(" · ")}</p></div>; }
 
 function ScannerTest() {
   const [input, setInput] = useState("");
   const [result, setResult] = useState(null);
   const runTest = (event) => { event.preventDefault(); const value = input.trim(); if (!value) return; const resolved = resolveInventoryIdentity(value); const audit = createScanOpsAuditEvent(SCANOPS_EVENT_TYPES.SCANNER_TEST_SCANNED, { status: resolved ? "test_resolved" : "test_unresolved", scanned_value: value, resolved_item_id: resolved?.id || null, resolved_sku: resolved?.sku || null, stock_mutation: false }); setResult({ value, resolved, traceId: audit.traceId || audit.trace_id }); };
-  return <form onSubmit={runTest} className="space-y-2"><div className="flex gap-2"><input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Scan or enter barcode / PLU" className="min-w-0 flex-1 h-11 rounded-xl border border-white/10 bg-slate-900 px-3 text-sm font-bold text-slate-50 outline-none placeholder:text-slate-500 focus:ring-2 focus:ring-blue-300/20" /><button type="submit" className="flex w-12 items-center justify-center rounded-xl bg-blue-600 text-white"><ScanBarcode className="h-5 w-5" /></button></div>{result && <div className="rounded-xl bg-slate-900/80 px-3 py-2 text-xs font-semibold text-slate-400"><p className="font-black text-slate-50">Input accepted · no stock mutation</p><p className="truncate">Trace: {result.traceId}</p><p className="truncate">{result.resolved ? `${result.resolved.name} · ${result.resolved.sku || "SKU not set"}` : "No item resolved"}</p></div>}</form>;
+  return <form onSubmit={runTest} className="space-y-2"><div className="flex gap-2"><input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Scan or enter barcode / PLU" className="min-w-0 flex-1 h-11 rounded-xl border border-border bg-background px-3 text-sm font-bold text-foreground outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20" /><button type="submit" className="flex w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground"><ScanBarcode className="h-5 w-5" /></button></div>{result && <div className="rounded-xl bg-background/60 px-3 py-2 text-xs font-semibold text-muted-foreground"><p className="font-black text-foreground">Input accepted · no stock mutation</p><p className="truncate">Trace: {result.traceId}</p><p className="truncate">{result.resolved ? `${result.resolved.name} · ${result.resolved.sku || "SKU not set"}` : "No item resolved"}</p></div>}</form>;
 }
 
 function SettingsHome({ navigate }) {
-  return <><section className="rounded-2xl border border-white/10 bg-slate-900/80 px-3 py-2" aria-label="Settings summary"><div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Settings</div><div className="mt-1 text-sm font-black text-slate-50">Tap a tile to open its workspace</div></section><section className="mt-2 grid grid-cols-3 gap-1" aria-label="Settings categories">{SETTINGS_TILES.map((tile) => <SettingsTile key={tile.key} icon={tile.icon} label={tile.label} description={tile.description} tone={tile.tone} onClick={() => navigate(`/scanner-settings/${tile.key}`)} />)}</section><section className="mt-2 rounded-2xl border border-white/10 bg-slate-900/80 px-3 py-2"><p className="text-xs font-black leading-snug text-slate-300">Settings owns the handheld. Inventory Desktop owns business rules, stock truth, ledger, audit, pricing, and user governance.</p></section></>;
+  return <><section className="rounded-2xl border border-border bg-card px-3 py-2" aria-label="Settings summary"><div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Settings</div><div className="mt-1 text-sm font-black text-foreground">Tap a tile to open its workspace</div></section><section className="mt-2 grid grid-cols-3 gap-1" aria-label="Settings categories">{SETTINGS_TILES.map((tile) => <SettingsTile key={tile.key} icon={tile.icon} label={tile.label} description={tile.description} onClick={() => navigate(`/scanner-settings/${tile.key}`)} />)}</section><section className="mt-2 rounded-2xl border border-border bg-card px-3 py-2"><p className="text-xs font-black leading-snug text-muted-foreground">Settings owns the handheld. Inventory Desktop owns business rules, stock truth, ledger, audit, pricing, and user governance.</p></section></>;
 }
 
 function DeviceWorkspace({ session, network, onBack }) { return <WorkspaceShell icon={Smartphone} label="Device Workspace" title="Device" helper="Physical handheld, Wi-Fi, battery, storage, and hardware status." onBack={onBack}><WorkspaceSection title="Current Device" helper="Read-only hardware and operating context."><InfoGrid rows={[["Device ID", session.deviceId], ["Store / Dept", session.departmentName], ["App Version", "ScanOps Preview"], ["Uptime", "Active shift"]]} /></WorkspaceSection><WorkspaceSection title="Wi-Fi" helper="Android owns Wi-Fi joining, passwords, and network selection. ScanOps only shows status."><InfoGrid rows={[["Status", "Connected"], ["Network", network], ["Signal", "Strong"], ["IP Address", "Auto assigned"]]} /><SettingRow icon={Wifi} title="Wi-Fi Details" helper="SSID, IP, MAC, and signal strength." value="Device owned" /></WorkspaceSection><WorkspaceSection title="Power & Storage"><InfoGrid rows={[["Battery", "70%"], ["Charging", "No"], ["Storage", "Healthy"], ["Memory", "Healthy"]]} /></WorkspaceSection><PlannedList items={["Bluetooth", "NFC", "RFID reader", "Camera health", "USB", "GPS", "Docking station", "Charging cradle"]} /></WorkspaceShell>; }
@@ -116,7 +106,7 @@ function ScannerWorkspace({ onBack }) { return <WorkspaceShell icon={ScanBarcode
 function PrinterWorkspace({ onBack }) { return <WorkspaceShell icon={Printer} label="Printer Workspace" title="Printer" helper="Label printer pairing, status, test print, and templates." onBack={onBack}><WorkspaceSection title="Printer Status" helper="Printing stays local to labels and does not change stock."><InfoGrid rows={[["Paired Printer", "Not paired"], ["Connection", "Pending setup"], ["Paper", "Unknown"], ["Density", "Default"]]} /></WorkspaceSection><WorkspaceSection title="Actions"><SettingRow icon={Printer} title="Pair Printer" helper="Connect a handheld or label printer." value="Planned" disabled /><SettingRow icon={CheckCircle2} title="Test Print" helper="Print a test label when paired." value="Planned" disabled /><SettingRow icon={Info} title="Label Templates" helper="Markdown and shelf-ticket templates." value="Planned" disabled /></WorkspaceSection><PlannedList items={["Multiple printers", "Bluetooth printer", "Network printer", "Print queue", "Label templates", "Print history"]} /></WorkspaceShell>; }
 
 function SetupMethodRow({ icon: Icon, title, helper, value }) {
-  return <div className="flex min-h-12 w-full items-center gap-3 rounded-2xl bg-slate-900/80 px-3 py-2 text-left"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/10 text-slate-100"><Icon className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block text-xs font-black text-slate-50">{title}</span><span className="mt-0.5 block text-[10.5px] font-bold leading-snug text-slate-400">{helper}</span></span><span className="shrink-0 rounded-full bg-slate-800 px-2 py-1 text-[10px] font-black text-slate-200">{value}</span></div>;
+  return <div className="flex min-h-12 w-full items-center gap-3 rounded-2xl bg-background/60 px-3 py-2 text-left"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Icon className="h-4 w-4" /></span><span className="min-w-0 flex-1"><span className="block text-xs font-black text-foreground">{title}</span><span className="mt-0.5 block text-[10.5px] font-bold leading-snug text-muted-foreground">{helper}</span></span><span className="shrink-0 rounded-full bg-secondary px-2 py-1 text-[10px] font-black text-foreground">{value}</span></div>;
 }
 
 function SyncWorkspace({ network, syncSummary, session, navigate, onBack }) {
@@ -173,5 +163,5 @@ export default function ScannerSettings() {
   const [feedback, setFeedback] = useState({ successBeep: true, errorBeep: true, vibration: true, haptics: true }); const [access, setAccess] = useState({ largeText: true, highContrast: true, reduceMotion: false }); const [timeout, setTimeoutValue] = useState("30 min");
   const activeWorkspace = VALID_WORKSPACES.has(workspace) ? workspace : null; const backToSettings = () => navigate("/scanner-settings");
   const renderWorkspace = () => { switch (activeWorkspace) { case "device": return <DeviceWorkspace session={session} network={network} onBack={backToSettings} />; case "scanner": return <ScannerWorkspace onBack={backToSettings} />; case "printer": return <PrinterWorkspace onBack={backToSettings} />; case "sync": return <SyncWorkspace network={network} syncSummary={syncSummary} session={session} navigate={navigate} onBack={backToSettings} />; case "feedback": return <FeedbackWorkspace feedback={feedback} setFeedback={setFeedback} onBack={backToSettings} />; case "accessibility": return <AccessibilityWorkspace access={access} setAccess={setAccess} onBack={backToSettings} />; case "session": return <SessionWorkspace session={session} timeout={timeout} setTimeoutValue={setTimeoutValue} onBack={backToSettings} />; case "diagnostics": return <DiagnosticsWorkspace network={network} syncSummary={syncSummary} onBack={backToSettings} />; case "about": return <AboutWorkspace onBack={backToSettings} />; default: return <SettingsHome navigate={navigate} />; } };
-  return <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col overflow-x-hidden"><AppHeader title="Settings" subtitle={activeWorkspace ? "Configuration workspace" : "Configure the handheld, not the business"} /><main data-scanops-scroll className="flex-1 overflow-y-auto bg-slate-950 px-4 py-3 pb-24">{renderWorkspace()}<section className="mt-2 rounded-2xl border border-amber-300/20 bg-amber-900/20 px-3 py-2"><p className="text-xs font-black leading-snug text-amber-100">Settings configures the scanner and session only. Inventory rules, roles, pricing, ledger, audit, and business configuration remain owned by Inventory Desktop.</p></section></main></div>;
+  return <div className="bold-blocks min-h-screen bg-background text-foreground flex flex-col overflow-x-hidden"><AppHeader title="Settings" subtitle={activeWorkspace ? "Configuration workspace" : "Configure the handheld, not the business"} /><main data-scanops-scroll className="flex-1 overflow-y-auto bg-background px-4 py-3 pb-24">{renderWorkspace()}<section className="mt-2 rounded-2xl border border-amber-400/20 bg-amber-500/5 px-3 py-2"><p className="text-xs font-black leading-snug text-amber-200">Settings configures the scanner and session only. Inventory rules, roles, pricing, ledger, audit, and business configuration remain owned by Inventory Desktop.</p></section></main></div>;
 }
