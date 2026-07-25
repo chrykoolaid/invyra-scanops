@@ -70,8 +70,11 @@ jobs:
         working-directory: scanops-repo
         run: |
           set -euo pipefail
-          node scripts/validate-phase39-0f5-item-search-view.mjs \
-            | tee phase39-0f5-scanops-item-search-view-report.json
+          node scripts/validate-phase39-0f5-scanops-item-search-view.mjs \
+            | tee phase39-0f5-scanops-item-search-view-output.txt
+          sed '/^SCANOPS_ITEM_SEARCH_VIEW_READY$/d' \
+            phase39-0f5-scanops-item-search-view-output.txt \
+            > phase39-0f5-scanops-item-search-view-report.json
 
       - name: Re-certify paired health connection
         working-directory: scanops-repo
@@ -89,7 +92,10 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/validate-phase39-0f6-cross-repository-item-read-acceptance.mjs \
-            | tee phase39-0f6-cross-repository-item-read-acceptance-report.json
+            | tee phase39-0f6-cross-repository-item-read-acceptance-output.txt
+          sed '/^SCANOPS_CROSS_REPOSITORY_ITEM_READ_ACCEPTANCE_READY$/d' \
+            phase39-0f6-cross-repository-item-read-acceptance-output.txt \
+            > phase39-0f6-cross-repository-item-read-acceptance-report.json
 
       - name: Verify machine-readable acceptance evidence
         working-directory: scanops-repo
@@ -97,14 +103,20 @@ jobs:
           set -euo pipefail
           for report in \
             phase39-0f6-cross-repository-commits.json \
+            phase39-0f5-scanops-item-search-view-output.txt \
             phase39-0f5-scanops-item-search-view-report.json \
             phase39-0b-cross-repository-connection-report.json \
+            phase39-0f6-cross-repository-item-read-acceptance-output.txt \
             phase39-0f6-cross-repository-item-read-acceptance-report.json \
             inventory-repo/phase39-0f4-inventory-item-read-binding-report.txt; do
             test -s "${report}"
           done
           node --input-type=module <<'NODE'
           import { readFileSync } from 'node:fs';
+          const scanOps = JSON.parse(readFileSync(
+            'phase39-0f5-scanops-item-search-view-report.json',
+            'utf8',
+          ));
           const acceptance = JSON.parse(readFileSync(
             'phase39-0f6-cross-repository-item-read-acceptance-report.json',
             'utf8',
@@ -113,7 +125,7 @@ jobs:
             'phase39-0b-cross-repository-connection-report.json',
             'utf8',
           ));
-          for (const report of [acceptance, connection]) {
+          for (const report of [scanOps, acceptance, connection]) {
             if (report.passed !== true || report.failedChecks !== 0) {
               throw new Error('A cross-repository certification report failed.');
             }
@@ -143,8 +155,10 @@ jobs:
           name: phase39-0f6-cross-repository-item-read-acceptance
           path: |
             scanops-repo/phase39-0f6-cross-repository-commits.json
+            scanops-repo/phase39-0f5-scanops-item-search-view-output.txt
             scanops-repo/phase39-0f5-scanops-item-search-view-report.json
             scanops-repo/phase39-0b-cross-repository-connection-report.json
+            scanops-repo/phase39-0f6-cross-repository-item-read-acceptance-output.txt
             scanops-repo/phase39-0f6-cross-repository-item-read-acceptance-report.json
             scanops-repo/inventory-repo/phase39-0f4-inventory-item-read-binding-report.txt
           if-no-files-found: error
