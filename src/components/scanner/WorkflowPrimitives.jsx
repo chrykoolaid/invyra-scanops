@@ -1,8 +1,8 @@
 import React from "react";
 import { AlertTriangle, CheckCircle2, Info, Minus, Package, Plus, Trash2 } from "lucide-react";
 
-export function PageShell({ children, className = "" }) {
-  return <div className={`min-h-screen bg-background flex flex-col overflow-x-hidden ${className}`}>{children}</div>;
+export function PageShell({ children, className = "", unthemed = false }) {
+  return <div className={`${unthemed ? "" : "bold-blocks "}min-h-screen bg-background flex flex-col overflow-x-hidden ${className}`}>{children}</div>;
 }
 
 export function WorkflowMain({ children, className = "" }) {

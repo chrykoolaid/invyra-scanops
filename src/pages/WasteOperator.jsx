@@ -239,7 +239,7 @@ export default function WasteOperator() {
   };
 
   return (
-    <PageShell>
+    <PageShell unthemed>
       <PageHeader title="Waste" subtitle="Scan item, classify loss, queue evidence" />
       <WorkflowHeader
         title="Waste"
