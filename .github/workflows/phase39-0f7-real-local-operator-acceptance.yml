@@ -1,4 +1,4 @@
-name: Phase 39-0F7 Real Local Operator Acceptance Kit
+name: Phase 39-0F7.1 Real Local Operator Acceptance Baseline
 
 on:
   pull_request:
@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 45
     env:
       INVENTORY_PHASE39_0F4_SHA: de4ceca8d137d8acf409031cf986c858a792606d
-      SCANOPS_PHASE39_0F7_BASE_SHA: be87402cb2c65b6e899de9b088cf9c2b9df2ac22
+      SCANOPS_PHASE39_0F7_BASE_SHA: 47891e62941af3be939ab9ac9f4e5bfa28c94242
     steps:
       - name: Verify Inventory repository read token
         env:
@@ -121,8 +121,8 @@ jobs:
             printf '%s\n' "${changed_typechecked_surfaces}"
             npm run typecheck
           else
-            echo 'No jsconfig-covered application surface changed in Phase 39-0F7.'
-            echo 'The acceptance kit does not inherit responsibility for unrelated baseline typecheck debt.'
+            echo 'No jsconfig-covered application surface changed in Phase 39-0F7.1.'
+            echo 'The baseline refresh does not inherit responsibility for unrelated baseline typecheck debt.'
           fi
 
       - name: Check acceptance script syntax
@@ -140,11 +140,11 @@ jobs:
           grep -q 'PHASE39_0F7_OPERATOR_ACCEPTANCE_KIT_READY' phase39-0f7-acceptance-kit-report.txt
           ! grep -q 'REAL_LOCAL_OPERATOR_ACCEPTANCE_CERTIFIED' phase39-0f7-acceptance-kit-report.txt
 
-      - name: Upload Phase 39-0F7 readiness evidence
+      - name: Upload Phase 39-0F7.1 readiness evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: phase39-0f7-real-local-operator-acceptance-kit
+          name: phase39-0f7-1-real-local-operator-acceptance-baseline
           path: |
             scanops-repo/phase39-0f7-baselines.json
             scanops-repo/phase39-0f7-acceptance-kit-report.txt
