@@ -1,0 +1,151 @@
+name: Phase 39-0F6 Cross-Repository Item Read Acceptance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/validate-phase39-0f6-cross-repository-item-read-acceptance.mjs'
+      - 'docs/bridge/PHASE_39_0F6_CROSS_REPOSITORY_ITEM_READ_ACCEPTANCE.md'
+      - '.github/workflows/phase39-0f6-cross-repository-item-read-acceptance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      INVENTORY_PHASE39_0F4_SHA: de4ceca8d137d8acf409031cf986c858a792606d
+    steps:
+      - name: Verify Inventory repository read token
+        env:
+          INVENTORY_REPO_READ_TOKEN: ${{ secrets.INVENTORY_REPO_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${INVENTORY_REPO_READ_TOKEN}" || {
+            echo "::error::INVENTORY_REPO_READ_TOKEN is required."
+            exit 1
+          }
+
+      - name: Checkout ScanOps candidate
+        uses: actions/checkout@v4
+        with:
+          path: scanops-repo
+          persist-credentials: false
+
+      - name: Checkout certified Inventory item-read runtime
+        uses: actions/checkout@v4
+        with:
+          repository: chrykoolaid/invyra-base44
+          ref: ${{ env.INVENTORY_PHASE39_0F4_SHA }}
+          token: ${{ secrets.INVENTORY_REPO_READ_TOKEN }}
+          path: scanops-repo/inventory-repo
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Verify pinned cross-repository commits
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          inventory_sha="$(git -C inventory-repo rev-parse HEAD)"
+          test "${inventory_sha}" = "${INVENTORY_PHASE39_0F4_SHA}"
+          printf '{\n  "scanOpsCommit": "%s",\n  "inventoryCommit": "%s"\n}\n' \
+            "$(git rev-parse HEAD)" "${inventory_sha}" \
+            | tee phase39-0f6-cross-repository-commits.json
+
+      - name: Re-certify Inventory Phase 39-0F4 binding
+        working-directory: scanops-repo/inventory-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-phase39-0f4-item-read-binding.mjs \
+            | tee phase39-0f4-inventory-item-read-binding-report.txt
+
+      - name: Re-certify ScanOps Phase 39-0F5 client and UI contracts
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-phase39-0f5-item-search-view.mjs \
+            | tee phase39-0f5-scanops-item-search-view-report.json
+
+      - name: Re-certify paired health connection
+        working-directory: scanops-repo
+        env:
+          INVENTORY_REPO_PATH: inventory-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-phase39-0b-cross-repository-connection.mjs \
+            | tee phase39-0b-cross-repository-connection-report.json
+
+      - name: Run cross-repository item read acceptance
+        working-directory: scanops-repo
+        env:
+          INVENTORY_REPO_PATH: inventory-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-phase39-0f6-cross-repository-item-read-acceptance.mjs \
+            | tee phase39-0f6-cross-repository-item-read-acceptance-report.json
+
+      - name: Verify machine-readable acceptance evidence
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          for report in \
+            phase39-0f6-cross-repository-commits.json \
+            phase39-0f5-scanops-item-search-view-report.json \
+            phase39-0b-cross-repository-connection-report.json \
+            phase39-0f6-cross-repository-item-read-acceptance-report.json \
+            inventory-repo/phase39-0f4-inventory-item-read-binding-report.txt; do
+            test -s "${report}"
+          done
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const acceptance = JSON.parse(readFileSync(
+            'phase39-0f6-cross-repository-item-read-acceptance-report.json',
+            'utf8',
+          ));
+          const connection = JSON.parse(readFileSync(
+            'phase39-0b-cross-repository-connection-report.json',
+            'utf8',
+          ));
+          for (const report of [acceptance, connection]) {
+            if (report.passed !== true || report.failedChecks !== 0) {
+              throw new Error('A cross-repository certification report failed.');
+            }
+            if (report.receivingIntegrationAuthorized !== false) {
+              throw new Error('Receiving must remain blocked.');
+            }
+          }
+          if (acceptance.readiness !== 'READY_FOR_REAL_LOCAL_OPERATOR_ACCEPTANCE') {
+            throw new Error('Phase 39-0F6 did not reach the required readiness marker.');
+          }
+          if (acceptance.explicitSelectionRequired !== true
+            || acceptance.automaticSelectionAdded !== false
+            || acceptance.persistenceAdded !== false
+            || acceptance.queueWriteAdded !== false
+            || acceptance.automaticRetryAdded !== false) {
+            throw new Error('A locked item-read safety boundary changed.');
+          }
+          if (Object.values(acceptance.mutationCounts).some((value) => value !== 0)) {
+            throw new Error('All mutation counters must remain zero.');
+          }
+          NODE
+
+      - name: Upload Phase 39-0F6 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase39-0f6-cross-repository-item-read-acceptance
+          path: |
+            scanops-repo/phase39-0f6-cross-repository-commits.json
+            scanops-repo/phase39-0f5-scanops-item-search-view-report.json
+            scanops-repo/phase39-0b-cross-repository-connection-report.json
+            scanops-repo/phase39-0f6-cross-repository-item-read-acceptance-report.json
+            scanops-repo/inventory-repo/phase39-0f4-inventory-item-read-binding-report.txt
+          if-no-files-found: error
+          retention-days: 30
