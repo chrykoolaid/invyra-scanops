@@ -239,7 +239,7 @@ export default function MarkdownsOperator() {
   };
 
   return (
-    <PageShell>
+    <PageShell unthemed>
       <PageHeader title="Markdown" subtitle="Scan item, choose markdown, request label" />
       <WorkflowHeader
         title="Markdown"
