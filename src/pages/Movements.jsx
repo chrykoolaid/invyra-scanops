@@ -118,7 +118,7 @@ export default function Movements() {
   };
 
   return (
-    <PageShell>
+    <PageShell className="bold-blocks">
       <WorkflowHeader title="Inventory Movements" subtitle="What happened to stock" scanValue={scanValue} onScanValueChange={setScanValue} onScan={handleScan} />
       <WorkflowMain>
         {product ? <ItemSummaryCard item={product} /> : <EmptyState title="Scan an item to review movements." helper="Newest movement cards appear first. This screen is read-only." />}

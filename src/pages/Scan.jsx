@@ -578,7 +578,7 @@ export default function Scan() {
   };
 
   return (
-    <PageShell data-phase39-0f5-item-search-view>
+    <PageShell className="bold-blocks" data-phase39-0f5-item-search-view>
       <PageHeader title="Item Lookup" subtitle="Scan, search, and view authoritative Inventory items" />
       <WorkflowMain>
         {!availability.connected ? (

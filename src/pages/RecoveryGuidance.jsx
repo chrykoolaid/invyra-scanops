@@ -134,7 +134,7 @@ export default function RecoveryGuidance() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col overflow-x-hidden bg-background">
+    <div className="bold-blocks flex min-h-screen flex-col overflow-x-hidden bg-background">
       <PageHeader title="Recovery Guidance" subtitle="What went wrong and what to do next" />
       <main className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-4 py-4 pb-8" data-scanops-scroll>
         <section className={`rounded-3xl border p-4 shadow-sm ${toneClasses(status.tone)}`}>

@@ -261,7 +261,7 @@ export default function SessionCollaboration() {
   };
 
   return (
-    <PageShell>
+    <PageShell className="bold-blocks">
       <PageHeader title="Session Collaboration" subtitle="Shared task ownership, handoff, and conflict review" />
       <WorkflowMain>
         <SectionCard className="space-y-3 border-primary/20 bg-primary/5">

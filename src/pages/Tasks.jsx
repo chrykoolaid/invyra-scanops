@@ -245,7 +245,7 @@ export default function Tasks() {
     const canComplete = canCompleteTask(selectedTask, session);
     const canEscalate = canEscalateTask(selectedTask, session);
     return (
-      <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
+      <div className="bold-blocks min-h-screen bg-background flex flex-col overflow-x-hidden">
         <PageHeader title="Task" subtitle="Source-linked work evidence" />
         <main data-scanops-scroll className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 pb-8 space-y-3">
           <SectionCard className="space-y-3">
@@ -355,7 +355,7 @@ export default function Tasks() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
+    <div className="bold-blocks min-h-screen bg-background flex flex-col overflow-x-hidden">
       <PageHeader title="Tasks" subtitle="Assigned frontline work" />
       <main data-scanops-scroll className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 pb-8 space-y-3">
         <SectionCard className="space-y-3">

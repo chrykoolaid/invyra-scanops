@@ -180,7 +180,7 @@ export default function ProductLookup() {
   };
 
   return (
-    <PageShell>
+    <PageShell className="bold-blocks">
       <WorkflowHeader
         title="Scan or Lookup Item"
         subtitle="Scan → item → stock/location → next action"

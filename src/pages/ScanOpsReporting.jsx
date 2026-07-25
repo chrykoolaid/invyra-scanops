@@ -171,7 +171,7 @@ function EventFeed({ events }) {
 
 function AccessRestricted({ session }) {
   return (
-    <PageShell>
+    <PageShell className="bold-blocks">
       <PageHeader title="ScanOps Reporting" subtitle="Access Restricted" />
       <WorkflowMain>
         <section className="scanops-work-card border-amber-500/20 bg-amber-500/10">
@@ -222,7 +222,7 @@ export default function ScanOpsReporting() {
   const updateFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
 
   return (
-    <PageShell>
+    <PageShell className="bold-blocks">
       <PageHeader title="ScanOps Reporting" subtitle="Scanner activity, queue health, exceptions, and evidence quality" />
       <WorkflowMain className="space-y-3">
         <section className="scanops-work-card">

@@ -45,7 +45,7 @@ export default function SessionAwareness() {
   const device = session?.deviceId || session?.scannerId || "Scanner";
 
   return (
-    <div className="flex min-h-screen flex-col overflow-x-hidden bg-background">
+    <div className="bold-blocks flex min-h-screen flex-col overflow-x-hidden bg-background">
       <PageHeader title="Session Awareness" subtitle="User, store, shift, and device context" />
       <main className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-4 py-4 pb-8" data-scanops-scroll>
         <section className="rounded-3xl border border-primary/20 bg-primary/5 p-4 shadow-sm">

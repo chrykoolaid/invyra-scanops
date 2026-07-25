@@ -490,7 +490,7 @@ export default function StoreOpsDashboard() {
   const refresh = () => setRefreshKey((value) => value + 1);
 
   return (
-    <PageShell>
+    <PageShell className="bold-blocks">
       <PageHeader title="Store Exceptions" subtitle="Items that need review before the store can continue smoothly" />
       <WorkflowMain key={refreshKey}>
         <StoreStatusPanel model={model} session={session} />

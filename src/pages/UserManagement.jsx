@@ -100,7 +100,7 @@ export default function UserManagement() {
   };
 
   return (
-    <PageShell>
+    <PageShell className="bold-blocks">
       <PageHeader title="User Management" subtitle="Manage ScanOps roles and invite staff" />
       <WorkflowMain>
 

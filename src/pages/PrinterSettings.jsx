@@ -89,7 +89,7 @@ export default function PrinterSettings() {
   const set = (key, value) => setForm((f) => ({ ...f, [key]: value }));
 
   return (
-    <PageShell>
+    <PageShell className="bold-blocks">
       <PageHeader title="Printer Settings" subtitle="WiFi label printer configuration" />
       <WorkflowMain>
         {saved && (

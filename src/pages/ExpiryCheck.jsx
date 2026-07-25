@@ -64,7 +64,7 @@ export default function ExpiryCheck() {
   };
 
   return (
-    <PageShell>
+    <PageShell className="bold-blocks">
       <PageHeader title="Expiry Check" subtitle="Capture date and freshness truth" />
       <WorkflowHeader
         title="Expiry Check"

@@ -198,7 +198,7 @@ export default function PriceCheck() {
   };
 
   return (
-    <PageShell>
+    <PageShell className="bold-blocks">
       <WorkflowHeader title="Price Check" subtitle="Price + promo label verification" scanValue={scanValue} onScanValueChange={setScanValue} onScan={scan} />
       <WorkflowMain>
         {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} tone={operatorError.tone || "warning"} actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}

@@ -62,7 +62,7 @@ export default function GapScan() {
   };
 
   return (
-    <PageShell>
+    <PageShell className="bold-blocks">
       <PageHeader title="Gap Scan" subtitle="Capture shelf gap evidence" />
       <WorkflowHeader
         title="Gap Scan"

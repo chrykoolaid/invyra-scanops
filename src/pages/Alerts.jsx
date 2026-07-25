@@ -79,7 +79,7 @@ export default function Alerts() {
   const deviceCount = ALERTS.filter((alert) => alert.category === "Device").length;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col overflow-x-hidden">
+    <div className="bold-blocks min-h-screen bg-background flex flex-col overflow-x-hidden">
       <PageHeader title="Alerts" subtitle="Urgent operational issues" />
       <main data-scanops-scroll className="flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 pb-8 space-y-3">
         <SectionCard className="space-y-3">

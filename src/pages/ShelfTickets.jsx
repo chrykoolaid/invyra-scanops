@@ -234,7 +234,7 @@ export default function ShelfTickets() {
   const closeHandoffDisabled = selectedRequest?.status !== SHELF_TICKET_STATUSES.READY_FOR_PRINT_HANDOFF;
 
   return (
-    <PageShell>
+    <PageShell className="bold-blocks">
       <PageHeader title="Shelf Tickets" subtitle="Shelf ticket requests" />
       <WorkflowHeader
         title="Shelf Tickets"

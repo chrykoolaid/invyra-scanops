@@ -85,7 +85,7 @@ export default function DeviceHealth() {
   const warnings = cards.filter((card) => card.status !== "healthy").length;
 
   return (
-    <div className="flex min-h-screen flex-col overflow-x-hidden bg-background">
+    <div className="bold-blocks flex min-h-screen flex-col overflow-x-hidden bg-background">
       <PageHeader title="Device Health" subtitle="Scanner · Network · Printer · Queue readiness" />
       <main className="flex-1 space-y-4 overflow-y-auto overflow-x-hidden px-4 py-4 pb-8" data-scanops-scroll>
         <section className={`rounded-3xl border p-4 shadow-sm ${warnings ? "border-amber-200 bg-amber-50 text-amber-800" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>

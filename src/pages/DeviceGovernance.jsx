@@ -114,7 +114,7 @@ export default function DeviceGovernance() {
   ], []);
 
   return (
-    <PageShell>
+    <PageShell className="bold-blocks">
       <PageHeader title="Device & Shift Governance" subtitle="Local device, user, role, and shift context" />
       <WorkflowMain>
         <SectionCard className="space-y-3">

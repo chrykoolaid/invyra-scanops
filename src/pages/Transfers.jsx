@@ -405,7 +405,7 @@ export default function Transfers() {
   const hasReceiveLines = Boolean((activeBatch?.receive_lines || []).length);
 
   return (
-    <PageShell>
+    <PageShell className="bold-blocks">
       <PageHeader title="Move Stock" subtitle={subtitle} />
       <WorkflowHeader
         title="Move Stock"

@@ -166,7 +166,7 @@ export default function Receiving() {
   };
 
   return (
-    <PageShell>
+    <PageShell className="bold-blocks">
       <PageHeader title="Receive Stock" subtitle="Scan, confirm quantity, save, repeat" />
       <WorkflowHeader
         title="Receive Stock"

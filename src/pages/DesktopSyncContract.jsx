@@ -299,7 +299,7 @@ export default function DesktopSyncContract() {
 
   if (context.actorRole === "Staff") {
     return (
-      <PageShell>
+      <PageShell className="bold-blocks">
         <PageHeader title="Sync Status" subtitle="Saved locally, waiting to sync, or needs review" />
         <WorkflowMain>
           <SyncStatusPanel context={context} summary={summary} />
@@ -319,7 +319,7 @@ export default function DesktopSyncContract() {
   }
 
   return (
-    <PageShell>
+    <PageShell className="bold-blocks">
       <PageHeader title="Sync Review" subtitle="Manager/Admin contract preview and payload validation" />
       <WorkflowMain>
         <SyncStatusPanel context={context} summary={summary} />

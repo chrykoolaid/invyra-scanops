@@ -334,7 +334,7 @@ export default function Replenish() {
   };
 
   return (
-    <PageShell>
+    <PageShell className="bold-blocks">
       <PageHeader title="Replenishment" subtitle="Backroom-to-shelf execution" />
       <WorkflowHeader
         title="Replenishment"
