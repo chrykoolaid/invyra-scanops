@@ -1,0 +1,157 @@
+name: Phase 39-0F7 Real Local Operator Acceptance Kit
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'scripts/run-phase39-0f7-real-local-operator-acceptance.mjs'
+      - 'scripts/validate-phase39-0f7-real-local-operator-acceptance-kit.mjs'
+      - 'evidence/phase39-0f7-local-operator-acceptance.template.json'
+      - 'docs/bridge/PHASE_39_0F7_REAL_LOCAL_OPERATOR_ACCEPTANCE.md'
+      - '.github/workflows/phase39-0f7-real-local-operator-acceptance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      INVENTORY_PHASE39_0F4_SHA: de4ceca8d137d8acf409031cf986c858a792606d
+      SCANOPS_PHASE39_0F7_BASE_SHA: be87402cb2c65b6e899de9b088cf9c2b9df2ac22
+    steps:
+      - name: Verify Inventory repository read token
+        env:
+          INVENTORY_REPO_READ_TOKEN: ${{ secrets.INVENTORY_REPO_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${INVENTORY_REPO_READ_TOKEN}" || {
+            echo "::error::INVENTORY_REPO_READ_TOKEN is required."
+            exit 1
+          }
+
+      - name: Checkout ScanOps candidate
+        uses: actions/checkout@v4
+        with:
+          path: scanops-repo
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Checkout certified Inventory item-read runtime
+        uses: actions/checkout@v4
+        with:
+          repository: chrykoolaid/invyra-base44
+          ref: ${{ env.INVENTORY_PHASE39_0F4_SHA }}
+          token: ${{ secrets.INVENTORY_REPO_READ_TOKEN }}
+          path: scanops-repo/inventory-repo
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: scanops-repo/package-lock.json
+
+      - name: Verify pinned baselines
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          inventory_sha="$(git -C inventory-repo rev-parse HEAD)"
+          base_sha="$(git merge-base HEAD origin/main)"
+          test "${inventory_sha}" = "${INVENTORY_PHASE39_0F4_SHA}"
+          test "${base_sha}" = "${SCANOPS_PHASE39_0F7_BASE_SHA}"
+          printf '{\n  "scanOpsCandidate": "%s",\n  "scanOpsBase": "%s",\n  "inventory": "%s"\n}\n' \
+            "$(git rev-parse HEAD)" "${base_sha}" "${inventory_sha}" \
+            | tee phase39-0f7-baselines.json
+
+      - name: Install ScanOps dependencies
+        working-directory: scanops-repo
+        run: npm ci
+
+      - name: Install Inventory dependencies
+        working-directory: scanops-repo/inventory-repo
+        run: npm ci
+
+      - name: Certify Phase 39-0F7 acceptance kit
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-phase39-0f7-real-local-operator-acceptance-kit.mjs \
+            | tee phase39-0f7-acceptance-kit-report.txt
+
+      - name: Re-certify Inventory Phase 39-0F4 binding
+        working-directory: scanops-repo/inventory-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-phase39-0f4-item-read-binding.mjs \
+            | tee phase39-0f4-inventory-item-read-binding-report.txt
+
+      - name: Re-certify ScanOps Phase 39-0F5 visible workflow
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-phase39-0f5-scanops-item-search-view.mjs \
+            | tee phase39-0f5-scanops-item-search-view-report.txt
+
+      - name: Re-certify Phase 39-0F6 cross-repository harness
+        working-directory: scanops-repo
+        env:
+          INVENTORY_REPO_PATH: inventory-repo
+        run: |
+          set -euo pipefail
+          node scripts/validate-phase39-0f6-cross-repository-item-read-acceptance.mjs \
+            | tee phase39-0f6-cross-repository-item-read-acceptance-report.txt
+
+      - name: Build latest ScanOps baseline
+        working-directory: scanops-repo
+        run: npm run build
+
+      - name: Enforce differential typecheck boundary
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          changed_typechecked_surfaces="$(git diff --name-only "${SCANOPS_PHASE39_0F7_BASE_SHA}"..HEAD -- \
+            jsconfig.json package.json package-lock.json \
+            'src/components/**/*.js' 'src/pages/**/*.jsx' src/Layout.jsx)"
+          if [ -n "${changed_typechecked_surfaces}" ]; then
+            echo "Typechecked application surfaces changed:"
+            printf '%s\n' "${changed_typechecked_surfaces}"
+            npm run typecheck
+          else
+            echo 'No jsconfig-covered application surface changed in Phase 39-0F7.'
+            echo 'The acceptance kit does not inherit responsibility for unrelated baseline typecheck debt.'
+          fi
+
+      - name: Check acceptance script syntax
+        working-directory: scanops-repo
+        run: |
+          node --check scripts/run-phase39-0f7-real-local-operator-acceptance.mjs
+          node --check scripts/validate-phase39-0f7-real-local-operator-acceptance-kit.mjs
+
+      - name: Verify readiness is not misreported as human acceptance
+        working-directory: scanops-repo
+        run: |
+          set -euo pipefail
+          grep -q 'READY_FOR_REAL_LOCAL_OPERATOR_EXECUTION' phase39-0f7-acceptance-kit-report.txt
+          grep -q '"humanAcceptancePassed": false' phase39-0f7-acceptance-kit-report.txt
+          grep -q 'PHASE39_0F7_OPERATOR_ACCEPTANCE_KIT_READY' phase39-0f7-acceptance-kit-report.txt
+          ! grep -q 'REAL_LOCAL_OPERATOR_ACCEPTANCE_CERTIFIED' phase39-0f7-acceptance-kit-report.txt
+
+      - name: Upload Phase 39-0F7 readiness evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase39-0f7-real-local-operator-acceptance-kit
+          path: |
+            scanops-repo/phase39-0f7-baselines.json
+            scanops-repo/phase39-0f7-acceptance-kit-report.txt
+            scanops-repo/phase39-0f5-scanops-item-search-view-report.txt
+            scanops-repo/phase39-0f6-cross-repository-item-read-acceptance-report.txt
+            scanops-repo/inventory-repo/phase39-0f4-inventory-item-read-binding-report.txt
+            scanops-repo/evidence/phase39-0f7-local-operator-acceptance.template.json
+            scanops-repo/docs/bridge/PHASE_39_0F7_REAL_LOCAL_OPERATOR_ACCEPTANCE.md
+          if-no-files-found: error
+          retention-days: 30
