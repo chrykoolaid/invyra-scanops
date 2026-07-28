@@ -99,14 +99,7 @@ export default function Home() {
           />
         </section>
 
-        <section className="mt-2 rounded-2xl border border-blue-400/15 bg-blue-950/35 px-3 py-2" aria-label="System boundary reminder">
-          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-200/80">Operational layer</p>
-          <p className="mt-1 text-[11px] font-bold leading-snug text-blue-50/80">
-            ScanOps records operator evidence. Inventory Desktop applies stock, ledger, price, and approval decisions after governed sync.
-          </p>
-        </section>
-
-        <section className="mt-2 grid grid-cols-3 gap-1.5" aria-label="ScanOps operations control pad">
+        <section className="mt-3 grid grid-cols-3 gap-2" aria-label="ScanOps operations control pad">
           {tiles.map((tile) => (
             <ActionTile
               key={tile.label}
