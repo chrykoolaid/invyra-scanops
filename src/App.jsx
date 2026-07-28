@@ -82,15 +82,15 @@ const getAppEscapeMeta = (pathname) => {
     "/replenish": { title: "Replenish Stock", subtitle: "Move stock from backroom to shelf" },
     "/price-check": { title: "Price Check", subtitle: "Check price and promotion labels" },
     "/gap-scan": { title: "Report Shelf Issue", subtitle: "Evidence-only shelf observations" },
-    "/tasks": { title: "Tasks", subtitle: "Review assigned store work" },
+    "/tasks": { title: "Tasks", subtitle: "Review assigned store work", backTo: { path: "/more", label: "Tools" } },
     "/alerts": { title: "Alerts", subtitle: "Review urgent operational issues" },
     "/more": { title: "Tools & Support", subtitle: "Secondary ScanOps tools" },
-    "/help": { title: "Help", subtitle: "Quick operator guidance" },
+    "/help": { title: "Help", subtitle: "Quick operator guidance", backTo: { path: "/more", label: "Tools" } },
     "/markdowns": { title: "Markdown", subtitle: "Scan item, choose markdown, request label" },
     "/waste": { title: "Waste", subtitle: "Scan item, classify loss, queue evidence" },
     "/expiry-check": { title: "Expiry Check", subtitle: "Scan item, confirm date, save freshness evidence" },
     "/inventory-sync": { title: "Sync Status", subtitle: "Queue, status, setup, and review" },
-    "/sync-control": { title: "Manual Sync", subtitle: "Operator-controlled bridge handoff" },
+    "/sync-control": { title: "Manual Sync", subtitle: "Operator-controlled bridge handoff", backTo: { path: "/more", label: "Tools" } },
     "/sync-queue": { title: "Sync Status", subtitle: "Device queue and errors" },
     "/shelf-tickets": { title: "Shelf Tickets", subtitle: "Prepare shelf ticket work" },
     "/transfers": { title: "Transfers", subtitle: "Set route, scan item, move quantity, save" },
@@ -105,12 +105,12 @@ const getAppEscapeMeta = (pathname) => {
     "/sync-handoff": { title: "Sync & Handoff", subtitle: "Queue, status, setup, and review" },
     "/desktop-sync-contract": { title: "Desktop Sync Contract", subtitle: "Review integration contracts" },
     "/store-ops-dashboard": { title: "Store Ops Dashboard", subtitle: "Review store exceptions" },
-    "/scanner-settings": { title: "Settings", subtitle: "Device configuration and session controls" },
-    "/scanner-settings/sync": { title: "Sync & Connectivity", subtitle: "Connect this scanner to Inventory Desktop" },
+    "/scanner-settings": { title: "Settings", subtitle: "Device configuration and session controls", backTo: { path: "/more", label: "Tools" } },
+    "/scanner-settings/sync": { title: "Sync & Connectivity", subtitle: "Connect this scanner to Inventory Desktop", backTo: { path: "/scanner-settings", label: "Settings" } },
   };
 
   if (exactRoutes[pathname]) return exactRoutes[pathname];
-  if (pathname.startsWith("/scanner-settings/")) return { title: "Settings", subtitle: "Device configuration workspace" };
+  if (pathname.startsWith("/scanner-settings/")) return { title: "Settings", subtitle: "Device configuration workspace", backTo: { path: "/scanner-settings", label: "Settings" } };
   if (pathname.startsWith("/product/")) return { title: "Lookup Item", subtitle: "Item details" };
 
   return { title: "ScanOps", subtitle: "ScanOps workflow" };
