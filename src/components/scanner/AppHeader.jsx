@@ -2,7 +2,9 @@ import React from "react";
 import { useScanOpsSession } from "../../lib/scanOpsSession";
 import { useScanOpsGovernanceContext } from "../../lib/scanOpsGovernance";
 import { useCurrentUser } from "../../lib/useCurrentUser";
+import { useBatteryStatus } from "../../lib/useBatteryStatus";
 import SyncStatusChip from "./SyncStatusChip";
+import BatteryPill from "./BatteryPill";
 
 function HeaderMetaPill({ value }) {
   if (!value) return null;
@@ -17,6 +19,7 @@ export default function AppHeader() {
   useCurrentUser();
   const session = useScanOpsSession();
   const governance = useScanOpsGovernanceContext();
+  const battery = useBatteryStatus();
   const metaItems = [
     session.actorName || "Operator",
     session.actorRole || "Role",
@@ -32,6 +35,7 @@ export default function AppHeader() {
           <h1 className="text-base font-bold text-foreground tracking-tight truncate" title="Invyra ScanOps">Invyra ScanOps</h1>
           <div className="mt-1 flex flex-wrap items-center gap-1.5" aria-label="Current ScanOps session context">
             {metaItems.map((item, index) => <HeaderMetaPill key={`${item}:${index}`} value={item} />)}
+            <BatteryPill battery={battery} />
           </div>
         </div>
         <SyncStatusChip />
