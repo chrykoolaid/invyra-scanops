@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, CheckCircle2, Loader2, ShieldCheck, Unplug } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, Loader2, PackageSearch, ShieldCheck, Unplug } from "lucide-react";
 import PageHeader from "../components/scanner/PageHeader";
 import { PageShell, SectionCard, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
 import ItemLookupSearch from "../components/scanner/itemLookup/ItemLookupSearch";
@@ -13,7 +13,7 @@ import InventoryTab from "../components/scanner/itemLookup/InventoryTab";
 import LocationsTab from "../components/scanner/itemLookup/LocationsTab";
 import SalesTab from "../components/scanner/itemLookup/SalesTab";
 import QuickActions from "../components/scanner/itemLookup/QuickActions";
-import { mergeItemData, detectLookupType } from "../components/scanner/itemLookup/itemLookupHelpers";
+import { describeItem, detectLookupType, identityLabel, mergeItemData } from "../components/scanner/itemLookup/itemLookupHelpers";
 import {
   getLiveItemLookupAvailability,
   runLiveItemLookup,
@@ -72,10 +72,65 @@ function ReadFailure({ read, fallbackTitle = "Item read needs attention" }) {
   );
 }
 
+function ExactLookupResult({ lookup, onOpen, onSearchByName, viewing }) {
+  if (!lookup?.ok) return null;
+
+  if (lookup.status === "ITEM_NOT_FOUND") {
+    return (
+      <SectionCard className="border-amber-500/30 bg-amber-500/10 text-amber-200">
+        <div className="flex items-start gap-3">
+          <PackageSearch className="mt-0.5 h-5 w-5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-black">No exact Inventory match</p>
+            <p className="mt-1 text-xs font-bold leading-snug opacity-85">
+              The barcode, SKU, or sell ID was not found. No broader search was started automatically.
+            </p>
+          </div>
+        </div>
+        <button type="button" className={`mt-3 ${BTN_PRIMARY}`} disabled={viewing} onClick={onSearchByName}>
+          Search this value by name
+        </button>
+      </SectionCard>
+    );
+  }
+
+  if (lookup.status !== "FOUND") return null;
+  const item = lookup.result?.item;
+  const canonicalItemId = item?.canonicalItemId || item?.canonical_item_id;
+
+  return (
+    <SectionCard className="border-emerald-500/30 bg-emerald-500/10">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-black uppercase tracking-wider text-emerald-300">Exact Inventory match</p>
+          <p className="mt-1 break-words text-base font-black leading-tight text-foreground">{item?.itemName || "Inventory item"}</p>
+          <p className="mt-1 text-xs font-bold text-muted-foreground">{describeItem(item) || "Authoritative Inventory identity"}</p>
+          <p className="mt-2 break-all font-mono text-[10px] font-bold text-muted-foreground">{identityLabel(item)}</p>
+        </div>
+        <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-400" />
+      </div>
+      <button
+        type="button"
+        className={`mt-3 flex items-center justify-center gap-2 ${BTN_PRIMARY}`}
+        disabled={!canonicalItemId || viewing}
+        onClick={() => onOpen(canonicalItemId)}
+      >
+        {viewing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+        Open operational item view
+      </button>
+      <p className="mt-2 text-center text-[10px] font-black uppercase tracking-wide text-emerald-300">
+        Explicit operator action required
+      </p>
+    </SectionCard>
+  );
+}
+
 export default function Scan() {
   const navigate = useNavigate();
   const session = useScanOpsSession();
+  const [lookupMode, setLookupMode] = useState("EXACT");
   const [searchValue, setSearchValue] = useState("");
+  const [inputNotice, setInputNotice] = useState("");
   const [busyAction, setBusyAction] = useState(null);
   const [lookup, setLookup] = useState(null);
   const [searchResult, setSearchResult] = useState(null);
@@ -92,6 +147,17 @@ export default function Scan() {
   const refreshAvailability = useCallback(() => {
     setAvailability(getLiveItemLookupAvailability(session));
   }, [session]);
+
+  const resetReadState = useCallback(() => {
+    requestSequence.current += 1;
+    requestInFlight.current = false;
+    setBusyAction(null);
+    setInputNotice("");
+    setLookup(null);
+    setSearchResult(null);
+    setItemView(null);
+    setActiveTab("Summary");
+  }, []);
 
   useEffect(() => {
     refreshAvailability();
@@ -112,13 +178,8 @@ export default function Scan() {
 
   useEffect(() => {
     if (availability.connected) return;
-    requestSequence.current += 1;
-    requestInFlight.current = false;
-    setBusyAction(null);
-    setLookup(null);
-    setSearchResult(null);
-    setItemView(null);
-  }, [availability.connected]);
+    resetReadState();
+  }, [availability.connected, resetReadState]);
 
   const executeRead = useCallback(async (action, runner, applyResult) => {
     if (!availability.connected || requestInFlight.current) return;
@@ -155,37 +216,18 @@ export default function Scan() {
     executeRead("VIEW", () => runLiveItemView({ canonicalItemId, session }), setItemView);
   }, [executeRead, session]);
 
-  const runBarcodeOrSkuLookup = useCallback((lookupType, value) => {
+  const runExactLookup = useCallback((lookupType, value) => {
+    setInputNotice("");
     setLookup(null);
     setSearchResult(null);
     setItemView(null);
-    executeRead(
-      "LOOKUP",
-      () => runLiveItemLookup({ lookupType, lookupValue: value, session }),
-      (result) => {
-        setLookup(result);
-        if (result?.ok && result?.status === "FOUND" && result?.result?.item?.canonicalItemId) {
-          const itemId = result.result.item.canonicalItemId || result.result.item.canonical_item_id;
-          if (itemId) {
-            requestAnimationFrame(() => {
-              executeRead("VIEW", () => runLiveItemView({ canonicalItemId: itemId, session }), setItemView);
-            });
-          }
-        } else if (result?.ok && result?.status === "ITEM_NOT_FOUND") {
-          const fallbackQuery = value;
-          executeRead(
-            "SEARCH",
-            () => runLiveItemSearch({ query: fallbackQuery, page: 1, limit: 20, session }),
-            setSearchResult,
-          );
-        }
-      },
-    );
+    executeRead("LOOKUP", () => runLiveItemLookup({ lookupType, lookupValue: value, session }), setLookup);
   }, [executeRead, session]);
 
   const runNameSearch = useCallback((rawQuery, page = 1) => {
     const query = String(rawQuery || "").trim();
     if (!query || query.length > 128) return;
+    setInputNotice("");
     setLookup(null);
     setItemView(null);
     executeRead("SEARCH", () => runLiveItemSearch({ query, page, limit: 20, session }), setSearchResult);
@@ -194,16 +236,34 @@ export default function Scan() {
   const handleSubmit = useCallback(() => {
     const value = String(searchValue || "").trim();
     if (!value || value.length > 128) return;
-    const type = detectLookupType(value);
-    if (type === "BARCODE") {
-      setLastBarcode(value);
-      runBarcodeOrSkuLookup("BARCODE", value);
-    } else if (type === "SKU") {
-      runBarcodeOrSkuLookup("SKU", value);
-    } else {
+
+    if (lookupMode === "NAME") {
       runNameSearch(value, 1);
+      return;
     }
-  }, [searchValue, runBarcodeOrSkuLookup, runNameSearch]);
+
+    const type = detectLookupType(value);
+    if (type === "NAME") {
+      setInputNotice("Exact lookup does not accept spaced item names. Choose Search name to run a broader Inventory search.");
+      return;
+    }
+    if (type === "BARCODE") setLastBarcode(value);
+    runExactLookup(type || "SKU", value);
+  }, [lookupMode, runExactLookup, runNameSearch, searchValue]);
+
+  const handleModeChange = useCallback((nextMode) => {
+    if (nextMode === lookupMode) return;
+    resetReadState();
+    setLookupMode(nextMode);
+    requestAnimationFrame(() => inputRef.current?.focus?.());
+  }, [lookupMode, resetReadState]);
+
+  const handleSearchExactAsName = useCallback(() => {
+    const query = String(searchValue || "").trim();
+    resetReadState();
+    setLookupMode("NAME");
+    if (query) runNameSearch(query, 1);
+  }, [resetReadState, runNameSearch, searchValue]);
 
   useEffect(() => {
     if (!availability.connected) return undefined;
@@ -212,9 +272,11 @@ export default function Scan() {
       const barcode = scannerBuffer.current.trim();
       scannerBuffer.current = "";
       if (!barcode || barcode.length > 128) return;
+      resetReadState();
+      setLookupMode("EXACT");
       setLastBarcode(barcode);
       setSearchValue(barcode);
-      runBarcodeOrSkuLookup("BARCODE", barcode);
+      runExactLookup("BARCODE", barcode);
     };
 
     const onKeyDown = (event) => {
@@ -245,41 +307,30 @@ export default function Scan() {
       window.clearTimeout(scannerTimer.current);
       scannerBuffer.current = "";
     };
-  }, [availability.connected, runBarcodeOrSkuLookup]);
+  }, [availability.connected, resetReadState, runExactLookup]);
 
+  const exactItem = lookup?.ok && lookup?.status === "FOUND" ? lookup?.result?.item : null;
   const mergedItem = useMemo(() => {
-    const lookupItem = lookup?.ok && lookup?.status === "FOUND" ? lookup?.result?.item : null;
     const viewItem = itemView?.ok && itemView?.status === "ITEM_VIEW_READY" ? itemView?.result?.item : null;
-    if (!lookupItem && !viewItem) return null;
-    return mergeItemData(lookupItem, viewItem);
-  }, [lookup, itemView]);
+    if (!viewItem) return null;
+    return mergeItemData(exactItem, viewItem);
+  }, [exactItem, itemView]);
 
   const showDetail = Boolean(mergedItem);
   const showSearchResults = !showDetail && Boolean(searchResult);
+  const showExactResult = !showDetail && !showSearchResults && Boolean(lookup?.ok);
   const isBusy = Boolean(busyAction);
 
-  const handleQuickAction = useCallback((key) => {
-    if (key === "scan") {
-      setSearchValue("");
-      setLookup(null);
-      setSearchResult(null);
-      setItemView(null);
-      setLastBarcode("");
-      requestAnimationFrame(() => inputRef.current?.focus?.());
-    } else if (key === "movements") {
-      const itemKey = mergedItem?.primaryBarcode || mergedItem?.sku || mergedItem?.canonicalItemId;
-      navigate(itemKey ? `/movements?item=${encodeURIComponent(itemKey)}` : "/movements");
-    } else if (key === "locations") {
-      setActiveTab("Locations");
-    } else if (key === "report") {
-      const itemKey = mergedItem?.primaryBarcode || mergedItem?.sku || mergedItem?.canonicalItemId;
-      navigate(itemKey ? `/gap-scan?item=${encodeURIComponent(itemKey)}` : "/gap-scan");
-    }
-  }, [mergedItem, navigate]);
+  const handleQuickAction = useCallback(() => {
+    resetReadState();
+    setSearchValue("");
+    setLastBarcode("");
+    requestAnimationFrame(() => inputRef.current?.focus?.());
+  }, [resetReadState]);
 
   return (
-    <PageShell className="bold-blocks" data-phase39-0f5-item-search-view>
-      <PageHeader title="Lookup Item" subtitle="Scan or search item details" />
+    <PageShell className="bold-blocks" data-phase39-0f5-item-search-view data-phase39-0f8-current-main-reconciliation>
+      <PageHeader title="Lookup Item" subtitle="Authoritative Inventory identity and handling" />
       <WorkflowMain>
         {!availability.connected ? (
           <ConnectionRequired
@@ -290,23 +341,32 @@ export default function Scan() {
           <>
             <ItemLookupSearch
               ref={inputRef}
+              mode={lookupMode}
+              onModeChange={handleModeChange}
               value={searchValue}
               onChange={(next) => {
                 setSearchValue(next);
-                if (!next) {
-                  setLookup(null);
-                  setSearchResult(null);
-                }
+                setInputNotice("");
+                if (!next) resetReadState();
               }}
               onSubmit={handleSubmit}
               busy={isBusy}
             />
 
-            {lastBarcode && !showDetail && !showSearchResults && (
+            {inputNotice && (
+              <SectionCard className="border-amber-500/30 bg-amber-500/10 text-amber-200">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p className="text-xs font-bold leading-snug">{inputNotice}</p>
+                </div>
+              </SectionCard>
+            )}
+
+            {lastBarcode && !showDetail && !showSearchResults && !showExactResult && (
               <p className="break-all font-mono text-[11px] font-bold text-muted-foreground">Last scan: {lastBarcode}</p>
             )}
 
-            {isBusy && !showDetail && !showSearchResults && (
+            {isBusy && !showDetail && !showSearchResults && !showExactResult && (
               <SectionCard className="border-primary/20 bg-primary/5">
                 <div className="flex items-center gap-3 text-sm font-black text-foreground">
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -319,6 +379,15 @@ export default function Scan() {
               <ReadFailure read={lookup} fallbackTitle="Lookup needs attention" />
             )}
 
+            {showExactResult && (
+              <ExactLookupResult
+                lookup={lookup}
+                onOpen={openItemView}
+                onSearchByName={handleSearchExactAsName}
+                viewing={busyAction === "VIEW"}
+              />
+            )}
+
             {showSearchResults && (
               <ItemSearchResults
                 searchResult={searchResult}
@@ -326,6 +395,10 @@ export default function Scan() {
                 onPage={(page) => runNameSearch(searchResult?.result?.query || searchValue, page)}
                 viewing={isBusy}
               />
+            )}
+
+            {itemView && !itemView.ok && !showDetail && (
+              <ReadFailure read={itemView} fallbackTitle="Item view needs attention" />
             )}
 
             {showDetail && (
@@ -343,12 +416,12 @@ export default function Scan() {
 
                 <div className="flex items-center gap-2 rounded-2xl bg-secondary/60 px-3 py-2 text-[11px] font-bold text-muted-foreground">
                   <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-                  Read-only. No stock, pricing, ledger, or item mutation is performed.
+                  Zero mutations verified. Read-only Inventory data; no stock, pricing, ledger, purchase-order, Receiving, or Item Master mutation.
                 </div>
               </>
             )}
 
-            {!showDetail && !showSearchResults && !isBusy && !lookup && !searchResult && (
+            {!showDetail && !showSearchResults && !showExactResult && !isBusy && !lookup && !searchResult && !inputNotice && (
               <SectionCard>
                 <div className="flex items-start gap-3">
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
@@ -357,15 +430,11 @@ export default function Scan() {
                   <div className="min-w-0">
                     <p className="text-base font-black leading-tight text-foreground">Connected to Inventory</p>
                     <p className="mt-1 text-xs font-bold leading-snug text-muted-foreground">
-                      Scan a barcode or search by item name, SKU, or sell ID to open the item detail.
+                      Use Scan / SKU for an exact lookup or Search name for a candidate list. No result opens automatically.
                     </p>
                   </div>
                 </div>
               </SectionCard>
-            )}
-
-            {itemView && !itemView.ok && showDetail && (
-              <ReadFailure read={itemView} fallbackTitle="Item view needs attention" />
             )}
           </>
         )}
