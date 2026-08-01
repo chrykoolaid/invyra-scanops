@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertCircle,
@@ -7,14 +7,16 @@ import {
   Bell,
   Info,
   PackageSearch,
+  Printer,
   Smartphone,
 } from "lucide-react";
 import PageHeader from "../components/scanner/PageHeader";
 import { SectionCard } from "../components/scanner/WorkflowPrimitives";
+import { getMarkdownPrintExceptions } from "../lib/scanOpsMarkdownLifecycle";
 
-const FILTERS = ["All", "Stock", "Sync", "Device"];
+const FILTERS = ["All", "Stock", "Markdown", "Sync", "Device"];
 
-const ALERTS = [
+const STATIC_ALERTS = [
   {
     id: "low-stock-yoghurt",
     severity: "CRITICAL",
@@ -44,6 +46,18 @@ const ALERTS = [
   },
 ];
 
+function buildMarkdownPrintAlerts() {
+  return getMarkdownPrintExceptions().map((record) => ({
+    id: `markdown-print-${record.submissionId}`,
+    severity: "CRITICAL",
+    category: "Markdown",
+    title: `${record.itemName || "Markdown item"} · labels not printed`,
+    message: `${record.labelCopies || 1} label${Number(record.labelCopies || 1) === 1 ? "" : "s"} pending retry for batch ${record.batchLot || "—"}`,
+    source: record.printErrorCode || "Markdown Print",
+    to: "/markdowns",
+  }));
+}
+
 function severityClass(severity) {
   switch (severity) {
     case "CRITICAL":
@@ -61,6 +75,7 @@ function severityClass(severity) {
 function categoryIcon(category) {
   if (category === "Device") return Smartphone;
   if (category === "Stock") return PackageSearch;
+  if (category === "Markdown") return Printer;
   if (category === "Sync") return Bell;
   return AlertTriangle;
 }
@@ -68,15 +83,27 @@ function categoryIcon(category) {
 export default function Alerts() {
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState("All");
+  const [markdownAlerts, setMarkdownAlerts] = useState(() => buildMarkdownPrintAlerts());
 
+  useEffect(() => {
+    const refresh = () => setMarkdownAlerts(buildMarkdownPrintAlerts());
+    window.addEventListener("storage", refresh);
+    const interval = window.setInterval(refresh, 30_000);
+    return () => {
+      window.removeEventListener("storage", refresh);
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  const alerts = useMemo(() => [...markdownAlerts, ...STATIC_ALERTS], [markdownAlerts]);
   const visibleAlerts = useMemo(() => {
-    if (activeFilter === "All") return ALERTS;
-    return ALERTS.filter((alert) => alert.category === activeFilter);
-  }, [activeFilter]);
+    if (activeFilter === "All") return alerts;
+    return alerts.filter((alert) => alert.category === activeFilter);
+  }, [activeFilter, alerts]);
 
-  const criticalCount = ALERTS.filter((alert) => alert.severity === "CRITICAL").length;
-  const warningCount = ALERTS.filter((alert) => alert.severity === "WARNING").length;
-  const deviceCount = ALERTS.filter((alert) => alert.category === "Device").length;
+  const criticalCount = alerts.filter((alert) => alert.severity === "CRITICAL").length;
+  const warningCount = alerts.filter((alert) => alert.severity === "WARNING").length;
+  const deviceCount = alerts.filter((alert) => alert.category === "Device").length;
 
   return (
     <div className="bold-blocks min-h-screen bg-background flex flex-col overflow-x-hidden">
@@ -99,13 +126,13 @@ export default function Alerts() {
           </div>
         </SectionCard>
 
-        <section className="grid grid-cols-4 gap-2 min-w-0" aria-label="Alert filters">
+        <section className="grid grid-cols-5 gap-2 min-w-0" aria-label="Alert filters">
           {FILTERS.map((filter) => (
             <button
               key={filter}
               type="button"
               onClick={() => setActiveFilter(filter)}
-              className={`min-h-11 rounded-2xl border px-3 text-xs font-black transition-all active:scale-[0.98] ${
+              className={`min-h-11 rounded-2xl border px-2 text-[11px] font-black transition-all active:scale-[0.98] ${
                 activeFilter === filter ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-foreground"
               }`}
             >
@@ -119,7 +146,7 @@ export default function Alerts() {
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
               <Info className="h-5 w-5" />
             </div>
-            <p className="break-words text-sm font-semibold text-muted-foreground">Review what needs attention now.</p>
+            <p className="break-words text-sm font-semibold text-muted-foreground">Review what needs attention now. Unresolved markdown prints remain here until the same submission prints successfully.</p>
           </div>
         </SectionCard>
 
