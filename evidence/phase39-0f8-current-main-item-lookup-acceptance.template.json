@@ -15,7 +15,8 @@
   },
   "endpoints": {
     "inventoryControlUrl": "http://127.0.0.1:8787",
-    "scanOpsUrl": "http://127.0.0.1:5173/scan"
+    "inventoryUrl": "http://127.0.0.1:5173",
+    "scanOpsUrl": "http://127.0.0.1:5174/scan"
   },
   "startup": {
     "inventoryRootPassed": false,
@@ -29,6 +30,14 @@
     "trustedPairingConfirmed": false,
     "healthPingConfirmed": false,
     "itemReadAuthorisationConfirmed": false
+  },
+  "unifiedLookup": {
+    "singleFieldVisible": false,
+    "barcodeAccepted": false,
+    "skuAccepted": false,
+    "sellIdAccepted": false,
+    "itemNameAccepted": false,
+    "separateModeTabsVisible": false
   },
   "exactLookup": {
     "inputType": "SKU",
@@ -46,6 +55,18 @@
     "nameSearchStartedAutomatically": false,
     "explicitSearchByNameActionVisible": false,
     "explicitSearchByNameActionUsed": false
+  },
+  "partialNameSearch": {
+    "oneLetterQuery": "b",
+    "oneLetterResultCount": 0,
+    "oneLetterCandidateListVisible": false,
+    "threeLetterBleQuery": "ble",
+    "threeLetterBleachCandidateVisible": false,
+    "threeLetterDetQuery": "det",
+    "threeLetterDetergentCandidateVisible": false,
+    "autoSelected": false,
+    "explicitSelectionRequired": false,
+    "resultLimitAtMost20": false
   },
   "nameSearch": {
     "query": "",
@@ -96,8 +117,8 @@
     "scanOps": 0
   },
   "usability": {
-    "scanSkuModeClear": false,
-    "searchNameModeClear": false,
+    "unifiedLookupFieldClear": false,
+    "partialNameSearchClear": false,
     "primaryActionClear": false,
     "candidateCardsReadable": false,
     "lifecycleStatesClear": false,
@@ -116,10 +137,12 @@
     "receivingIntegrationAuthorized": false
   },
   "screenshots": [
-    { "label": "connected-two-mode-lookup", "path": "" },
+    { "label": "connected-unified-lookup", "path": "" },
+    { "label": "one-letter-candidate-list", "path": "" },
+    { "label": "three-letter-bleach-search", "path": "" },
+    { "label": "three-letter-detergent-search", "path": "" },
     { "label": "exact-result-before-explicit-open", "path": "" },
     { "label": "explicit-not-found-fallback", "path": "" },
-    { "label": "name-search-candidates", "path": "" },
     { "label": "authorised-item-summary", "path": "" },
     { "label": "unsupported-stock-location-sales-scope", "path": "" },
     { "label": "authorisation-unavailable", "path": "" }
