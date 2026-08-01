@@ -1,60 +1,53 @@
 import React from "react";
-import { hasValue, valueOf } from "./itemLookupHelpers";
+import { hasValue, valueOf, yesNo } from "./itemLookupHelpers";
 
-function MetricCell({ label, value, tone = "default" }) {
-  const toneClass = {
-    green: "text-emerald-400",
-    red: "text-red-400",
-    default: "text-foreground",
-  };
+function DetailCell({ label, value, wide = false }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-2.5">
+    <div className={`rounded-2xl border border-border bg-card p-3 ${wide ? "col-span-2" : ""}`}>
       <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className={`mt-1 break-words text-sm font-black ${toneClass[tone] || toneClass.default}`}>{value}</p>
+      <p className="mt-1 break-words text-sm font-black leading-snug text-foreground">{hasValue(value) ? value : "—"}</p>
     </div>
   );
 }
 
+function displayAlternateBarcodes(item) {
+  const values = valueOf(item, ["alternateBarcodes", "alternate_barcodes"], null);
+  if (!Array.isArray(values) || values.length === 0) return "—";
+  return values.join(", ");
+}
+
 export default function SummaryTab({ item }) {
   if (!item) return null;
-  const unit = valueOf(item, ["unitOfMeasure", "unit_of_measure", "uom"], "");
-  const adjustIn = valueOf(item, ["adjustIn7d", "adjust_in_7d", "adjustIn"], null);
-  const adjustOut = valueOf(item, ["adjustOut7d", "adjust_out_7d", "adjustOut"], null);
-  const lastReceivedDate = valueOf(item, ["lastReceivedDate", "last_received_date", "updatedDate", "updated_date"], null);
-  const lastReceivedQty = valueOf(item, ["lastReceivedQty", "last_received_qty"], null);
-  const inTransit = valueOf(item, ["inTransit", "in_transit", "pendingDeliveryQty", "pending_delivery_qty"], null);
-  const wasted = valueOf(item, ["wastedUnits", "wasted_units"], null);
-  const unavailableSoh = valueOf(item, ["unavailableSoh", "unavailable_soh"], null);
-  const shelfCapacity = valueOf(item, ["shelfCapacity", "shelf_capacity"], "N/A");
-  const cartonCapacity = valueOf(item, ["cartonCapacity", "carton_capacity"], "N/A");
-  const mdq = valueOf(item, ["mdq", "MDQ"], "N/A");
-  const pdq = valueOf(item, ["pdq", "PDQ"], "0");
-
-  const fmt = (val, suffix = "") => hasValue(val) ? `${val}${suffix ? ` ${suffix}` : ""}` : "—";
+  const minimumShelfLife = valueOf(item, ["minimumShelfLifeDays", "minimum_shelf_life_days"], null);
+  const minimumShelfLifeDisplay = hasValue(minimumShelfLife) ? `${minimumShelfLife} days` : "Not specified";
 
   return (
     <div className="space-y-3">
-      <div>
-        <p className="mb-2 text-[11px] font-black uppercase tracking-wider text-muted-foreground">Key Snapshot</p>
+      <section>
+        <p className="mb-2 text-[11px] font-black uppercase tracking-wider text-muted-foreground">Identity</p>
         <div className="grid grid-cols-2 gap-2">
-          <MetricCell label="Adjust In (7 days)" value={fmt(adjustIn, unit)} tone={hasValue(adjustIn) ? "green" : "default"} />
-          <MetricCell label="Adjust Out (7 days)" value={fmt(adjustOut, unit)} tone={hasValue(adjustOut) ? "red" : "default"} />
-          <MetricCell label="Last Received" value={fmt(lastReceivedDate)} />
-          <MetricCell label="Last Received Qty" value={fmt(lastReceivedQty, unit)} />
-          <MetricCell label="In Transit" value={fmt(inTransit, unit)} />
-          <MetricCell label="Wasted Units" value={fmt(wasted, unit)} />
-          <MetricCell label="Unavailable SOH" value={fmt(unavailableSoh, unit)} />
-          <MetricCell label="Batch Tracked" value={valueOf(item, ["batchTracked", "batch_tracked"], "—") === true ? "Yes" : "No"} />
+          <DetailCell label="Short display name" value={valueOf(item, ["shortDisplayName", "short_display_name"], "—")} wide />
+          <DetailCell label="SKU" value={valueOf(item, ["sku"], "—")} />
+          <DetailCell label="Unit of measure" value={valueOf(item, ["unitOfMeasure", "unit_of_measure", "uom"], "—")} />
+          <DetailCell label="Brand" value={valueOf(item, ["brand"], "—")} />
+          <DetailCell label="Category" value={valueOf(item, ["category"], "—")} />
+          <DetailCell label="Pack size" value={valueOf(item, ["packSize", "pack_size"], "—")} />
+          <DetailCell label="Primary barcode" value={valueOf(item, ["primaryBarcode", "primary_barcode"], "—")} />
+          <DetailCell label="Alternate barcodes" value={displayAlternateBarcodes(item)} wide />
         </div>
-      </div>
-      <div>
-        <p className="mb-2 text-[11px] font-black uppercase tracking-wider text-muted-foreground">Reference Info</p>
-        <div className="grid grid-cols-3 gap-2">
-          <MetricCell label="Shelf Capacity" value={shelfCapacity} />
-          <MetricCell label="Carton Capacity" value={cartonCapacity} />
-          <MetricCell label="MDQ / PDQ" value={`${mdq} / ${pdq}`} />
+      </section>
+
+      <section>
+        <p className="mb-2 text-[11px] font-black uppercase tracking-wider text-muted-foreground">Handling</p>
+        <div className="grid grid-cols-2 gap-2">
+          <DetailCell label="Batch tracked" value={yesNo(valueOf(item, ["batchTracked", "batch_tracked"], null))} />
+          <DetailCell label="Expiry tracked" value={yesNo(valueOf(item, ["expiryTracked", "expiry_tracked"], null))} />
+          <DetailCell label="Serialised" value={yesNo(valueOf(item, ["serialised", "serialized"], null))} />
+          <DetailCell label="Minimum shelf life" value={minimumShelfLifeDisplay} />
+          <DetailCell label="Storage guidance" value={valueOf(item, ["storageGuidance", "storage_guidance"], "Not specified")} wide />
+          <DetailCell label="Inventory updated" value={valueOf(item, ["updatedDate", "updated_date"], "—")} wide />
         </div>
-      </div>
+      </section>
     </div>
   );
 }

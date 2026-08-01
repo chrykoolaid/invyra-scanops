@@ -1,0 +1,132 @@
+{
+  "phase": "39-0F8",
+  "status": "INCOMPLETE",
+  "environment": "TRAINING",
+  "executedAt": null,
+  "baselines": {
+    "inventory": "4346c8895b38b35006eba5d4d763ed32f2548cc0",
+    "scanOpsBase": "e7ea23e3a219ba26f874eefbad5f54d4856f7632",
+    "scanOpsCandidate": "REPLACE_WITH_PHASE_39_0F8_HEAD_OR_MERGE_COMMIT"
+  },
+  "operator": {
+    "name": "",
+    "operatorId": "",
+    "role": "staff"
+  },
+  "endpoints": {
+    "inventoryControlUrl": "http://127.0.0.1:8787",
+    "scanOpsUrl": "http://127.0.0.1:5173/scan"
+  },
+  "startup": {
+    "inventoryRootPassed": false,
+    "inventorySettingsDevicesPassed": false,
+    "scanOpsRootPassed": false,
+    "scanOpsLookupRoutePassed": false
+  },
+  "connection": {
+    "trainingModeConfirmed": false,
+    "listenerOnline": false,
+    "trustedPairingConfirmed": false,
+    "healthPingConfirmed": false,
+    "itemReadAuthorisationConfirmed": false
+  },
+  "exactLookup": {
+    "inputType": "SKU",
+    "inputValue": "",
+    "found": false,
+    "exactResultVisibleBeforeItemView": false,
+    "itemViewOpenedAutomatically": false,
+    "explicitOpenActionUsed": false,
+    "canonicalItemId": "",
+    "itemName": ""
+  },
+  "notFound": {
+    "inputValue": "",
+    "exactNotFoundVisible": false,
+    "nameSearchStartedAutomatically": false,
+    "explicitSearchByNameActionVisible": false,
+    "explicitSearchByNameActionUsed": false
+  },
+  "nameSearch": {
+    "query": "",
+    "resultCount": 0,
+    "autoSelected": false,
+    "explicitSelectionRequired": false,
+    "selectedCanonicalItemId": "",
+    "activeCandidateVisible": false,
+    "inactiveCandidateVisible": false
+  },
+  "operationalItemView": {
+    "openedAfterExplicitAction": false,
+    "identityVisible": false,
+    "handlingVisible": false,
+    "lifecycleVisible": false,
+    "batchTrackingVisible": false,
+    "expiryTrackingVisible": false,
+    "storageGuidanceVisible": false,
+    "minimumShelfLifeVisible": false,
+    "priceVisible": false
+  },
+  "unsupportedScope": {
+    "inventoryTabExplainsUnavailableScope": false,
+    "locationsTabExplainsUnavailableScope": false,
+    "salesTabExplainsUnavailableScope": false,
+    "syntheticSalesChartVisible": false,
+    "inferredStockVisible": false,
+    "inferredLocationVisible": false
+  },
+  "failClosed": {
+    "blockedRole": "cashier",
+    "blockedBeforeDispatch": false,
+    "authorisationClearedInInventory": false,
+    "nextReadFailedClosed": false,
+    "staleItemDataReused": false,
+    "automaticRetryObserved": false,
+    "trustExpiredOrDisconnected": false,
+    "dispatchBlockedWithoutTrust": false
+  },
+  "mutationCounts": {
+    "inventory": 0,
+    "stock": 0,
+    "ledger": 0,
+    "itemMaster": 0,
+    "pricing": 0,
+    "purchaseOrder": 0,
+    "receiving": 0,
+    "scanOps": 0
+  },
+  "usability": {
+    "scanSkuModeClear": false,
+    "searchNameModeClear": false,
+    "primaryActionClear": false,
+    "candidateCardsReadable": false,
+    "lifecycleStatesClear": false,
+    "errorRecoveryClear": false,
+    "lowCognitiveLoad": false
+  },
+  "safety": {
+    "liveEnabled": false,
+    "productionEnabled": false,
+    "automaticSelectionAdded": false,
+    "automaticRetryAdded": false,
+    "persistenceAdded": false,
+    "queueWriteAdded": false,
+    "localCatalogueFallbackUsed": false,
+    "inventoryCredentialExposedToScanOps": false,
+    "receivingIntegrationAuthorized": false
+  },
+  "screenshots": [
+    { "label": "connected-two-mode-lookup", "path": "" },
+    { "label": "exact-result-before-explicit-open", "path": "" },
+    { "label": "explicit-not-found-fallback", "path": "" },
+    { "label": "name-search-candidates", "path": "" },
+    { "label": "authorised-item-summary", "path": "" },
+    { "label": "unsupported-stock-location-sales-scope", "path": "" },
+    { "label": "authorisation-unavailable", "path": "" }
+  ],
+  "notes": "",
+  "validation": {
+    "passed": false,
+    "blockers": []
+  }
+}

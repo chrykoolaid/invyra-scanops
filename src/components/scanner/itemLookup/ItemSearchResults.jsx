@@ -1,6 +1,6 @@
 import React from "react";
 import { ChevronLeft, ChevronRight, Eye, PackageSearch } from "lucide-react";
-import { describeItem, hasValue, valueOf } from "./itemLookupHelpers";
+import { describeItem, hasValue } from "./itemLookupHelpers";
 
 function LifecycleChip({ status }) {
   const normalized = String(status || "UNKNOWN").toUpperCase();
@@ -68,7 +68,7 @@ export default function ItemSearchResults({ searchResult, onSelect, onPage, view
             {hasValue(candidate.primaryBarcode) && <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-bold text-muted-foreground">Barcode: {candidate.primaryBarcode}</span>}
           </div>
           <div className="mt-2 flex items-center gap-1.5 text-xs font-black text-primary">
-            <Eye className="h-3.5 w-3.5" /> View item
+            <Eye className="h-3.5 w-3.5" /> View this item
           </div>
         </button>
       ))}
