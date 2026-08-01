@@ -3,17 +3,10 @@ import { Barcode, Loader2, Search, X } from "lucide-react";
 import { detectLookupType } from "./itemLookupHelpers";
 
 const ItemLookupSearch = forwardRef(function ItemLookupSearch(
-  { mode = "EXACT", onModeChange, value, onChange, onSubmit, busy },
+  { value, onChange, onSubmit, busy },
   ref,
 ) {
-  const handleChange = (event) => {
-    const nextValue = event.target.value.slice(0, 128);
-    const detectedType = detectLookupType(nextValue);
-    const nextMode = detectedType === "NAME" ? "NAME" : "EXACT";
-
-    if (nextValue && nextMode !== mode) onModeChange?.(nextMode);
-    onChange(nextValue);
-  };
+  const nameInput = detectLookupType(value) === "NAME";
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -33,12 +26,12 @@ const ItemLookupSearch = forwardRef(function ItemLookupSearch(
         <input
           ref={ref}
           value={value}
-          onChange={handleChange}
+          onChange={(event) => onChange(event.target.value.slice(0, 128))}
           placeholder="Scan barcode or enter SKU, sell ID, or item name"
           autoComplete="off"
           autoCapitalize="off"
           autoCorrect="off"
-          spellCheck={mode === "NAME"}
+          spellCheck={nameInput}
           enterKeyHint="search"
           aria-label="Scan barcode or search Inventory by SKU, sell ID, or item name"
           className="min-w-0 flex-1 bg-transparent py-1.5 text-sm font-semibold text-foreground placeholder:text-muted-foreground outline-none"
