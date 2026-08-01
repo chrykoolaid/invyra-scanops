@@ -1,20 +1,19 @@
 import React, { forwardRef } from "react";
 import { Barcode, Loader2, Search, X } from "lucide-react";
-
-const MODES = [
-  { key: "EXACT", label: "Scan / SKU", icon: Barcode },
-  { key: "NAME", label: "Search name", icon: Search },
-];
+import { detectLookupType } from "./itemLookupHelpers";
 
 const ItemLookupSearch = forwardRef(function ItemLookupSearch(
   { mode = "EXACT", onModeChange, value, onChange, onSubmit, busy },
   ref,
 ) {
-  const nameMode = mode === "NAME";
-  const placeholder = nameMode
-    ? "Enter an item name, brand, or pack description"
-    : "Scan barcode or enter exact SKU / sell ID";
-  const actionLabel = nameMode ? "Search" : "Lookup";
+  const handleChange = (event) => {
+    const nextValue = event.target.value.slice(0, 128);
+    const detectedType = detectLookupType(nextValue);
+    const nextMode = detectedType === "NAME" ? "NAME" : "EXACT";
+
+    if (nextValue && nextMode !== mode) onModeChange?.(nextMode);
+    onChange(nextValue);
+  };
 
   const handleSubmit = (event) => {
     event.preventDefault();
@@ -22,54 +21,26 @@ const ItemLookupSearch = forwardRef(function ItemLookupSearch(
   };
 
   return (
-    <div className="space-y-2" data-item-lookup-search>
-      <div
-        className="grid grid-cols-2 gap-1 rounded-2xl border border-border bg-card p-1"
-        role="tablist"
-        aria-label="Item lookup mode"
-      >
-        {MODES.map(({ key, label, icon: Icon }) => {
-          const selected = mode === key;
-          return (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              disabled={busy}
-              onClick={() => onModeChange?.(key)}
-              className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-xs font-black transition-colors disabled:opacity-50 ${
-                selected
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground active:bg-secondary"
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </button>
-          );
-        })}
-      </div>
-
+    <div className="space-y-2" data-item-lookup-search data-unified-item-lookup>
       <form
         onSubmit={handleSubmit}
         className="flex items-center gap-2 rounded-2xl border border-input bg-background px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-primary/20"
       >
-        {nameMode ? (
-          <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
-        ) : (
-          <Barcode className="h-4 w-4 shrink-0 text-muted-foreground" />
-        )}
+        <span className="relative flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground" aria-hidden="true">
+          <Search className="h-4 w-4" />
+          <Barcode className="absolute -bottom-1 -right-1 h-2.5 w-2.5 rounded-sm bg-background" />
+        </span>
         <input
           ref={ref}
           value={value}
-          onChange={(event) => onChange(event.target.value.slice(0, 128))}
-          placeholder={placeholder}
+          onChange={handleChange}
+          placeholder="Scan barcode or enter SKU, sell ID, or item name"
           autoComplete="off"
           autoCapitalize="off"
           autoCorrect="off"
-          spellCheck={nameMode}
+          spellCheck={mode === "NAME"}
           enterKeyHint="search"
+          aria-label="Scan barcode or search Inventory by SKU, sell ID, or item name"
           className="min-w-0 flex-1 bg-transparent py-1.5 text-sm font-semibold text-foreground placeholder:text-muted-foreground outline-none"
         />
         {value ? (
@@ -86,17 +57,15 @@ const ItemLookupSearch = forwardRef(function ItemLookupSearch(
           type="submit"
           disabled={busy || !value.trim()}
           className="flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-primary px-3 text-xs font-black text-primary-foreground active:scale-[0.98] disabled:opacity-40"
-          aria-label={nameMode ? "Search Inventory by item name" : "Run exact Inventory lookup"}
+          aria-label="Find item in Inventory"
         >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : nameMode ? <Search className="h-4 w-4" /> : <Barcode className="h-4 w-4" />}
-          <span className="hidden sm:inline">{busy ? "Working" : actionLabel}</span>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+          <span className="hidden sm:inline">{busy ? "Working" : "Find item"}</span>
         </button>
       </form>
 
       <p className="px-1 text-[11px] font-bold leading-snug text-muted-foreground">
-        {nameMode
-          ? "Search returns candidates only. Choose an item explicitly to open its Inventory view."
-          : "Use this mode for a hardware scan or an exact barcode, SKU, or sell ID."}
+        One field for scans, exact IDs, and names. Exact matches and name candidates still require an explicit operator action before the item view opens.
       </p>
     </div>
   );
