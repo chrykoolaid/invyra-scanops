@@ -24,14 +24,46 @@ jobs:
   certify:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      INVENTORY_CURRENT_MAIN_SHA: 4346c8895b38b35006eba5d4d763ed32f2548cc0
     steps:
-      - name: Checkout
+      - name: Checkout ScanOps candidate
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify Inventory repository read token
+        env:
+          INVENTORY_REPO_READ_TOKEN: ${{ secrets.INVENTORY_REPO_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${INVENTORY_REPO_READ_TOKEN}" || {
+            echo "::error::INVENTORY_REPO_READ_TOKEN is required."
+            exit 1
+          }
+
+      - name: Checkout current Inventory main baseline
+        uses: actions/checkout@v4
+        with:
+          repository: chrykoolaid/invyra-base44
+          ref: ${{ env.INVENTORY_CURRENT_MAIN_SHA }}
+          token: ${{ secrets.INVENTORY_REPO_READ_TOKEN }}
+          path: inventory-repo
+          persist-credentials: false
 
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: '24'
+
+      - name: Verify pinned Inventory baseline
+        run: |
+          set -euo pipefail
+          inventory_sha="$(git -C inventory-repo rev-parse HEAD)"
+          test "${inventory_sha}" = "${INVENTORY_CURRENT_MAIN_SHA}"
+          printf '{\n  "scanOpsCommit": "%s",\n  "inventoryCommit": "%s"\n}\n' \
+            "$(git rev-parse HEAD)" "${inventory_sha}" \
+            | tee phase39-0f8-current-main-commits.json
 
       - name: Phase 39-0F8 current-main reconciliation
         run: node scripts/validate-phase39-0f8-current-main-item-lookup-reconciliation.mjs
@@ -40,6 +72,8 @@ jobs:
         run: node scripts/validate-phase39-0f5-scanops-item-search-view.mjs
 
       - name: Phase 39-0F6 cross-repository item read compatibility
+        env:
+          INVENTORY_REPO_PATH: inventory-repo
         run: node scripts/validate-phase39-0f6-cross-repository-item-read-acceptance.mjs
 
       - name: Phase 39-0F7 operator acceptance kit compatibility
@@ -109,6 +143,7 @@ jobs:
         with:
           name: phase39-0f8-current-main-item-lookup-reconciliation
           path: |
+            phase39-0f8-current-main-commits.json
             scanops-phase39-0f8-quality-note.json
             evidence/phase39-0f8-current-main-item-lookup-acceptance.template.json
           if-no-files-found: warn
