@@ -70,7 +70,17 @@ export function identityLabel(item) {
 export function detectLookupType(value) {
   const trimmed = String(value || "").trim();
   if (!trimmed) return null;
+
   if (/^\d{6,}$/.test(trimmed)) return "BARCODE";
-  if (!/\s/.test(trimmed) && trimmed.length <= 32 && /^[A-Za-z0-9\-_]+$/.test(trimmed)) return "SKU";
+  if (/^\d{1,5}$/.test(trimmed)) return "SKU";
+
+  const compactIdentifier = !/\s/.test(trimmed)
+    && trimmed.length <= 64
+    && /^[A-Za-z0-9\-_]+$/.test(trimmed);
+  const mixedAlphaNumeric = /[A-Za-z]/.test(trimmed) && /\d/.test(trimmed);
+  const structuredIdentifier = /[-_]/.test(trimmed);
+  const canonicalIdentifier = /^[a-f0-9]{20,}$/i.test(trimmed);
+
+  if (compactIdentifier && (mixedAlphaNumeric || structuredIdentifier || canonicalIdentifier)) return "SKU";
   return "NAME";
 }
