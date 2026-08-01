@@ -33,8 +33,9 @@ Later ScanOps current-main UI changes introduced behaviour and presentation that
 ## Locked architecture
 
 ```text
-ScanOps exact lookup or name search
+ScanOps unified lookup field
 → trusted TRAINING connection
+→ exact BARCODE/SKU lookup or governed NAME search
 → canonical LOOKUP_REQUEST
 → governed Inventory read operation
 → correlated read-only receipt
@@ -45,19 +46,26 @@ Inventory remains the system of record.
 
 ScanOps does not create, update, delete, post, approve, persist, queue, cache, or infer Inventory truth.
 
-## Reconciled workflow
+## Unified lookup workflow
 
-### Exact lookup
-
-The default mode is:
+The former visible `Scan / SKU` and `Search name` tabs are replaced by one field:
 
 ```text
-Scan / SKU
+Scan barcode or enter SKU, sell ID, or item name
 ```
 
-It accepts a hardware barcode scan or an exact barcode, SKU, or sell ID.
+This reduces operator steps while preserving the governed distinction between exact lookup and item-name search.
 
-A found result displays an exact Inventory match first. The operational item view opens only after the operator selects:
+### Exact identifiers
+
+The unified field accepts:
+
+- a hardware barcode scan;
+- an exact barcode;
+- an exact SKU;
+- an exact sell ID or canonical identifier.
+
+A found exact result displays an Inventory match first. The operational item view opens only after the operator selects:
 
 ```text
 Open operational item view
@@ -65,28 +73,40 @@ Open operational item view
 
 No exact result opens automatically.
 
+### Partial item-name search
+
+Plain alphabetic text is treated as an item-name search.
+
+One or more letters are valid. Examples:
+
+```text
+b   → candidate list containing matching B items
+ble → Bleach candidates
+ det → Detergent candidates
+```
+
+The Inventory-owned search ranks results deterministically:
+
+1. exact item name;
+2. item name starts with the query;
+3. SKU starts with the query;
+4. brand-and-item-name match;
+5. item name contains the query.
+
+The first page is capped at 20 results. No candidate is automatically selected. A candidate opens only after the operator explicitly selects:
+
+```text
+View this item
+```
+
 ### Exact not found
 
 An exact not-found response remains visible and controlled.
 
-ScanOps does not automatically run an item-name search. The operator may explicitly select:
+ScanOps does not automatically convert a failed exact lookup into an item-name search. The operator may explicitly select:
 
 ```text
 Search this value by name
-```
-
-### Item-name search
-
-The second mode is:
-
-```text
-Search name
-```
-
-It returns Inventory-owned candidates with no automatic selection. A candidate opens only after the operator explicitly selects:
-
-```text
-View this item
 ```
 
 ## Authorised item view data
@@ -107,7 +127,7 @@ The operational item view may display only the Inventory-certified identity and 
 
 ## Unsupported tabs
 
-The redesigned UI retains Inventory, Locations and Sales tabs for future expansion, but they now show truthful scope messages only.
+The redesigned UI retains Inventory, Locations and Sales tabs for future expansion, but they show truthful scope messages only.
 
 The current Item Lookup contract does not authorise:
 
@@ -168,21 +188,23 @@ Required operator checks:
 4. Authorise Inventory item reads.
 5. Start ScanOps from the Phase 39-0F8 candidate.
 6. Pair ScanOps and confirm trusted health.
-7. Confirm the Scan / SKU and Search name modes are visible and clear.
+7. Confirm one unified lookup field is visible and no separate mode tabs remain.
 8. Run a known exact barcode or SKU lookup.
 9. Confirm the exact result remains visible and does not open automatically.
 10. Select Open operational item view and verify the authoritative identity and handling projection.
-11. Run an exact value that does not exist.
-12. Confirm no name search starts automatically.
-13. Select Search this value by name and verify candidates appear.
-14. Run a partial name search returning multiple candidates.
-15. Confirm no candidate auto-selects.
-16. Explicitly select an active candidate and an inactive candidate.
-17. Confirm price is absent.
-18. Confirm Inventory, Locations and Sales tabs explain unavailable scope and show no inferred or simulated values.
-19. Clear Inventory read authorisation and confirm the next read fails closed without automatic retry or stale data.
-20. Disconnect or expire trust and confirm dispatch is blocked.
-21. Confirm every mutation count remains zero.
+11. Search with one letter, such as `b`, and confirm a candidate list appears without auto-selection.
+12. Search `ble` and confirm Bleach appears when present in Inventory.
+13. Search `det` and confirm Detergent appears when present in Inventory.
+14. Confirm the initial result page contains no more than 20 candidates.
+15. Explicitly select a candidate using View this item.
+16. Run an exact value that does not exist.
+17. Confirm no name search starts automatically.
+18. Select Search this value by name and verify candidates appear.
+19. Confirm price is absent.
+20. Confirm Inventory, Locations and Sales tabs explain unavailable scope and show no inferred or simulated values.
+21. Clear Inventory read authorisation and confirm the next read fails closed without automatic retry or stale data.
+22. Disconnect or expire trust and confirm dispatch is blocked.
+23. Confirm every mutation count remains zero.
 
 ## Completion gate
 
