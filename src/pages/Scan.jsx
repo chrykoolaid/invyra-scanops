@@ -325,7 +325,7 @@ export default function Scan() {
       data-phase39-0f5-item-search-view
       data-phase39-0f8-current-main-reconciliation
       data-unified-item-lookup
-      data-certification-labels="Unified item lookup | No auto-select | View this item | Operational item view | Storage guidance | Minimum shelf life"
+      data-certification-labels="Unified item lookup | Scan / SKU | Search name | No auto-select | View this item | Operational item view | Storage guidance | Minimum shelf life"
     >
       <PageHeader title="Lookup Item" subtitle="Authoritative Inventory identity and handling" />
       <WorkflowMain>
@@ -415,7 +415,7 @@ export default function Scan() {
                   <div className="min-w-0">
                     <p className="text-base font-black leading-tight text-foreground">Connected to Inventory</p>
                     <p className="mt-1 text-xs font-bold leading-snug text-muted-foreground">
-                      Use the single field to scan a barcode or enter an exact identifier or item name. No result opens automatically.
+                      Use the single field to scan a barcode, enter an exact identifier, or type one or more item-name letters. No result opens automatically.
                     </p>
                   </div>
                 </div>
