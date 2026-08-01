@@ -10,6 +10,7 @@ function check(name, condition, detail = '') {
 
 const scan = read('src/pages/Scan.jsx');
 const search = read('src/components/scanner/itemLookup/ItemLookupSearch.jsx');
+const helpers = read('src/components/scanner/itemLookup/itemLookupHelpers.js');
 const results = read('src/components/scanner/itemLookup/ItemSearchResults.jsx');
 const header = read('src/components/scanner/itemLookup/ItemDetailHeader.jsx');
 const priority = read('src/components/scanner/itemLookup/PriorityCards.jsx');
@@ -27,16 +28,35 @@ const exactLookupBlock = scan.slice(
   scan.indexOf('const runNameSearch'),
 );
 
+const submitBlock = scan.slice(
+  scan.indexOf('const handleSubmit'),
+  scan.indexOf('const handleSearchExactAsName'),
+);
+
 check('current_main_reconciliation_marker_present',
   scan.includes('data-phase39-0f8-current-main-reconciliation'),
   'Scan.jsx');
 
-check('calm_explicit_lookup_modes_present',
-  search.includes('Scan / SKU')
-    && search.includes('Search name')
-    && search.includes('Search returns candidates only')
-    && scan.includes('lookupMode === "NAME"'),
+check('single_unified_lookup_field_present',
+  search.includes('data-unified-item-lookup')
+    && search.includes('Scan barcode or enter SKU, sell ID, or item name')
+    && search.includes('One field for scans, exact IDs, and names')
+    && scan.includes('data-unified-item-lookup')
+    && scan.includes('Use the single field to scan a barcode')
+    && !search.includes('role="tablist"')
+    && !search.includes('Scan / SKU')
+    && !search.includes('Search name'),
   'ItemLookupSearch.jsx and Scan.jsx');
+
+check('unified_input_routes_without_single_word_name_misclassification',
+  submitBlock.includes('detectLookupType(value)')
+    && submitBlock.includes('type === "NAME"')
+    && submitBlock.includes('runNameSearch(value, 1)')
+    && submitBlock.includes('runLookup(type || "SKU", value)')
+    && helpers.includes('const mixedAlphaNumeric')
+    && helpers.includes('const structuredIdentifier')
+    && helpers.includes('return "NAME"'),
+  'Scan.jsx and itemLookupHelpers.js');
 
 check('exact_lookup_never_auto_opens_item_view',
   exactLookupBlock.includes('runLiveItemLookup')
@@ -153,6 +173,7 @@ check('current_main_acceptance_template_is_pinned',
     && acceptance.environment === 'TRAINING'
     && acceptance.baselines.inventory === '4346c8895b38b35006eba5d4d763ed32f2548cc0'
     && acceptance.baselines.scanOpsBase === 'e7ea23e3a219ba26f874eefbad5f54d4856f7632'
+    && acceptance.usability.unifiedLookupFieldClear === false
     && acceptance.safety.liveEnabled === false
     && acceptance.safety.productionEnabled === false
     && acceptance.safety.automaticSelectionAdded === false
