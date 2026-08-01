@@ -8,12 +8,15 @@ export const MARKDOWN_STAGES = {
 };
 
 export const DEFAULT_MARKDOWN_POLICY = Object.freeze({
+  timeZone: null,
   initialLeadTradingDays: 1,
   initialPercent: 25,
   furtherPercent: 50,
   finalPercent: 60,
   earlySessionTime: "09:00",
   finalSessionTime: "15:00",
+  minimumMinutesBeforeClose: 90,
+  minimumMinutesBetweenSessions: 120,
   advanceWarningTradingDays: 2,
   weeklyTradingDays: [0, 1, 2, 3, 4, 5, 6],
   dateOverrides: [],
@@ -23,11 +26,53 @@ function pad(value) {
   return String(value).padStart(2, "0");
 }
 
-export function toDateOnly(value = new Date()) {
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const date = value instanceof Date ? new Date(value) : new Date(value);
+function validTimeZone(value) {
+  if (!value) return null;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value }).format(new Date());
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+function zonedParts(value, timeZone) {
+  const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const zone = validTimeZone(timeZone);
+  if (!zone) {
+    return {
+      year: date.getFullYear(),
+      month: date.getMonth() + 1,
+      day: date.getDate(),
+      hour: date.getHours(),
+      minute: date.getMinutes(),
+    };
+  }
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: zone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return {
+    year: Number(map.year),
+    month: Number(map.month),
+    day: Number(map.day),
+    hour: Number(map.hour),
+    minute: Number(map.minute),
+  };
+}
+
+export function toDateOnly(value = new Date(), timeZone = null) {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const parts = zonedParts(value, timeZone);
+  if (!parts) return null;
+  return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`;
 }
 
 function dateAtNoon(dateOnly) {
@@ -53,10 +98,14 @@ export function normalizeMarkdownPolicy(input = {}) {
   return {
     ...DEFAULT_MARKDOWN_POLICY,
     ...input,
+    timeZone: validTimeZone(input.timeZone),
     initialLeadTradingDays: Math.max(1, Number(input.initialLeadTradingDays || DEFAULT_MARKDOWN_POLICY.initialLeadTradingDays)),
     initialPercent: Math.min(99, Math.max(1, Number(input.initialPercent || DEFAULT_MARKDOWN_POLICY.initialPercent))),
     furtherPercent: Math.min(99, Math.max(1, Number(input.furtherPercent || DEFAULT_MARKDOWN_POLICY.furtherPercent))),
     finalPercent: Math.min(99, Math.max(1, Number(input.finalPercent || DEFAULT_MARKDOWN_POLICY.finalPercent))),
+    minimumMinutesBeforeClose: Math.max(0, Number(input.minimumMinutesBeforeClose ?? DEFAULT_MARKDOWN_POLICY.minimumMinutesBeforeClose)),
+    minimumMinutesBetweenSessions: Math.max(0, Number(input.minimumMinutesBetweenSessions ?? DEFAULT_MARKDOWN_POLICY.minimumMinutesBetweenSessions)),
+    advanceWarningTradingDays: Math.max(0, Number(input.advanceWarningTradingDays ?? DEFAULT_MARKDOWN_POLICY.advanceWarningTradingDays)),
     weeklyTradingDays,
     dateOverrides,
   };
@@ -115,9 +164,9 @@ export function getInitialMarkdownTradingDate(expiryDate, policyInput = {}) {
   return getPreviousTradingDate(finalSellableDate, policy, policy.initialLeadTradingDays);
 }
 
-export function isExpiredForSale(expiryDate, reference = new Date()) {
+export function isExpiredForSale(expiryDate, reference = new Date(), timeZone = null) {
   const expiry = toDateOnly(expiryDate);
-  const today = toDateOnly(reference);
+  const today = toDateOnly(reference, timeZone);
   if (!expiry || !today) return false;
   return compareDateOnly(today, expiry) > 0;
 }
@@ -127,9 +176,43 @@ function minutesFromTime(value) {
   return (Number.isFinite(hours) ? hours : 0) * 60 + (Number.isFinite(minutes) ? minutes : 0);
 }
 
-function currentMinutes(reference = new Date()) {
-  const date = reference instanceof Date ? reference : new Date(reference);
-  return date.getHours() * 60 + date.getMinutes();
+function timeFromMinutes(value) {
+  const safe = Math.max(0, Math.min(1439, Math.round(Number(value || 0))));
+  return `${pad(Math.floor(safe / 60))}:${pad(safe % 60)}`;
+}
+
+function currentMinutes(reference = new Date(), timeZone = null) {
+  const parts = zonedParts(reference, timeZone);
+  return parts ? parts.hour * 60 + parts.minute : 0;
+}
+
+export function getEffectiveMarkdownSessionTimes(dateOnly, policyInput = {}) {
+  const policy = normalizeMarkdownPolicy(policyInput);
+  const hours = getTradingHours(dateOnly, policy);
+  if (!hours) return null;
+
+  const opensAt = minutesFromTime(hours.opensAt);
+  const closesAt = minutesFromTime(hours.closesAt);
+  const configuredEarly = minutesFromTime(policy.earlySessionTime);
+  const configuredFinal = minutesFromTime(policy.finalSessionTime);
+  const latestSafeFinal = Math.max(opensAt, closesAt - policy.minimumMinutesBeforeClose);
+  const finalMinutes = Math.max(opensAt, Math.min(configuredFinal, latestSafeFinal));
+  const latestSafeEarly = Math.max(opensAt, finalMinutes - policy.minimumMinutesBetweenSessions);
+  const earlyMinutes = Math.max(opensAt, Math.min(configuredEarly, latestSafeEarly));
+  const insufficientSessionWindow = finalMinutes - earlyMinutes < policy.minimumMinutesBetweenSessions;
+
+  return {
+    opensAt: hours.opensAt,
+    closesAt: hours.closesAt,
+    earlySessionTime: timeFromMinutes(earlyMinutes),
+    finalSessionTime: timeFromMinutes(finalMinutes),
+    earlySessionMinutes: earlyMinutes,
+    finalSessionMinutes: finalMinutes,
+    reducedHours: hours.reducedHours,
+    closureReason: hours.reason,
+    sessionAdjusted: earlyMinutes !== configuredEarly || finalMinutes !== configuredFinal,
+    insufficientSessionWindow,
+  };
 }
 
 function latestStage(rounds = []) {
@@ -146,7 +229,7 @@ function latestStage(rounds = []) {
 export function evaluateMarkdownSchedule({ expiryDate, reference = new Date(), policy: policyInput = {}, rounds = [] } = {}) {
   const policy = normalizeMarkdownPolicy(policyInput);
   const expiry = toDateOnly(expiryDate);
-  const today = toDateOnly(reference);
+  const today = toDateOnly(reference, policy.timeZone);
   const finalSellableDate = getFinalSellableTradingDate(expiry, policy);
   const initialMarkdownDate = getInitialMarkdownTradingDate(expiry, policy);
   const holidayAdjusted = Boolean(expiry && finalSellableDate && expiry !== finalSellableDate);
@@ -162,12 +245,13 @@ export function evaluateMarkdownSchedule({ expiryDate, reference = new Date(), p
       finalSellableDate: null,
       initialMarkdownDate: null,
       holidayAdjusted: false,
+      reducedHoursAdjusted: false,
       previousStage,
       helper: "Enter the batch expiry date to calculate the markdown round.",
     };
   }
 
-  if (isExpiredForSale(expiry, reference)) {
+  if (isExpiredForSale(expiry, reference, policy.timeZone)) {
     return {
       policyVersion: MARKDOWN_POLICY_VERSION,
       stage: MARKDOWN_STAGES.EXPIRED,
@@ -177,6 +261,7 @@ export function evaluateMarkdownSchedule({ expiryDate, reference = new Date(), p
       finalSellableDate,
       initialMarkdownDate,
       holidayAdjusted,
+      reducedHoursAdjusted: false,
       previousStage,
       helper: `Expired ${expiry}. This batch cannot be sold and must move to waste review.`,
     };
@@ -184,9 +269,10 @@ export function evaluateMarkdownSchedule({ expiryDate, reference = new Date(), p
 
   const onFinalSellableDate = today === finalSellableDate;
   const afterInitialDate = compareDateOnly(today, initialMarkdownDate) >= 0;
-  const nowMinutes = currentMinutes(reference);
-  const finalSessionMinutes = minutesFromTime(policy.finalSessionTime);
-  const earlySessionMinutes = minutesFromTime(policy.earlySessionTime);
+  const sessions = getEffectiveMarkdownSessionTimes(finalSellableDate, policy);
+  const nowMinutes = currentMinutes(reference, policy.timeZone);
+  const finalSessionMinutes = sessions?.finalSessionMinutes ?? minutesFromTime(policy.finalSessionTime);
+  const earlySessionMinutes = sessions?.earlySessionMinutes ?? minutesFromTime(policy.earlySessionTime);
 
   let stage = MARKDOWN_STAGES.INITIAL;
   let dueState = afterInitialDate ? "DUE" : "UPCOMING";
@@ -198,9 +284,9 @@ export function evaluateMarkdownSchedule({ expiryDate, reference = new Date(), p
     if (nowMinutes >= finalSessionMinutes || previousStage === MARKDOWN_STAGES.FURTHER) {
       stage = MARKDOWN_STAGES.FINAL;
       dueState = nowMinutes >= finalSessionMinutes ? "DUE" : "UPCOMING_LATER_TODAY";
-    } else if (nowMinutes >= earlySessionMinutes || previousStage === MARKDOWN_STAGES.INITIAL || !previousStage) {
+    } else {
       stage = MARKDOWN_STAGES.FURTHER;
-      dueState = "DUE";
+      dueState = nowMinutes >= earlySessionMinutes ? "DUE" : "UPCOMING_TODAY";
     }
   } else if (previousStage === MARKDOWN_STAGES.INITIAL) {
     stage = MARKDOWN_STAGES.FURTHER;
@@ -223,6 +309,9 @@ export function evaluateMarkdownSchedule({ expiryDate, reference = new Date(), p
     : stage === MARKDOWN_STAGES.INITIAL
       ? `D-1 trading day · expiry ${expiry}`
       : `Final sellable day · expiry ${expiry}`;
+  const sessionHelper = onFinalSellableDate && sessions
+    ? ` · sessions ${sessions.earlySessionTime} / ${sessions.finalSessionTime}`
+    : "";
 
   return {
     policyVersion: MARKDOWN_POLICY_VERSION,
@@ -234,9 +323,39 @@ export function evaluateMarkdownSchedule({ expiryDate, reference = new Date(), p
     finalSellableDate,
     initialMarkdownDate,
     holidayAdjusted,
+    reducedHoursAdjusted: Boolean(sessions?.reducedHours || sessions?.sessionAdjusted),
+    insufficientSessionWindow: Boolean(sessions?.insufficientSessionWindow),
+    effectiveEarlySessionTime: sessions?.earlySessionTime || policy.earlySessionTime,
+    effectiveFinalSessionTime: sessions?.finalSessionTime || policy.finalSessionTime,
     previousStage,
-    helper: `${stageLabel} · ${dateHelper}`,
+    helper: `${stageLabel} · ${dateHelper}${sessionHelper}`,
   };
+}
+
+function countOpenTradingDaysBetween(startDate, endDate, policyInput = {}) {
+  let cursor = startDate;
+  let count = 0;
+  let guard = 0;
+  while (compareDateOnly(cursor, endDate) < 0 && guard < 370) {
+    if (isTradingDate(cursor, policyInput)) count += 1;
+    cursor = addCalendarDays(cursor, 1);
+    guard += 1;
+  }
+  return count;
+}
+
+export function getUpcomingClosureWarnings(reference = new Date(), policyInput = {}) {
+  const policy = normalizeMarkdownPolicy(policyInput);
+  const today = toDateOnly(reference, policy.timeZone);
+  return policy.dateOverrides
+    .filter((entry) => entry?.date && entry.isOpen === false && compareDateOnly(entry.date, today) >= 0)
+    .map((entry) => ({
+      date: entry.date,
+      reason: entry.reason || "Non-trading day",
+      openTradingDaysAway: countOpenTradingDaysBetween(today, entry.date, policy),
+    }))
+    .filter((entry) => entry.openTradingDaysAway <= policy.advanceWarningTradingDays)
+    .sort((left, right) => left.date.localeCompare(right.date));
 }
 
 export function buildMarkdownBatchKey({ itemId, sku, barcode, locationId, batchLot, expiryDate } = {}) {
