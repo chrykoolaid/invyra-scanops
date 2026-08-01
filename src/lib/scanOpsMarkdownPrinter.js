@@ -16,8 +16,10 @@ export function buildMarkdownLabelPayload(record) {
   const itemCode = record.barcode || record.sku || record.itemId || record.submissionId;
   return {
     version: MARKDOWN_PRINT_VERSION,
+    labelVersion: record.submissionVersion || MARKDOWN_PRINT_VERSION,
     submissionId: record.submissionId,
     markdownRecordId: record.submissionId,
+    batchKey: record.batchKey || null,
     itemId: record.itemId || null,
     itemName: record.itemName,
     sku: record.sku || null,
@@ -25,6 +27,7 @@ export function buildMarkdownLabelPayload(record) {
     itemCode,
     batchLot: batch,
     expiryDate: expiry,
+    finalSellableDate: record.finalSellableDate || expiry,
     markdownStage: record.stage,
     markdownPercent: record.selectedMarkdownPercent,
     markdownPrice: record.selectedMarkdownPrice,
@@ -80,6 +83,7 @@ export async function getDefaultMarkdownPrinter() {
 }
 
 function normalizeBridgeResult(result) {
+  if (typeof result === "boolean") return { ok: result };
   if (typeof result === "string") {
     try {
       return JSON.parse(result);
@@ -133,20 +137,33 @@ export async function printMarkdownLabels(record, printerInput = null) {
         printer,
       };
     }
-    if (result.ok === false) {
+    if (result.ok !== true) {
       return {
         ok: false,
-        code: result.code || "PRINT_FAILED",
+        code: result.code || "PRINT_NOT_CONFIRMED",
         message: result.message || "The label printer did not confirm printing.",
         printer,
       };
     }
+
+    const confirmedCopies = Number(result.printedCopies ?? result.copies);
+    if (!Number.isFinite(confirmedCopies) || confirmedCopies !== copies) {
+      return {
+        ok: false,
+        code: "PARTIAL_PRINT_NOT_CONFIRMED",
+        message: `Expected ${copies} label${copies === 1 ? "" : "s"}, but the printer did not confirm the complete job. Check the labels and retry the same submission.`,
+        printer,
+        expectedCopies: copies,
+        confirmedCopies: Number.isFinite(confirmedCopies) ? confirmedCopies : 0,
+      };
+    }
+
     return {
       ok: true,
       code: "PRINTED",
       message: result.message || `${copies} label${copies === 1 ? "" : "s"} printed`,
       printer,
-      copies,
+      copies: confirmedCopies,
       nativeJobId: result.jobId || result.nativeJobId || null,
     };
   } catch (error) {
