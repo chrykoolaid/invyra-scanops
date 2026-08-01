@@ -81,6 +81,7 @@ jobs:
           npx eslint \
             src/pages/Scan.jsx \
             src/components/scanner/itemLookup/ItemLookupSearch.jsx \
+            src/components/scanner/itemLookup/itemLookupHelpers.js \
             src/components/scanner/itemLookup/ItemSearchResults.jsx \
             src/components/scanner/itemLookup/ItemDetailHeader.jsx \
             src/components/scanner/itemLookup/PriorityCards.jsx \
@@ -99,6 +100,10 @@ jobs:
             "status": "AUTOMATED_SCANOPS_CERTIFICATION_ONLY",
             "inventoryBaseline": "4346c8895b38b35006eba5d4d763ed32f2548cc0",
             "scanOpsBase": "e7ea23e3a219ba26f874eefbad5f54d4856f7632",
+            "unifiedLookupField": true,
+            "oneLetterNameSearchAccepted": true,
+            "threeLetterPrefixSearchAccepted": true,
+            "resultPageLimit": 20,
             "explicitExactOpenRequired": true,
             "automaticNotFoundFallback": false,
             "automaticCandidateSelection": false,
