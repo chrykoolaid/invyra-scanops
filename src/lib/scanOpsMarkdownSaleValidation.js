@@ -1,5 +1,7 @@
-import { compareDateOnly, toDateOnly } from "./scanOpsMarkdownPolicy";
-import { MARKDOWN_PRINT_STATUSES } from "./scanOpsMarkdownLifecycle";
+import { compareDateOnly, toDateOnly } from "./scanOpsMarkdownPolicy.js";
+
+const PRINTED_STATUS = "PRINTED";
+const SUPERSEDED_STATUS = "SUPERSEDED";
 
 export const MARKDOWN_SALE_DECISIONS = {
   ALLOW: "ALLOW",
@@ -87,7 +89,7 @@ export function validateMarkdownLabelForSale({
   }
 
   if (
-    markdownRecord.printStatus === MARKDOWN_PRINT_STATUSES.SUPERSEDED
+    markdownRecord.printStatus === SUPERSEDED_STATUS
     || markdownRecord.supersededBy
     || (activeSubmissionId && markdownRecord.submissionId !== activeSubmissionId)
   ) {
@@ -98,7 +100,7 @@ export function validateMarkdownLabelForSale({
     };
   }
 
-  if (markdownRecord.printStatus !== MARKDOWN_PRINT_STATUSES.PRINTED) {
+  if (markdownRecord.printStatus !== PRINTED_STATUS) {
     return {
       allowed: false,
       decision: MARKDOWN_SALE_DECISIONS.BLOCK_NOT_PRINTED,
