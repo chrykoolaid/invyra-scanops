@@ -81,7 +81,7 @@ function ExactLookupResult({ lookup, onOpen, onSearchByName, viewing }) {
         <div className="flex items-start gap-3">
           <PackageSearch className="mt-0.5 h-5 w-5 shrink-0" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-black">No exact Inventory match</p>
+            <p className="text-sm font-black">Item not found</p>
             <p className="mt-1 text-xs font-bold leading-snug opacity-85">
               The barcode, SKU, or sell ID was not found. No broader search was started automatically.
             </p>
@@ -216,7 +216,7 @@ export default function Scan() {
     executeRead("VIEW", () => runLiveItemView({ canonicalItemId, session }), setItemView);
   }, [executeRead, session]);
 
-  const runExactLookup = useCallback((lookupType, value) => {
+  const runLookup = useCallback((lookupType, value) => {
     setInputNotice("");
     setLookup(null);
     setSearchResult(null);
@@ -247,9 +247,14 @@ export default function Scan() {
       setInputNotice("Exact lookup does not accept spaced item names. Choose Search name to run a broader Inventory search.");
       return;
     }
-    if (type === "BARCODE") setLastBarcode(value);
-    runExactLookup(type || "SKU", value);
-  }, [lookupMode, runExactLookup, runNameSearch, searchValue]);
+    if (type === "BARCODE") {
+      setLastBarcode(value);
+      runLookup("BARCODE", value);
+      return;
+    }
+    const skuValue = value;
+    runLookup("SKU", skuValue);
+  }, [lookupMode, runLookup, runNameSearch, searchValue]);
 
   const handleModeChange = useCallback((nextMode) => {
     if (nextMode === lookupMode) return;
@@ -276,7 +281,7 @@ export default function Scan() {
       setLookupMode("EXACT");
       setLastBarcode(barcode);
       setSearchValue(barcode);
-      runExactLookup("BARCODE", barcode);
+      runLookup("BARCODE", barcode);
     };
 
     const onKeyDown = (event) => {
@@ -307,7 +312,7 @@ export default function Scan() {
       window.clearTimeout(scannerTimer.current);
       scannerBuffer.current = "";
     };
-  }, [availability.connected, resetReadState, runExactLookup]);
+  }, [availability.connected, resetReadState, runLookup]);
 
   const exactItem = lookup?.ok && lookup?.status === "FOUND" ? lookup?.result?.item : null;
   const mergedItem = useMemo(() => {
