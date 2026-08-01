@@ -13,9 +13,26 @@ export const MARKDOWN_SALE_DECISIONS = {
   BLOCK_EXPIRED: "BLOCK_EXPIRED",
 };
 
-function sameValue(left, right) {
-  if (left == null || right == null || left === "" || right === "") return true;
-  return String(left).trim().toLowerCase() === String(right).trim().toLowerCase();
+function hasValue(value) {
+  return value !== null && value !== undefined && String(value).trim() !== "";
+}
+
+function normalized(value) {
+  return String(value).trim().toLowerCase();
+}
+
+function sameOptionalValue(left, right) {
+  if (!hasValue(left) || !hasValue(right)) return true;
+  return normalized(left) === normalized(right);
+}
+
+function identityMatches(markdownRecord, scanned) {
+  const pairs = [
+    [markdownRecord.itemId, scanned.itemId],
+    [markdownRecord.sku, scanned.sku],
+    [markdownRecord.barcode, scanned.barcode],
+  ].filter(([left, right]) => hasValue(left) && hasValue(right));
+  return pairs.length > 0 && pairs.some(([left, right]) => normalized(left) === normalized(right));
 }
 
 export function validateMarkdownLabelForSale({
@@ -37,12 +54,7 @@ export function validateMarkdownLabelForSale({
     };
   }
 
-  const itemMatches = [
-    sameValue(markdownRecord.itemId, scannedItemId),
-    sameValue(markdownRecord.sku, scannedSku),
-    sameValue(markdownRecord.barcode, scannedBarcode),
-  ].some(Boolean);
-  if (!itemMatches) {
+  if (!identityMatches(markdownRecord, { itemId: scannedItemId, sku: scannedSku, barcode: scannedBarcode })) {
     return {
       allowed: false,
       decision: MARKDOWN_SALE_DECISIONS.BLOCK_ITEM_MISMATCH,
@@ -50,7 +62,7 @@ export function validateMarkdownLabelForSale({
     };
   }
 
-  if (!sameValue(markdownRecord.batchLot, scannedBatchLot)) {
+  if (!sameOptionalValue(markdownRecord.batchLot, scannedBatchLot)) {
     return {
       allowed: false,
       decision: MARKDOWN_SALE_DECISIONS.BLOCK_BATCH_MISMATCH,
@@ -58,7 +70,7 @@ export function validateMarkdownLabelForSale({
     };
   }
 
-  if (!sameValue(markdownRecord.locationId, locationId)) {
+  if (!sameOptionalValue(markdownRecord.locationId, locationId)) {
     return {
       allowed: false,
       decision: MARKDOWN_SALE_DECISIONS.BLOCK_LOCATION_MISMATCH,
