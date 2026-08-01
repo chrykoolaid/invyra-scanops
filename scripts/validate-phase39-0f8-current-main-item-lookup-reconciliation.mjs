@@ -40,13 +40,25 @@ check('current_main_reconciliation_marker_present',
 check('single_unified_lookup_field_present',
   search.includes('data-unified-item-lookup')
     && search.includes('Scan barcode or enter SKU, sell ID, or item name')
-    && search.includes('One field for scans, exact IDs, and names')
+    && search.includes('Type one or more letters to get a candidate list')
     && scan.includes('data-unified-item-lookup')
     && scan.includes('Use the single field to scan a barcode')
     && !search.includes('role="tablist"')
     && !search.includes('Scan / SKU')
     && !search.includes('Search name'),
   'ItemLookupSearch.jsx and Scan.jsx');
+
+check('partial_name_search_accepts_one_or_three_letters',
+  search.includes('“b”, “ble”, or “det”')
+    && submitBlock.includes('type === "NAME"')
+    && submitBlock.includes('runNameSearch(value, 1)')
+    && helpers.includes('return "NAME"')
+    && !client.includes('ITEM_SEARCH_QUERY_TOO_SHORT')
+    && acceptance.partialNameSearch.oneLetterQuery === 'b'
+    && acceptance.partialNameSearch.threeLetterBleQuery === 'ble'
+    && acceptance.partialNameSearch.threeLetterDetQuery === 'det'
+    && acceptance.partialNameSearch.autoSelected === false,
+  'Unified search sources and acceptance template');
 
 check('unified_input_routes_without_single_word_name_misclassification',
   submitBlock.includes('detectLookupType(value)')
@@ -174,6 +186,7 @@ check('current_main_acceptance_template_is_pinned',
     && acceptance.baselines.inventory === '4346c8895b38b35006eba5d4d763ed32f2548cc0'
     && acceptance.baselines.scanOpsBase === 'e7ea23e3a219ba26f874eefbad5f54d4856f7632'
     && acceptance.usability.unifiedLookupFieldClear === false
+    && acceptance.usability.partialNameSearchClear === false
     && acceptance.safety.liveEnabled === false
     && acceptance.safety.productionEnabled === false
     && acceptance.safety.automaticSelectionAdded === false
