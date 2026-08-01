@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CalendarClock, Printer, RefreshCw, Tags } from "lucide-react";
 import PageHeader from "../components/scanner/PageHeader";
 import { EmptyState, MetricPill, PageShell, SectionCard, WorkflowMain } from "../components/scanner/WorkflowPrimitives";
-import { getMarkdownMonitorEntries } from "../lib/scanOpsMarkdownLifecycle";
+import { getMarkdownMonitorEntries, getMarkdownPolicy } from "../lib/scanOpsMarkdownLifecycle";
+import { getUpcomingClosureWarnings } from "../lib/scanOpsMarkdownPolicy";
 
 function money(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return "—";
@@ -47,9 +48,13 @@ function MonitorCard({ entry }) {
 
 export default function MarkdownMonitor() {
   const [entries, setEntries] = useState(() => getMarkdownMonitorEntries());
+  const [closureWarnings, setClosureWarnings] = useState(() => getUpcomingClosureWarnings(new Date(), getMarkdownPolicy()));
   const [filter, setFilter] = useState("all");
 
-  const refresh = () => setEntries(getMarkdownMonitorEntries());
+  const refresh = () => {
+    setEntries(getMarkdownMonitorEntries());
+    setClosureWarnings(getUpcomingClosureWarnings(new Date(), getMarkdownPolicy()));
+  };
 
   useEffect(() => {
     const onStorage = () => refresh();
@@ -64,11 +69,11 @@ export default function MarkdownMonitor() {
   const filtered = useMemo(() => entries.filter((entry) => {
     if (filter === "holiday") return entry.holidayAdjusted;
     if (filter === "blocked") return entry.saleBlocked;
-    if (filter === "due") return ["DUE", "UPCOMING_LATER_TODAY"].includes(entry.nextActionState);
+    if (filter === "due") return ["DUE", "UPCOMING_TODAY", "UPCOMING_LATER_TODAY"].includes(entry.nextActionState);
     return true;
   }), [entries, filter]);
 
-  const dueCount = entries.filter((entry) => ["DUE", "UPCOMING_LATER_TODAY"].includes(entry.nextActionState) && !entry.saleBlocked).length;
+  const dueCount = entries.filter((entry) => ["DUE", "UPCOMING_TODAY", "UPCOMING_LATER_TODAY"].includes(entry.nextActionState) && !entry.saleBlocked).length;
   const holidayCount = entries.filter((entry) => entry.holidayAdjusted).length;
   const blockedCount = entries.filter((entry) => entry.saleBlocked).length;
 
@@ -76,6 +81,10 @@ export default function MarkdownMonitor() {
     <PageShell className="bold-blocks">
       <PageHeader title="Markdown Monitor" subtitle="Batches requiring further markdown or removal" />
       <WorkflowMain>
+        {closureWarnings.map((warning) => (
+          <OperatorClosureWarning key={warning.date} warning={warning} />
+        ))}
+
         <SectionCard className="print:hidden">
           <div className="flex items-start gap-3">
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
@@ -143,5 +152,19 @@ export default function MarkdownMonitor() {
         </SectionCard>
       </WorkflowMain>
     </PageShell>
+  );
+}
+
+function OperatorClosureWarning({ warning }) {
+  return (
+    <SectionCard className="border-amber-500/30 bg-amber-500/10 text-amber-200 print:hidden">
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+        <div>
+          <p className="text-sm font-black">Upcoming non-trading day</p>
+          <p className="mt-1 text-xs font-bold leading-snug">{warning.reason} is closed on {warning.date}. Review holiday-adjusted batches before the final open trading day.</p>
+        </div>
+      </div>
+    </SectionCard>
   );
 }
