@@ -1,10 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { BadgePercent, Printer, RotateCcw, ScanLine, Tag } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { BadgePercent, CheckCircle2, Printer, ScanLine, Tag } from "lucide-react";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
 import PageHeader from "../components/scanner/PageHeader";
 import TouchSelect from "../components/scanner/TouchSelect";
 import {
-  EmptyState,
   ItemSummaryCard,
   MetricPill,
   OperatorAlert,
@@ -14,7 +13,6 @@ import {
   TextInputField,
   WorkflowMain,
 } from "../components/scanner/WorkflowPrimitives";
-import { createScanOpsEvent, SCANOPS_EVENT_TYPES } from "../lib/scanOpsEvents";
 import { resolveInventoryIdentity, ensureInventoryLoaded } from "../lib/inventorySystemAdapter";
 import { useInventoryCacheStatus, isStaleCacheBlockingForPriceSensitiveWorkflow } from "../lib/inventory/useInventoryCacheStatus";
 import InventoryCacheStatusBar from "../components/scanner/InventoryCacheStatusBar";
@@ -28,13 +26,11 @@ import {
 import { GOVERNED_ACTIONS, canPerformScanOpsAction, recordGovernedAction, useScanOpsGovernanceContext } from "../lib/scanOpsGovernance";
 import { getCurrencySymbol, getCurrentPriceSnapshot, MARKDOWN_REASON_OPTIONS } from "../lib/scanOpsRequestLifecycle";
 import {
-  createMarkdownApprovalRequest,
-  evaluateMarkdownRule,
-  getMarkdownApprovalRequests,
-  LABEL_HANDOFF_METHODS,
-  MARKDOWN_PERCENT_OPTIONS,
-  MARKDOWN_STATUSES,
-} from "../lib/scanOpsMarkdownApproval";
+  getMarkdownScheduleForItem,
+  retryMarkdownPrint,
+  submitMarkdownAndPrint,
+} from "../lib/scanOpsMarkdownLifecycle";
+import { MARKDOWN_STAGES } from "../lib/scanOpsMarkdownPolicy";
 
 function formatMoney(currency, value) {
   if (value === null || value === undefined || value === "" || Number.isNaN(Number(value))) return "—";
@@ -49,61 +45,16 @@ function primaryScanValue(item) {
   return item?.barcode || item?.gtin || item?.sku || item?.plu || item?.scaleCode || item?.name || "";
 }
 
-function MarkdownSessionCard({ requests }) {
-  const pending = requests.filter((request) => [MARKDOWN_STATUSES.DRAFT, MARKDOWN_STATUSES.PENDING_APPROVAL, MARKDOWN_STATUSES.NEEDS_REVIEW, MARKDOWN_STATUSES.RETURNED].includes(request.status)).length;
-  const approved = requests.filter((request) => [MARKDOWN_STATUSES.APPROVED, MARKDOWN_STATUSES.READY_FOR_LABEL_HANDOFF, MARKDOWN_STATUSES.QUEUED_DESKTOP_PRINT, MARKDOWN_STATUSES.QUEUED_MOBILE_PRINTER].includes(request.status)).length;
-  const blocked = requests.filter((request) => request.status === MARKDOWN_STATUSES.BLOCKED_WASTE_REVIEW_REQUIRED).length;
-  return (
-    <SectionCard>
-      <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-          <BadgePercent className="h-5 w-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">Markdown Session</p>
-          <h2 className="mt-1 text-base font-black text-foreground">Approval-led price request</h2>
-          <p className="mt-1 text-xs font-bold text-muted-foreground">Scan → markdown → queue → approval → label handoff</p>
-        </div>
-      </div>
-      <div className="mt-3 grid grid-cols-3 gap-2">
-        <MetricPill label="Pending" value={pending} />
-        <MetricPill label="Approved" value={approved} />
-        <MetricPill label="Blocked" value={blocked} />
-      </div>
-    </SectionCard>
-  );
+function calculateMarkdownPrice(currentPrice, percent) {
+  const price = Number(currentPrice);
+  const markdownPercent = Number(percent);
+  if (!Number.isFinite(price) || !Number.isFinite(markdownPercent)) return null;
+  return Number(Math.max(0, price * (1 - markdownPercent / 100)).toFixed(2));
 }
 
-function PercentGrid({ value, onChange }) {
-  return (
-    <div className="grid grid-cols-3 gap-1 rounded-3xl bg-secondary/60 p-1">
-      {MARKDOWN_PERCENT_OPTIONS.map((option) => (
-        <button
-          key={option.id}
-          type="button"
-          onClick={() => onChange(option.id)}
-          className={`min-h-14 rounded-2xl px-3 text-base font-black active:scale-[0.98] ${value === option.id ? "bg-primary text-primary-foreground" : "bg-background text-foreground active:bg-primary/10"}`}
-        >
-          {option.label || `${option.id}%`}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function QueueCard({ request }) {
-  return (
-    <div className="rounded-2xl bg-secondary/60 p-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="break-words text-sm font-black text-foreground">{request.itemName}</p>
-          <p className="mt-1 text-xs font-bold text-muted-foreground">{request.reasonLabel} · Qty {request.quantity} · {request.selectedMarkdownPercent}%</p>
-          <p className="mt-1 text-xs font-semibold text-muted-foreground">New price {formatMoney(request.currency || "₱", request.selectedMarkdownPrice)}</p>
-        </div>
-        <span className="shrink-0 rounded-full bg-primary/10 px-2 py-1 text-[10px] font-black text-primary">{request.status}</span>
-      </div>
-    </div>
-  );
+function labelCopies(quantity, quantityType) {
+  if (["weight", "volume", "length"].includes(String(quantityType || "").toLowerCase())) return 1;
+  return Math.max(1, Math.ceil(Number(quantity || 1)));
 }
 
 export default function MarkdownsOperator() {
@@ -111,30 +62,41 @@ export default function MarkdownsOperator() {
   const cacheStatus = useInventoryCacheStatus();
   const staleCacheBlocking = isStaleCacheBlockingForPriceSensitiveWorkflow(cacheStatus);
   const markdownSubmitPermission = canPerformScanOpsAction(GOVERNED_ACTIONS.MARKDOWN_SUBMIT, governance);
+  const submitTokenRef = useRef(null);
 
   const [scanValue, setScanValue] = useState("");
   const [item, setItem] = useState(null);
   const [reason, setReason] = useState("short_dated");
-  const [selectedPercent, setSelectedPercent] = useState("40");
+  const [selectedPercent, setSelectedPercent] = useState("25");
   const [quantity, setQuantity] = useState("1");
   const [expiryDate, setExpiryDate] = useState("");
   const [batchLot, setBatchLot] = useState("");
   const [quantityType, setQuantityType] = useState("each");
-  const [notes, setNotes] = useState("");
-  const [requests, setRequests] = useState([]);
   const [operatorError, setOperatorError] = useState(null);
   const [lastSaved, setLastSaved] = useState(null);
+  const [printFailure, setPrintFailure] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const currentPrice = getCurrentPriceSnapshot(item);
   const currency = getCurrencySymbol(item) || "₱";
-  const rule = useMemo(() => evaluateMarkdownRule({ expiryDate, reasonCode: reason, selectedMarkdownPercent: selectedPercent, currentPrice, quantity }), [expiryDate, reason, selectedPercent, currentPrice, quantity]);
-
-  const refreshRequests = () => setRequests(getMarkdownApprovalRequests());
+  const markdownPrice = useMemo(() => calculateMarkdownPrice(currentPrice, selectedPercent), [currentPrice, selectedPercent]);
+  const saving = useMemo(() => {
+    if (!Number.isFinite(Number(currentPrice)) || !Number.isFinite(Number(markdownPrice))) return null;
+    return Number((Number(currentPrice) - Number(markdownPrice)).toFixed(2));
+  }, [currentPrice, markdownPrice]);
+  const copies = labelCopies(quantity, quantityType);
+  const schedule = useMemo(() => getMarkdownScheduleForItem({ item, batchLot, expiryDate }), [item, batchLot, expiryDate]);
 
   useEffect(() => {
     ensureInventoryLoaded();
-    refreshRequests();
   }, []);
+
+  useEffect(() => {
+    if (!item || !expiryDate) return;
+    if (!selectedPercent || selectedPercent === "25" || selectedPercent === "50" || selectedPercent === "60") {
+      setSelectedPercent(String(schedule.suggestedPercent || 25));
+    }
+  }, [item, expiryDate, schedule.suggestedPercent]);
 
   const scan = (value) => {
     const input = typeof value === "object" ? primaryScanValue(value) : String(value || "").trim();
@@ -145,53 +107,57 @@ export default function MarkdownsOperator() {
       return;
     }
     const defaultExpiry = getDefaultExpiryDate(found);
-    const price = getCurrentPriceSnapshot(found);
-    const defaultRule = evaluateMarkdownRule({ expiryDate: defaultExpiry, reasonCode: "short_dated", selectedMarkdownPercent: "40", currentPrice: price, quantity: 1 });
+    const defaultBatch = getDefaultLotBatch(found);
+    const initialSchedule = getMarkdownScheduleForItem({ item: found, batchLot: defaultBatch, expiryDate: defaultExpiry });
     setOperatorError(null);
     setLastSaved(null);
+    setPrintFailure(null);
     setItem(found);
     setScanValue(primaryScanValue(found));
     setReason(found?.markdownEligible === false ? "manager_instruction" : "short_dated");
-    setSelectedPercent(String(defaultRule.suggestedPercent || 40));
+    setSelectedPercent(String(initialSchedule.suggestedPercent || 25));
     setQuantity("1");
     setExpiryDate(defaultExpiry);
-    setBatchLot(getDefaultLotBatch(found));
+    setBatchLot(defaultBatch);
     setQuantityType(getDefaultQuantityType(found));
-    setNotes("");
+    submitTokenRef.current = null;
   };
 
   const resetItem = () => {
     setItem(null);
     setScanValue("");
     setQuantity("1");
-    setNotes("");
     setOperatorError(null);
+    setPrintFailure(null);
+    submitTokenRef.current = null;
   };
 
-  const createRequest = () => {
+  const completeSuccessfulPrint = (record) => {
+    setLastSaved(record);
+    setPrintFailure(null);
+    resetItem();
+  };
+
+  const submit = async () => {
     if (!item) {
-      setOperatorError({ title: "Item required", helper: "Scan an item before creating a markdown request." });
+      setOperatorError({ title: "Item required", helper: "Scan an item before submitting a markdown." });
       return;
     }
     if (!reason) {
-      setOperatorError({ title: "Reason required", helper: "Choose a markdown reason before saving." });
-      return;
-    }
-    if (!Number(quantity || 0)) {
-      setOperatorError({ title: "Quantity missing", helper: "Enter a valid markdown quantity before saving." });
-      return;
-    }
-    if (!selectedPercent) {
-      setOperatorError({ title: "Markdown missing", helper: "Choose a markdown percent before saving." });
+      setOperatorError({ title: "Reason required", helper: "Choose a markdown reason before submitting." });
       return;
     }
     if (staleCacheBlocking) {
-      setOperatorError({ title: "Inventory cache stale", helper: "Refresh the inventory cache before creating markdown evidence.", tone: "danger" });
+      setOperatorError({ title: "Inventory cache stale", helper: "Refresh the inventory cache before submitting this price-sensitive markdown.", tone: "danger" });
       return;
     }
     if (!markdownSubmitPermission.allowed) {
       recordGovernedAction(GOVERNED_ACTIONS.MARKDOWN_SUBMIT, "Markdowns", null, markdownSubmitPermission);
       setOperatorError({ title: "Permission required", helper: markdownSubmitPermission.reason || "This markdown action is blocked for the current role." });
+      return;
+    }
+    if (schedule.stage === MARKDOWN_STAGES.EXPIRED) {
+      setOperatorError({ title: "Expired batch — sale blocked", helper: schedule.helper, tone: "danger" });
       return;
     }
 
@@ -204,46 +170,65 @@ export default function MarkdownsOperator() {
       quantityType,
       enteredQuantity: quantity,
       weightSource: String(scanValue || "").startsWith("2") ? "label_weight" : "manual_entry",
-      source: "markdown_operator_workflow",
+      source: "markdown_operator_direct_submit_v2",
     });
     saveWorkflowItemAttributeSnapshot(attributeSnapshot);
-    recordGovernedAction(GOVERNED_ACTIONS.MARKDOWN_SUBMIT, "Markdowns", null, markdownSubmitPermission, { eventLabel: "Markdown request created from operator workflow" });
-    const request = createMarkdownApprovalRequest({
+    recordGovernedAction(GOVERNED_ACTIONS.MARKDOWN_SUBMIT, "Markdowns", null, markdownSubmitPermission, { eventLabel: "Markdown submitted for immediate label printing" });
+
+    if (!submitTokenRef.current) submitTokenRef.current = `markdown_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    setSubmitting(true);
+    setOperatorError(null);
+    setPrintFailure(null);
+    const result = await submitMarkdownAndPrint({
       item,
-      reasonCode: reason,
-      selectedMarkdownPercent: selectedPercent,
       quantity,
+      quantityType,
       expiryDate,
       batchLot,
-      notes,
-      labelRequired: true,
-      labelHandoffMethod: LABEL_HANDOFF_METHODS.STORE_PRINT_QUEUE,
+      reasonCode: reason,
+      selectedMarkdownPercent: selectedPercent,
       attributeSnapshot,
+      idempotencyKey: submitTokenRef.current,
     });
-    createScanOpsEvent(attributeSnapshot.weighted_snapshot ? SCANOPS_EVENT_TYPES.WEIGHTED_ITEM_EVIDENCE_CAPTURED : SCANOPS_EVENT_TYPES.ATTRIBUTE_EVIDENCE_CAPTURED, {
-      source_module: "Markdowns",
-      markdown_request_id: request.requestId,
-      item_name: request.itemName,
-      sku: request.sku,
-      barcode: request.barcode,
-      workflow_type: "markdown_approval",
-      expiry_date: attributeSnapshot.expiry_snapshot?.expiry_date || null,
-      lot_batch: attributeSnapshot.lot_batch_snapshot?.lot_batch_value || null,
-      applies_stock_directly: false,
-      applies_price_directly: false,
-      status: "attribute_evidence_saved",
-    });
-    setLastSaved(request);
-    refreshRequests();
-    resetItem();
+    setSubmitting(false);
+
+    if (!result.ok) {
+      if (result.record?.submissionId && result.record?.printStatus === "PRINT_FAILED") {
+        setPrintFailure(result.record);
+        setOperatorError({ title: "Labels could not be printed", helper: result.message || result.record.printErrorMessage, tone: "danger" });
+      } else {
+        setOperatorError({ title: result.code === "EXPIRED_BATCH_SALE_BLOCKED" ? "Expired batch — sale blocked" : "Markdown could not be submitted", helper: result.message, tone: "danger" });
+      }
+      return;
+    }
+    completeSuccessfulPrint(result.record);
+  };
+
+  const retryPrint = async () => {
+    if (!printFailure?.submissionId) return;
+    setSubmitting(true);
+    setOperatorError(null);
+    const result = await retryMarkdownPrint(printFailure.submissionId);
+    setSubmitting(false);
+    if (!result.ok) {
+      setPrintFailure(result.record || printFailure);
+      setOperatorError({ title: "Labels could not be printed", helper: result.message || result.record?.printErrorMessage, tone: "danger" });
+      return;
+    }
+    completeSuccessfulPrint(result.record);
+  };
+
+  const handlePercentChange = (value) => {
+    const digits = String(value || "").replace(/\D/g, "").slice(0, 2);
+    setSelectedPercent(digits);
   };
 
   return (
     <PageShell unthemed>
-      <PageHeader title="Markdown" subtitle="Scan item, choose markdown, request label" />
+      <PageHeader title="Markdown" subtitle="Scan item, enter markdown, print labels" />
       <WorkflowHeader
         title="Markdown"
-        subtitle="Scan → markdown → approval queue"
+        subtitle="Scan → details → submit → labels print"
         showHeaderChrome={false}
         scanValue={scanValue}
         onScanValueChange={setScanValue}
@@ -255,22 +240,33 @@ export default function MarkdownsOperator() {
         {staleCacheBlocking && (
           <OperatorAlert
             title="Inventory cache stale"
-            helper="Markdown pricing depends on current inventory data. Refresh the cache before creating requests."
+            helper="Markdown pricing depends on current inventory data. Refresh the cache before submitting."
             tone="danger"
             actions={[{ label: "Refresh Cache", onClick: cacheStatus.refresh, variant: "primary" }]}
           />
         )}
-        {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} tone={operatorError.tone || "warning"} actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}
-        {lastSaved && <OperatorAlert tone="success" title="Markdown request saved" helper={`${lastSaved.itemName || "Item"} queued for approval. No price changed on handheld.`} />}
-
-        <MarkdownSessionCard requests={requests} />
+        {operatorError && (
+          <OperatorAlert
+            title={operatorError.title}
+            helper={operatorError.helper}
+            tone={operatorError.tone || "warning"}
+            actions={printFailure ? [{ label: submitting ? "Printing…" : "Retry Printing", onClick: retryPrint, variant: "primary", disabled: submitting }] : [{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]}
+          />
+        )}
+        {lastSaved && (
+          <OperatorAlert
+            tone="success"
+            title="Markdown submitted"
+            helper={`${lastSaved.printedCopies || lastSaved.labelCopies || 1} label${Number(lastSaved.printedCopies || lastSaved.labelCopies || 1) === 1 ? "" : "s"} printed. Product Master and POS base prices remain unchanged.`}
+          />
+        )}
 
         {item ? (
           <>
             <ItemSummaryCard item={item}>
               <div className="grid grid-cols-3 gap-2">
                 <MetricPill label="Current" value={formatMoney(currency, currentPrice)} />
-                <MetricPill label="New" value={formatMoney(currency, rule.selectedMarkdownPrice)} />
+                <MetricPill label="New" value={formatMoney(currency, markdownPrice)} />
                 <MetricPill label="Qty" value={quantity || "—"} />
               </div>
             </ItemSummaryCard>
@@ -283,14 +279,14 @@ export default function MarkdownsOperator() {
                 <div className="min-w-0">
                   <p className="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">Markdown Request</p>
                   <h2 className="mt-1 text-base font-black text-foreground">{itemName(item)}</h2>
-                  <p className="mt-1 text-xs font-bold text-muted-foreground">Request only. Product master and POS prices stay unchanged.</p>
+                  <p className="mt-1 text-xs font-bold text-muted-foreground">Batch-linked label price only. Product Master and POS base prices stay unchanged.</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <TextInputField label="Quantity" value={quantity} onChange={setQuantity} type="number" placeholder="1" />
                 <TextInputField label="Expiry" value={expiryDate} onChange={setExpiryDate} type="date" />
               </div>
-              <TextInputField label="Batch / lot" value={batchLot} onChange={setBatchLot} placeholder="Optional" />
+              <TextInputField label="Batch / lot" value={batchLot} onChange={setBatchLot} placeholder="Required" />
               <TouchSelect label="Reason" value={reason} onChange={setReason} options={MARKDOWN_REASON_OPTIONS} />
             </SectionCard>
 
@@ -299,27 +295,44 @@ export default function MarkdownsOperator() {
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                   <BadgePercent className="h-5 w-5" />
                 </span>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="text-[11px] font-black uppercase tracking-[0.16em] text-muted-foreground">Markdown Percent</p>
-                  <h2 className="mt-1 text-3xl font-black text-foreground">{selectedPercent}%</h2>
-                  <p className="mt-1 text-xs font-bold text-muted-foreground">Suggested: {rule.suggestedRange} · Risk: {rule.riskLevel}</p>
+                  <div className="mt-2 flex items-center rounded-2xl border border-input bg-background px-4 focus-within:ring-2 focus-within:ring-primary/20">
+                    <input
+                      value={selectedPercent}
+                      onChange={(event) => handlePercentChange(event.target.value)}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      aria-label="Markdown percentage"
+                      className="h-16 min-w-0 flex-1 bg-transparent text-3xl font-black text-foreground outline-none"
+                      placeholder="25"
+                    />
+                    <span className="text-2xl font-black text-muted-foreground">%</span>
+                  </div>
+                  <p className="mt-2 text-xs font-bold text-muted-foreground">{schedule.helper}</p>
+                  {schedule.holidayAdjusted && (
+                    <p className="mt-1 rounded-xl bg-amber-500/10 px-3 py-2 text-xs font-black text-amber-300">Holiday-adjusted · final sellable trading day {schedule.finalSellableDate}</p>
+                  )}
                 </div>
               </div>
-              <PercentGrid value={selectedPercent} onChange={setSelectedPercent} />
-              <div className="rounded-2xl bg-secondary/60 p-3">
-                <div className="grid grid-cols-2 gap-2">
-                  <MetricPill label="Current" value={formatMoney(currency, currentPrice)} />
-                  <MetricPill label="New price" value={formatMoney(currency, rule.selectedMarkdownPrice)} />
-                  <MetricPill label="Role" value={rule.approvalRoleRequired} />
-                  <MetricPill label="Risk" value={rule.riskLevel} />
-                </div>
-                <p className="mt-3 text-xs font-bold leading-snug text-muted-foreground">{rule.ruleSummary}</p>
-                {rule.blockedReason && <p className="mt-2 rounded-xl bg-destructive/10 px-3 py-2 text-xs font-black text-destructive">{rule.blockedReason}</p>}
+              <div className="grid grid-cols-3 gap-2">
+                <MetricPill label="Current" value={formatMoney(currency, currentPrice)} />
+                <MetricPill label="New price" value={formatMoney(currency, markdownPrice)} />
+                <MetricPill label="Saving" value={formatMoney(currency, saving)} />
               </div>
-              <TextInputField label="Notes" value={notes} onChange={setNotes} placeholder="Optional approval context" />
+              <div className="flex items-center gap-2 rounded-2xl bg-secondary/60 px-3 py-3 text-xs font-bold text-muted-foreground">
+                <Printer className="h-4 w-4 shrink-0" />
+                Submit prints {copies} label{copies === 1 ? "" : "s"} automatically. A failed print stays on this screen and retries the same submission.
+              </div>
             </SectionCard>
 
-            <StickyActions leftLabel="Clear Item" rightLabel={staleCacheBlocking ? "Refresh Cache" : "Create Request"} onLeft={resetItem} onRight={staleCacheBlocking ? cacheStatus.refresh : createRequest} rightDisabled={cacheStatus.refreshing} />
+            <StickyActions
+              leftLabel="Clear Item"
+              rightLabel={submitting ? "Printing…" : printFailure ? "Retry Printing" : "Submit"}
+              onLeft={resetItem}
+              onRight={printFailure ? retryPrint : submit}
+              rightDisabled={submitting || cacheStatus.refreshing}
+            />
           </>
         ) : (
           <SectionCard className="border-primary/20 bg-primary/5">
@@ -329,35 +342,20 @@ export default function MarkdownsOperator() {
               </span>
               <div className="min-w-0">
                 <p className="text-lg font-black leading-tight text-foreground">Ready to markdown</p>
-                <p className="mt-1 text-sm font-bold leading-snug text-muted-foreground">Scan an item, choose the markdown, then create an approval request.</p>
+                <p className="mt-1 text-sm font-bold leading-snug text-muted-foreground">Scan an item, confirm its batch and expiry, enter the percentage, then submit.</p>
               </div>
             </div>
           </SectionCard>
         )}
 
         <SectionCard>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Approval Queue</p>
-              <h2 className="mt-1 text-lg font-black text-foreground">{requests.length} request{requests.length === 1 ? "" : "s"}</h2>
-            </div>
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
-              <Printer className="h-5 w-5" />
-            </span>
-          </div>
-          <div className="mt-3 space-y-2">
-            {requests.length ? requests.slice(0, 6).map((request) => <QueueCard key={request.requestId} request={request} />) : <EmptyState title="Queue empty" helper="Scan an item and create a markdown request." />}
-          </div>
-        </SectionCard>
-
-        <SectionCard className="space-y-2">
           <div className="flex items-start gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
-              <RotateCcw className="h-5 w-5" />
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <CheckCircle2 className="h-5 w-5" />
             </span>
             <div className="min-w-0">
-              <p className="text-sm font-black text-foreground">Markdown stays approval-led</p>
-              <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">This handheld workflow creates markdown requests and label readiness only. Inventory Desktop and POS remain the authoritative price layers.</p>
+              <p className="text-sm font-black text-foreground">D-1 batch lifecycle</p>
+              <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Initial 25% on the previous open trading day, 50% early on the final sellable day, 60% later that day, then a hard sale block after expiry. Closed and reduced-hours dates come from the location trading calendar.</p>
             </div>
           </div>
         </SectionCard>
