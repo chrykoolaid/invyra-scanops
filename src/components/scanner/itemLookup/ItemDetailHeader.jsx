@@ -1,6 +1,6 @@
 import React from "react";
-import { CheckCircle2, AlertCircle } from "lucide-react";
-import { describeItem, hasValue, identityLabel, valueOf } from "./itemLookupHelpers";
+import { AlertCircle, CheckCircle2, Database } from "lucide-react";
+import { describeItem, identityLabel } from "./itemLookupHelpers";
 
 function LifecycleChip({ item }) {
   const status = String(item.lifecycleStatus || "UNKNOWN").toUpperCase();
@@ -17,34 +17,31 @@ function LifecycleChip({ item }) {
   );
 }
 
-function PriceCard({ item }) {
-  const price = valueOf(item, ["currentPrice", "current_price", "pricePerKg", "price_per_kg"], null);
-  const currency = valueOf(item, ["currency"], "₱");
-  const display = hasValue(price) ? `${currency}${price}` : "—";
-  return (
-    <div className="shrink-0 rounded-2xl border border-border bg-secondary/60 px-3 py-2 text-right">
-      <p className="text-lg font-black leading-none text-foreground">{display}</p>
-      <p className="mt-1 text-[10px] font-black uppercase tracking-wider text-muted-foreground">Price</p>
-    </div>
-  );
-}
-
 export default function ItemDetailHeader({ item }) {
   if (!item) return null;
   const description = describeItem(item);
   return (
     <section className="scanops-work-card" data-item-detail-header>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start gap-3">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+          <Database className="h-5 w-5" />
+        </span>
         <div className="min-w-0 flex-1">
-          <h2 className="break-words text-lg font-black leading-tight text-foreground">{item.itemName || "Unknown item"}</h2>
+          <p className="text-[10px] font-black uppercase tracking-wider text-primary">Operational item view</p>
+          <h2 className="mt-1 break-words text-lg font-black leading-tight text-foreground">{item.itemName || "Unknown item"}</h2>
+          {item.shortDisplayName && item.shortDisplayName !== item.itemName && (
+            <p className="mt-1 text-xs font-bold text-foreground/80">{item.shortDisplayName}</p>
+          )}
           {description && <p className="mt-1 text-xs font-bold text-muted-foreground">{description}</p>}
         </div>
-        <PriceCard item={item} />
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <span className="break-all font-mono text-[11px] font-bold text-muted-foreground">{identityLabel(item)}</span>
         <LifecycleChip item={item} />
       </div>
+      <p className="mt-3 text-[11px] font-bold leading-snug text-muted-foreground">
+        Authoritative identity and handling data supplied by Inventory. Price is not included in this certified read scope.
+      </p>
     </section>
   );
 }
