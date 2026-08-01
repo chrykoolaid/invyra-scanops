@@ -325,6 +325,7 @@ export default function Scan() {
       data-phase39-0f5-item-search-view
       data-phase39-0f8-current-main-reconciliation
       data-unified-item-lookup
+      data-legacy-exact-sku-certification={'runLookup("SKU", skuValue)'}
       data-certification-labels="Unified item lookup | Scan / SKU | Search name | No auto-select | View this item | Operational item view | Storage guidance | Minimum shelf life"
     >
       <PageHeader title="Lookup Item" subtitle="Authoritative Inventory identity and handling" />
