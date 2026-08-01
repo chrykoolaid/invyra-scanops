@@ -1,18 +1,19 @@
 import React from "react";
 import AppHeader from "../components/scanner/AppHeader";
 import ActionTile from "../components/scanner/ActionTile";
-import { ArrowLeft, HelpCircle, ListChecks, RefreshCw, Settings } from "lucide-react";
+import { ArrowLeft, ClipboardList, HelpCircle, ListChecks, RefreshCw, Settings } from "lucide-react";
 
 const TOOL_TILES = [
-  { icon: ListChecks, label: "Tasks",    description: "Assigned work", to: "/tasks",            tone: "blue" },
-  { icon: RefreshCw,  label: "Sync",     description: "Manual handoff", to: "/sync-control",     tone: "cyan" },
-  { icon: Settings,   label: "Settings", description: "Device setup",  to: "/scanner-settings", tone: "grey" },
-  { icon: HelpCircle, label: "Help",     description: "Guidance",      to: "/help",             tone: "cyan" },
-  { icon: ArrowLeft,  label: "Back",     description: "Home",          to: "/",                tone: "grey" },
+  { icon: ListChecks,    label: "Tasks",            description: "Assigned work",  to: "/tasks",            tone: "blue" },
+  { icon: ClipboardList, label: "Markdown Monitor", description: "Further rounds", to: "/markdown-monitor", tone: "blue" },
+  { icon: RefreshCw,     label: "Sync",             description: "Manual handoff", to: "/sync-control",     tone: "cyan" },
+  { icon: Settings,      label: "Settings",         description: "Device setup",   to: "/scanner-settings", tone: "grey" },
+  { icon: HelpCircle,    label: "Help",             description: "Guidance",       to: "/help",             tone: "cyan" },
+  { icon: ArrowLeft,     label: "Back",             description: "Home",           to: "/",                 tone: "grey" },
 ];
 
 export default function More() {
-  const toolsSummary = "Tasks, manual sync, settings, help, and return to Home";
+  const toolsSummary = "Tasks, markdown monitoring, manual sync, settings, help, and return to Home";
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col overflow-x-hidden">
