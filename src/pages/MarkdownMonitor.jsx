@@ -18,23 +18,35 @@ function MonitorCard({ entry }) {
           <p className="text-base font-black leading-tight text-foreground">{entry.itemName}</p>
           <p className="mt-1 break-all font-mono text-[11px] font-bold text-muted-foreground">{entry.sku || entry.barcode || entry.itemId || "No item code"}</p>
         </div>
-        <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide ${entry.saleBlocked ? "bg-destructive/10 text-destructive" : entry.holidayAdjusted ? "bg-amber-500/10 text-amber-300" : "bg-primary/10 text-primary"}`}>
-          {entry.saleBlocked ? "Sale blocked" : entry.holidayAdjusted ? "Holiday adjusted" : entry.nextActionState}
+        <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-wide ${entry.saleBlocked ? "bg-destructive/10 text-destructive" : entry.holidayAdjusted || entry.reducedHoursAdjusted ? "bg-amber-500/10 text-amber-300" : "bg-primary/10 text-primary"}`}>
+          {entry.saleBlocked ? "Sale blocked" : entry.holidayAdjusted ? "Holiday adjusted" : entry.reducedHoursAdjusted ? "Hours adjusted" : entry.nextActionState}
         </span>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2">
         <MetricPill label="Batch / lot" value={entry.batchLot || "—"} />
         <MetricPill label="Expiry" value={entry.expiryDate || "—"} />
-        <MetricPill label="Remaining" value={`${entry.remainingQuantity ?? "—"} ${entry.quantityType || ""}`.trim()} />
+        <MetricPill label="Marked qty" value={`${entry.remainingQuantity ?? "—"} ${entry.quantityType || ""}`.trim()} />
         <MetricPill label="Current" value={`${entry.currentMarkdownPercent || 0}% · ${money(entry.currentMarkdownPrice)}`} />
         <MetricPill label="Next markdown" value={entry.saleBlocked ? "Waste review" : `${entry.recommendedNextPercent || 0}%`} />
         <MetricPill label="Next action" value={entry.nextActionDate || "—"} />
       </div>
 
+      <p className="mt-2 text-[11px] font-semibold text-muted-foreground">Marked quantity is the last submitted batch quantity until POS sales, waste, and corrections are reconciled by Inventory.</p>
+
       {entry.holidayAdjusted && (
         <p className="mt-3 rounded-xl bg-amber-500/10 px-3 py-2 text-xs font-black text-amber-300">
           Final sellable trading day: {entry.finalSellableDate}
+        </p>
+      )}
+      {entry.reducedHoursAdjusted && (
+        <p className="mt-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs font-black text-amber-300">
+          Adjusted sessions: {entry.effectiveEarlySessionTime} and {entry.effectiveFinalSessionTime}
+        </p>
+      )}
+      {entry.insufficientSessionWindow && (
+        <p className="mt-2 rounded-xl bg-destructive/10 px-3 py-2 text-xs font-black text-destructive">
+          Accelerated markdown required. Normal session spacing is unavailable before closing.
         </p>
       )}
       {entry.saleBlocked && (
@@ -67,14 +79,14 @@ export default function MarkdownMonitor() {
   }, []);
 
   const filtered = useMemo(() => entries.filter((entry) => {
-    if (filter === "holiday") return entry.holidayAdjusted;
+    if (filter === "holiday") return entry.holidayAdjusted || entry.reducedHoursAdjusted;
     if (filter === "blocked") return entry.saleBlocked;
     if (filter === "due") return ["DUE", "UPCOMING_TODAY", "UPCOMING_LATER_TODAY"].includes(entry.nextActionState);
     return true;
   }), [entries, filter]);
 
   const dueCount = entries.filter((entry) => ["DUE", "UPCOMING_TODAY", "UPCOMING_LATER_TODAY"].includes(entry.nextActionState) && !entry.saleBlocked).length;
-  const holidayCount = entries.filter((entry) => entry.holidayAdjusted).length;
+  const holidayCount = entries.filter((entry) => entry.holidayAdjusted || entry.reducedHoursAdjusted).length;
   const blockedCount = entries.filter((entry) => entry.saleBlocked).length;
 
   return (
@@ -97,7 +109,7 @@ export default function MarkdownMonitor() {
           </div>
           <div className="mt-3 grid grid-cols-3 gap-2">
             <MetricPill label="Due" value={dueCount} />
-            <MetricPill label="Holiday" value={holidayCount} />
+            <MetricPill label="Adjusted" value={holidayCount} />
             <MetricPill label="Blocked" value={blockedCount} />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
@@ -114,7 +126,7 @@ export default function MarkdownMonitor() {
           {[
             ["all", "All"],
             ["due", "Due"],
-            ["holiday", "Holiday"],
+            ["holiday", "Adjusted"],
             ["blocked", "Blocked"],
           ].map(([id, label]) => (
             <button
