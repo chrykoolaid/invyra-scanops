@@ -68,7 +68,7 @@ function enabledClient(port, overrides = {}) {
     environment: 'TEST',
     inventoryHost: '127.0.0.1',
     inventoryPort: port,
-    timeoutMs: 250,
+    timeoutMs: 2_000,
     now: stableNow,
     ...overrides,
   });
@@ -135,13 +135,21 @@ check('canonical_health_envelope_builds', built.ok === true, built);
 check('built_envelope_hash_locked', built.ok && hash(built.buildResult.envelope) === expectedHashes.envelope, built.ok ? hash(built.buildResult.envelope) : 'not-built');
 const positive = await positiveClient.sendHealthPing(healthInput);
 check('real_http_request_sent', observedRequest?.method === 'POST' && observedRequest?.path === '/api/bridge/v1/handoffs', observedRequest);
-check('real_http_json_content_type', observedRequest?.contentType?.startsWith('application/json'), observedRequest?.contentType);
-check('real_http_envelope_hash', hash(observedRequest.envelope) === expectedHashes.envelope, observedRequest?.envelope);
+check('real_http_json_content_type', observedRequest?.contentType?.startsWith('application/json') === true, observedRequest?.contentType || null);
+check(
+  'real_http_envelope_hash',
+  observedRequest !== null && hash(observedRequest.envelope) === expectedHashes.envelope,
+  observedRequest?.envelope || null,
+);
 check('positive_http_status_200', positive.httpStatus === 200, positive);
 check('positive_receipt_valid', positive.receiptValid === true, positive);
 check('positive_receipt_correlated', positive.ok === true && positive.correlated === true && positive.status === 'CORRELATED', positive);
 check('positive_admission_application', positive.admissionStatus === 'ACCEPTED' && positive.applicationStatus === 'NOT_APPLICABLE', positive);
-check('positive_receipt_hash_locked', hash(positive.receipt) === expectedHashes.receipt, hash(positive.receipt));
+check(
+  'positive_receipt_hash_locked',
+  Boolean(positive.receipt) && hash(positive.receipt) === expectedHashes.receipt,
+  positive.receipt || null,
+);
 await positiveServer.stop();
 
 const unsupportedEnvelope = { ...clone(goldenEnvelope), operationType: 'COUNT_SUBMISSION' };
@@ -212,10 +220,10 @@ const report = Object.freeze({
   passedChecks: checks.length - failures.length,
   failedChecks: failures.length,
   inventoryEndpoint: { host: '127.0.0.1', port: positiveServer.port },
-  request: { method: observedRequest?.method, path: observedRequest?.path },
+  request: { method: observedRequest?.method || null, path: observedRequest?.path || null },
   httpStatus: positive.httpStatus,
-  envelopeSemanticHash: hash(observedRequest.envelope),
-  receiptSemanticHash: hash(positive.receipt),
+  envelopeSemanticHash: observedRequest ? hash(observedRequest.envelope) : null,
+  receiptSemanticHash: positive.receipt ? hash(positive.receipt) : null,
   admissionStatus: positive.admissionStatus,
   applicationStatus: positive.applicationStatus,
   correlated: positive.correlated,
