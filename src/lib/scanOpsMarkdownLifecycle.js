@@ -5,7 +5,6 @@ import {
   buildMarkdownBatchKey,
   DEFAULT_MARKDOWN_POLICY,
   evaluateMarkdownSchedule,
-  isExpiredForSale,
   MARKDOWN_STAGES,
   normalizeMarkdownPolicy,
   toDateOnly,
@@ -80,6 +79,10 @@ function itemIdentity(item = {}) {
   };
 }
 
+function hasStableItemIdentity(identity) {
+  return Boolean(identity.itemId || identity.sku || identity.barcode);
+}
+
 function saveSubmissions(rows) {
   return safeWrite(SUBMISSIONS_KEY, rows.slice(0, MAX_RECORDS));
 }
@@ -152,12 +155,19 @@ function writeLifecycleEvent(eventType, record, extra = {}) {
     product_master_price_unchanged: true,
     pos_base_price_unchanged: true,
     holiday_adjusted: record.holidayAdjusted,
+    reduced_hours_adjusted: record.reducedHoursAdjusted,
     ...extra,
   });
 }
 
 export function getMarkdownSubmissions() {
   return safeRead(SUBMISSIONS_KEY, []);
+}
+
+export function getMarkdownPrintExceptions(locationId = actorSnapshot().locationId) {
+  return getMarkdownSubmissions()
+    .filter((record) => record.locationId === locationId && record.printStatus === MARKDOWN_PRINT_STATUSES.PRINT_FAILED)
+    .sort((left, right) => String(right.updatedAt || right.createdAt || "").localeCompare(String(left.updatedAt || left.createdAt || "")));
 }
 
 export function getMarkdownPolicy(locationId = actorSnapshot().locationId) {
@@ -232,14 +242,14 @@ async function attemptPrint(record, printer = null) {
       print_error_message: failed.printErrorMessage,
       retry_reuses_submission: true,
     });
-    return { ok: false, record: failed, printResult: result };
+    return { ok: false, code: failed.printErrorCode, message: failed.printErrorMessage, record: failed, printResult: result };
   }
 
   const printed = replaceSubmission({
     ...printing,
     printStatus: MARKDOWN_PRINT_STATUSES.PRINTED,
     printedAt: nowIso(),
-    printedCopies: result.copies || printing.labelCopies,
+    printedCopies: result.copies,
     printerId: result.printer?.id || null,
     printerName: result.printer?.name || null,
     nativePrintJobId: result.nativeJobId || null,
@@ -279,10 +289,18 @@ export async function submitMarkdownAndPrint({
 
   const actor = actorSnapshot();
   const identity = itemIdentity(item);
-  const currentPrice = getCurrentPriceSnapshot(item);
-  const schedule = getMarkdownScheduleForItem({ item, batchLot, expiryDate, reference, locationId: actor.locationId });
+  if (!hasStableItemIdentity(identity)) {
+    return { ok: false, code: "ITEM_IDENTITY_REQUIRED", message: "The scanned item does not have a stable Inventory identity." };
+  }
 
-  if (schedule.stage === MARKDOWN_STAGES.EXPIRED || isExpiredForSale(expiryDate, reference)) {
+  const currentPrice = getCurrentPriceSnapshot(item);
+  const numericCurrentPrice = Number(currentPrice);
+  if (!Number.isFinite(numericCurrentPrice) || numericCurrentPrice < 0) {
+    return { ok: false, code: "CURRENT_PRICE_REQUIRED", message: "A current authoritative price is required before a markdown label can be created." };
+  }
+
+  const schedule = getMarkdownScheduleForItem({ item, batchLot, expiryDate, reference, locationId: actor.locationId });
+  if (schedule.stage === MARKDOWN_STAGES.EXPIRED) {
     const blocked = {
       submissionVersion: MARKDOWN_SUBMISSION_VERSION,
       submissionId: makeId("md_block"),
@@ -308,10 +326,34 @@ export async function submitMarkdownAndPrint({
   }
 
   const stableKey = String(idempotencyKey || "").trim() || makeId("md_submit");
-  const existing = getMarkdownSubmissions().find((record) => record.idempotencyKey === stableKey);
-  if (existing) {
-    if (existing.printStatus === MARKDOWN_PRINT_STATUSES.PRINT_FAILED) return attemptPrint(existing, printer);
-    return { ok: existing.printStatus === MARKDOWN_PRINT_STATUSES.PRINTED, record: existing, duplicateBlocked: true };
+  const existingByIdempotency = getMarkdownSubmissions().find((record) => record.idempotencyKey === stableKey);
+  if (existingByIdempotency) {
+    if (existingByIdempotency.printStatus === MARKDOWN_PRINT_STATUSES.PRINT_FAILED) return attemptPrint(existingByIdempotency, printer);
+    return {
+      ok: existingByIdempotency.printStatus === MARKDOWN_PRINT_STATUSES.PRINTED,
+      code: "DUPLICATE_SUBMIT_BLOCKED",
+      message: "This submission has already been processed.",
+      record: existingByIdempotency,
+      duplicateBlocked: true,
+    };
+  }
+
+  const existingRound = getMarkdownSubmissions().find((record) => (
+    record.batchKey === schedule.batchKey
+    && record.stage === schedule.stage
+    && [MARKDOWN_PRINT_STATUSES.PRINTING, MARKDOWN_PRINT_STATUSES.PRINTED, MARKDOWN_PRINT_STATUSES.PRINT_FAILED].includes(record.printStatus)
+  ));
+  if (existingRound) {
+    const needsRetry = existingRound.printStatus === MARKDOWN_PRINT_STATUSES.PRINT_FAILED;
+    return {
+      ok: false,
+      code: needsRetry ? "MARKDOWN_PRINT_RETRY_REQUIRED" : "MARKDOWN_ROUND_ALREADY_ACTIVE",
+      message: needsRetry
+        ? "This batch already has an unprinted markdown record. Retry that print instead of creating another record."
+        : "This markdown round is already active for the selected batch.",
+      record: existingRound,
+      duplicateBlocked: true,
+    };
   }
 
   const percent = Number(selectedMarkdownPercent);
@@ -323,10 +365,10 @@ export async function submitMarkdownAndPrint({
     batchKey: schedule.batchKey,
     ...identity,
     ...actor,
-    currentPrice: Number.isFinite(Number(currentPrice)) ? Number(currentPrice) : null,
+    currentPrice: numericCurrentPrice,
     currency: getCurrencySymbol(item) || "₱",
     selectedMarkdownPercent: percent,
-    selectedMarkdownPrice: calculatePrice(currentPrice, percent),
+    selectedMarkdownPrice: calculatePrice(numericCurrentPrice, percent),
     quantity: Number(quantity),
     quantityType,
     labelCopies: labelCopiesFor(quantity, quantityType),
@@ -341,6 +383,10 @@ export async function submitMarkdownAndPrint({
     finalSellableDate: schedule.finalSellableDate,
     initialMarkdownDate: schedule.initialMarkdownDate,
     holidayAdjusted: schedule.holidayAdjusted,
+    reducedHoursAdjusted: schedule.reducedHoursAdjusted,
+    insufficientSessionWindow: schedule.insufficientSessionWindow,
+    effectiveEarlySessionTime: schedule.effectiveEarlySessionTime,
+    effectiveFinalSessionTime: schedule.effectiveFinalSessionTime,
     policyVersion: schedule.policyVersion,
     attributeSnapshot,
     printStatus: MARKDOWN_PRINT_STATUSES.PRINTING,
@@ -365,13 +411,19 @@ export async function submitMarkdownAndPrint({
 export async function retryMarkdownPrint(submissionId, printer = null) {
   const record = getMarkdownSubmissions().find((entry) => entry.submissionId === submissionId);
   if (!record) return { ok: false, code: "MARKDOWN_NOT_FOUND", message: "The markdown submission could not be found." };
-  if (record.printStatus === MARKDOWN_PRINT_STATUSES.PRINTED) return { ok: true, record, duplicateBlocked: true };
+  if (record.printStatus === MARKDOWN_PRINT_STATUSES.PRINTED) return { ok: true, code: "ALREADY_PRINTED", record, duplicateBlocked: true };
   if (record.printStatus === MARKDOWN_PRINT_STATUSES.SUPERSEDED) return { ok: false, code: "MARKDOWN_SUPERSEDED", message: "This markdown round has been superseded and cannot be reprinted." };
+  if (record.printStatus !== MARKDOWN_PRINT_STATUSES.PRINT_FAILED && record.printStatus !== MARKDOWN_PRINT_STATUSES.PRINTING) {
+    return { ok: false, code: "MARKDOWN_NOT_PRINTABLE", message: "This markdown record is not eligible for printing." };
+  }
   return attemptPrint(record, printer);
 }
 
 export function getMarkdownMonitorEntries(reference = new Date(), locationId = actorSnapshot().locationId) {
-  const records = getMarkdownSubmissions().filter((record) => record.locationId === locationId && record.printStatus !== MARKDOWN_PRINT_STATUSES.PRINT_FAILED);
+  const records = getMarkdownSubmissions().filter((record) => (
+    record.locationId === locationId
+    && [MARKDOWN_PRINT_STATUSES.PRINTED, MARKDOWN_PRINT_STATUSES.SUPERSEDED].includes(record.printStatus)
+  ));
   const latestByBatch = new Map();
   records.forEach((record) => {
     const current = latestByBatch.get(record.batchKey);
@@ -398,6 +450,7 @@ export function getMarkdownMonitorEntries(reference = new Date(), locationId = a
       locationId: record.locationId,
       locationName: record.locationName,
       remainingQuantity: record.quantity,
+      remainingQuantitySource: "submitted_quantity_pending_reconciliation",
       quantityType: record.quantityType,
       currentMarkdownPercent: record.selectedMarkdownPercent,
       currentMarkdownPrice: record.selectedMarkdownPrice,
@@ -408,6 +461,10 @@ export function getMarkdownMonitorEntries(reference = new Date(), locationId = a
       nextActionDate: schedule.stage === MARKDOWN_STAGES.INITIAL ? schedule.initialMarkdownDate : schedule.finalSellableDate,
       finalSellableDate: schedule.finalSellableDate,
       holidayAdjusted: schedule.holidayAdjusted,
+      reducedHoursAdjusted: schedule.reducedHoursAdjusted,
+      insufficientSessionWindow: schedule.insufficientSessionWindow,
+      effectiveEarlySessionTime: schedule.effectiveEarlySessionTime,
+      effectiveFinalSessionTime: schedule.effectiveFinalSessionTime,
       saleBlocked: schedule.stage === MARKDOWN_STAGES.EXPIRED,
       lastMarkdownAt: record.printedAt || record.createdAt,
       latestSubmissionId: record.submissionId,
