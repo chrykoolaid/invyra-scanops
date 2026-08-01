@@ -5,6 +5,7 @@ on:
     paths:
       - "src/pages/MarkdownsOperator.jsx"
       - "src/pages/MarkdownMonitor.jsx"
+      - "src/pages/Alerts.jsx"
       - "src/lib/scanOpsMarkdown*.js"
       - "scripts/validate-scanops-markdown-v2.mjs"
       - "src/App.jsx"
