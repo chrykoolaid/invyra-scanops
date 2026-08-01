@@ -58,7 +58,7 @@ const ItemLookupSearch = forwardRef(function ItemLookupSearch(
       </form>
 
       <p className="px-1 text-[11px] font-bold leading-snug text-muted-foreground">
-        One field for scans, exact IDs, and names. Exact matches and name candidates still require an explicit operator action before the item view opens.
+        Type one or more letters to get a candidate list, such as “b”, “ble”, or “det”. Scans and exact IDs still use the same field, and no result opens automatically.
       </p>
     </div>
   );
