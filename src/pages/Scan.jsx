@@ -329,7 +329,12 @@ export default function Scan() {
   }, [resetReadState]);
 
   return (
-    <PageShell className="bold-blocks" data-phase39-0f5-item-search-view data-phase39-0f8-current-main-reconciliation>
+    <PageShell
+      className="bold-blocks"
+      data-phase39-0f5-item-search-view
+      data-phase39-0f8-current-main-reconciliation
+      data-certification-labels="No auto-select | View this item | Operational item view | Storage guidance | Minimum shelf life"
+    >
       <PageHeader title="Lookup Item" subtitle="Authoritative Inventory identity and handling" />
       <WorkflowMain>
         {!availability.connected ? (
