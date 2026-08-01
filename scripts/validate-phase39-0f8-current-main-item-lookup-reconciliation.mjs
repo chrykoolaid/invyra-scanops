@@ -23,7 +23,7 @@ const client = read('src/inventory-bridge/itemLookup/v1/scanOpsItemLookupClientV
 const acceptance = JSON.parse(read('evidence/phase39-0f8-current-main-item-lookup-acceptance.template.json'));
 
 const exactLookupBlock = scan.slice(
-  scan.indexOf('const runExactLookup'),
+  scan.indexOf('const runLookup'),
   scan.indexOf('const runNameSearch'),
 );
 
