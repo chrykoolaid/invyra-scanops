@@ -27,16 +27,21 @@ const exactLookupBlock = scan.slice(
   scan.indexOf('const runNameSearch'),
 );
 
+const twoModeEntry = search.includes('Scan / SKU')
+  && search.includes('Search name')
+  && scan.includes('lookupMode === "NAME"');
+const unifiedEntry = search.includes('data-unified-item-lookup')
+  && search.includes('Scan barcode or enter SKU, sell ID, or item name')
+  && scan.includes('data-unified-item-lookup')
+  && scan.includes('detectLookupType(value)');
+
 check('current_main_reconciliation_marker_present',
   scan.includes('data-phase39-0f8-current-main-reconciliation'),
   'Scan.jsx');
 
-check('calm_explicit_lookup_modes_present',
-  search.includes('Scan / SKU')
-    && search.includes('Search name')
-    && search.includes('Search returns candidates only')
-    && scan.includes('lookupMode === "NAME"'),
-  'ItemLookupSearch.jsx and Scan.jsx');
+check('controlled_lookup_entry_present',
+  twoModeEntry || unifiedEntry,
+  'Two-mode Phase 39-0F8 entry or governed unified Phase 39-0F8.1 entry');
 
 check('exact_lookup_never_auto_opens_item_view',
   exactLookupBlock.includes('runLiveItemLookup')
@@ -163,6 +168,7 @@ check('current_main_acceptance_template_is_pinned',
 const failures = checks.filter((entry) => !entry.passed);
 const report = {
   phase: '39-0F8',
+  compatibilityFollowUp: unifiedEntry ? '39-0F8.1' : null,
   repository: 'chrykoolaid/invyra-scanops',
   inventoryBaseline: '4346c8895b38b35006eba5d4d763ed32f2548cc0',
   scanOpsBase: 'e7ea23e3a219ba26f874eefbad5f54d4856f7632',

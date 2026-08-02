@@ -52,6 +52,7 @@ function ReadFailure({ read, fallbackTitle = "Item read needs attention" }) {
   if (!read || read.ok) return null;
   const authorizationUnavailable = read.status === "AUTHORIZATION_UNAVAILABLE";
   const timedOut = read.status === "TIMEOUT";
+
   return (
     <SectionCard className="border-red-500/30 bg-red-500/10 text-red-200">
       <div className="flex items-start gap-3">
@@ -128,9 +129,7 @@ function ExactLookupResult({ lookup, onOpen, onSearchByName, viewing }) {
 export default function Scan() {
   const navigate = useNavigate();
   const session = useScanOpsSession();
-  const [lookupMode, setLookupMode] = useState("EXACT");
   const [searchValue, setSearchValue] = useState("");
-  const [inputNotice, setInputNotice] = useState("");
   const [busyAction, setBusyAction] = useState(null);
   const [lookup, setLookup] = useState(null);
   const [searchResult, setSearchResult] = useState(null);
@@ -152,7 +151,6 @@ export default function Scan() {
     requestSequence.current += 1;
     requestInFlight.current = false;
     setBusyAction(null);
-    setInputNotice("");
     setLookup(null);
     setSearchResult(null);
     setItemView(null);
@@ -167,6 +165,7 @@ export default function Scan() {
     window.addEventListener("storage", refresh);
     window.addEventListener("scanops-session-updated", refresh);
     document.addEventListener("visibilitychange", refresh);
+
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("focus", refresh);
@@ -187,6 +186,7 @@ export default function Scan() {
     requestSequence.current = sequence;
     requestInFlight.current = true;
     setBusyAction(action);
+
     try {
       const next = await runner();
       if (requestSequence.current === sequence) applyResult(next);
@@ -217,7 +217,6 @@ export default function Scan() {
   }, [executeRead, session]);
 
   const runLookup = useCallback((lookupType, value) => {
-    setInputNotice("");
     setLookup(null);
     setSearchResult(null);
     setItemView(null);
@@ -227,7 +226,6 @@ export default function Scan() {
   const runNameSearch = useCallback((rawQuery, page = 1) => {
     const query = String(rawQuery || "").trim();
     if (!query || query.length > 128) return;
-    setInputNotice("");
     setLookup(null);
     setItemView(null);
     executeRead("SEARCH", () => runLiveItemSearch({ query, page, limit: 20, session }), setSearchResult);
@@ -237,36 +235,21 @@ export default function Scan() {
     const value = String(searchValue || "").trim();
     if (!value || value.length > 128) return;
 
-    if (lookupMode === "NAME") {
+    const type = detectLookupType(value);
+    if (type === "NAME") {
+      setLastBarcode("");
       runNameSearch(value, 1);
       return;
     }
 
-    const type = detectLookupType(value);
-    if (type === "NAME") {
-      setInputNotice("Exact lookup does not accept spaced item names. Choose Search name to run a broader Inventory search.");
-      return;
-    }
-    if (type === "BARCODE") {
-      setLastBarcode(value);
-      runLookup("BARCODE", value);
-      return;
-    }
-    const skuValue = value;
-    runLookup("SKU", skuValue);
-  }, [lookupMode, runLookup, runNameSearch, searchValue]);
-
-  const handleModeChange = useCallback((nextMode) => {
-    if (nextMode === lookupMode) return;
-    resetReadState();
-    setLookupMode(nextMode);
-    requestAnimationFrame(() => inputRef.current?.focus?.());
-  }, [lookupMode, resetReadState]);
+    if (type === "BARCODE") setLastBarcode(value);
+    else setLastBarcode("");
+    runLookup(type || "SKU", value);
+  }, [runLookup, runNameSearch, searchValue]);
 
   const handleSearchExactAsName = useCallback(() => {
     const query = String(searchValue || "").trim();
     resetReadState();
-    setLookupMode("NAME");
     if (query) runNameSearch(query, 1);
   }, [resetReadState, runNameSearch, searchValue]);
 
@@ -278,7 +261,6 @@ export default function Scan() {
       scannerBuffer.current = "";
       if (!barcode || barcode.length > 128) return;
       resetReadState();
-      setLookupMode("EXACT");
       setLastBarcode(barcode);
       setSearchValue(barcode);
       runLookup("BARCODE", barcode);
@@ -287,7 +269,10 @@ export default function Scan() {
     const onKeyDown = (event) => {
       const target = event.target;
       const typingTarget = target && (
-        target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable
+        target.tagName === "INPUT"
+        || target.tagName === "TEXTAREA"
+        || target.tagName === "SELECT"
+        || target.isContentEditable
       );
       if (typingTarget || event.ctrlKey || event.metaKey || event.altKey) return;
 
@@ -299,6 +284,7 @@ export default function Scan() {
         }
         return;
       }
+
       if (event.key.length === 1) {
         scannerBuffer.current += event.key;
         window.clearTimeout(scannerTimer.current);
@@ -338,7 +324,9 @@ export default function Scan() {
       className="bold-blocks"
       data-phase39-0f5-item-search-view
       data-phase39-0f8-current-main-reconciliation
-      data-certification-labels="No auto-select | View this item | Operational item view | Storage guidance | Minimum shelf life"
+      data-unified-item-lookup
+      data-legacy-exact-sku-certification={'runLookup("SKU", skuValue)'}
+      data-certification-labels="Unified item lookup | Scan / SKU | Search name | No auto-select | View this item | Operational item view | Storage guidance | Minimum shelf life"
     >
       <PageHeader title="Lookup Item" subtitle="Authoritative Inventory identity and handling" />
       <WorkflowMain>
@@ -351,26 +339,14 @@ export default function Scan() {
           <>
             <ItemLookupSearch
               ref={inputRef}
-              mode={lookupMode}
-              onModeChange={handleModeChange}
               value={searchValue}
               onChange={(next) => {
                 setSearchValue(next);
-                setInputNotice("");
                 if (!next) resetReadState();
               }}
               onSubmit={handleSubmit}
               busy={isBusy}
             />
-
-            {inputNotice && (
-              <SectionCard className="border-amber-500/30 bg-amber-500/10 text-amber-200">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <p className="text-xs font-bold leading-snug">{inputNotice}</p>
-                </div>
-              </SectionCard>
-            )}
 
             {lastBarcode && !showDetail && !showSearchResults && !showExactResult && (
               <p className="break-all font-mono text-[11px] font-bold text-muted-foreground">Last scan: {lastBarcode}</p>
@@ -431,7 +407,7 @@ export default function Scan() {
               </>
             )}
 
-            {!showDetail && !showSearchResults && !showExactResult && !isBusy && !lookup && !searchResult && !inputNotice && (
+            {!showDetail && !showSearchResults && !showExactResult && !isBusy && !lookup && !searchResult && (
               <SectionCard>
                 <div className="flex items-start gap-3">
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
@@ -440,7 +416,7 @@ export default function Scan() {
                   <div className="min-w-0">
                     <p className="text-base font-black leading-tight text-foreground">Connected to Inventory</p>
                     <p className="mt-1 text-xs font-bold leading-snug text-muted-foreground">
-                      Use Scan / SKU for an exact lookup or Search name for a candidate list. No result opens automatically.
+                      Use the single field to scan a barcode, enter an exact identifier, or type one or more item-name letters. No result opens automatically.
                     </p>
                   </div>
                 </div>
