@@ -1,0 +1,58 @@
+name: Phase 39-0F8.3 Idle Read Timeout Tolerance
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/inventory-bridge/itemLookup/v1/index.js'
+      - 'scripts/validate-phase39-0f8-3-idle-read-timeout-tolerance.mjs'
+      - 'docs/bridge/PHASE_39_0F8_3_IDLE_READ_TIMEOUT_TOLERANCE.md'
+      - '.github/workflows/phase39-0f8-3-idle-read-timeout-tolerance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout ScanOps candidate
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Certify idle read timeout tolerance
+        run: node scripts/validate-phase39-0f8-3-idle-read-timeout-tolerance.mjs
+
+      - name: Phase 39-0F8.1 unified lookup compatibility
+        run: node scripts/validate-phase39-0f8-1-unified-partial-item-lookup.mjs
+
+      - name: Phase 39-0F8 current-main reconciliation compatibility
+        run: node scripts/validate-phase39-0f8-current-main-item-lookup-reconciliation.mjs
+
+      - name: Phase 39-0F5 governed search and view compatibility
+        run: node scripts/validate-phase39-0f5-scanops-item-search-view.mjs
+
+      - name: Phase 35-A transport timeout compatibility
+        run: node scripts/validate-phase35a-scanops-test-transport.mjs
+
+      - name: Install and build application
+        run: |
+          set -euo pipefail
+          npm install --ignore-scripts
+          npm run build
+
+      - name: Lint changed surfaces
+        run: |
+          set -euo pipefail
+          npx eslint \
+            src/inventory-bridge/itemLookup/v1/index.js \
+            scripts/validate-phase39-0f8-3-idle-read-timeout-tolerance.mjs \
+            --quiet
