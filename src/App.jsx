@@ -16,6 +16,7 @@ import Replenish from './pages/Replenish';
 import PriceCheck from './pages/PriceCheck';
 import GapScan from './pages/GapScan';
 import Markdowns from './pages/MarkdownsOperator';
+import MarkdownMonitor from './pages/MarkdownMonitor';
 import Waste from './pages/WasteOperator';
 import ExpiryCheck from './pages/ExpiryCheckOperator';
 import Tasks from './pages/Tasks';
@@ -86,7 +87,8 @@ const getAppEscapeMeta = (pathname) => {
     "/alerts": { title: "Alerts", subtitle: "Review urgent operational issues" },
     "/more": { title: "Tools & Support", subtitle: "Secondary ScanOps tools" },
     "/help": { title: "Help", subtitle: "Quick operator guidance", backTo: { path: "/more", label: "Tools" } },
-    "/markdowns": { title: "Markdown", subtitle: "Scan item, choose markdown, request label" },
+    "/markdowns": { title: "Markdown", subtitle: "Scan item, enter markdown, print labels" },
+    "/markdown-monitor": { title: "Markdown Monitor", subtitle: "Further rounds, holiday adjustments, and expiry removal", backTo: { path: "/more", label: "Tools" } },
     "/waste": { title: "Waste", subtitle: "Scan item, classify loss, queue evidence" },
     "/expiry-check": { title: "Expiry Check", subtitle: "Scan item, confirm date, save freshness evidence" },
     "/inventory-sync": { title: "Sync Status", subtitle: "Queue, status, setup, and review" },
@@ -164,6 +166,7 @@ const AuthenticatedApp = () => {
             <Route path="/price-check" element={<PriceCheck />} />
             <Route path="/gap-scan" element={<GapScan />} />
             <Route path="/markdowns" element={<Markdowns />} />
+            <Route path="/markdown-monitor" element={roleGated(<MarkdownMonitor />, "Supervisor", "Markdown Monitor")} />
             <Route path="/waste" element={<Waste />} />
             <Route path="/expiry-check" element={<ExpiryCheck />} />
             <Route path="/tasks" element={<Tasks />} />
