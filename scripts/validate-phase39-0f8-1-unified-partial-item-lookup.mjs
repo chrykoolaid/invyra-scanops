@@ -43,7 +43,7 @@ check('one_and_three_letter_name_queries_are_classified_as_name_searches',
 check('exact_identifiers_keep_exact_lookup_routing',
   detectLookupType('9300000000501') === 'BARCODE'
     && detectLookupType('CHM-LIVE-001') === 'SKU'
-    && detectLookupType('6a2837ecb8270c9119eeebae') === 'SKU',
+    && detectLookupType('6a2837ecb8270c9119eeebae') === 'CANONICAL_ID',
   'itemLookupHelpers.js runtime classification');
 
 check('unified_submit_routes_name_queries_to_candidate_search',
@@ -122,6 +122,7 @@ check('safety_flags_remain_closed',
 const failures = checks.filter((entry) => !entry.passed);
 const report = {
   phase: '39-0F8.1',
+  compatibilityFollowUp: '39-0F8.4',
   repository: 'chrykoolaid/invyra-scanops',
   inventoryBaseline: '4346c8895b38b35006eba5d4d763ed32f2548cc0',
   scanOpsBase: '52b2b6f4711ca87e031b05d1b3028daa402698d2',
