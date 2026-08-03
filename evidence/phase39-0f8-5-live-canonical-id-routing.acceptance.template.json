@@ -1,0 +1,50 @@
+{
+  "phase": "39-0F8.5",
+  "status": "INCOMPLETE",
+  "environment": "TRAINING",
+  "repository": "chrykoolaid/invyra-scanops",
+  "baselines": {
+    "scanOpsMain": "e03022a4b1c8a731220c5dfcbe01872e2195b195",
+    "inventoryMain": "3e597d5e22e30c0ca2b06822146a490d48c18cd9",
+    "candidateBranch": "agent/phase-39-0f8-5-live-canonical-id-routing",
+    "candidateCommit": null
+  },
+  "observedFailure": {
+    "confirmed": true,
+    "knownCanonicalId": "6a2837ecb8270c9119eeebae",
+    "unknownCanonicalId": "ffffffffffffffffffffffff",
+    "result": "ITEM_LOOKUP_INPUT_INVALID",
+    "operatorMessage": "Scan a barcode or enter an exact SKU.",
+    "dispatchAttempted": false,
+    "rootCause": "The live ScanOps lookup wrapper admitted BARCODE and SKU but omitted CANONICAL_ID."
+  },
+  "requiredRetest": {
+    "knownCanonicalIdResult": "PENDING",
+    "expectedItemName": "Detergent 5L",
+    "expectedSku": "CHM-LIVE-001",
+    "explicitOpenRequired": null,
+    "unknownCanonicalIdResult": "PENDING",
+    "unknownCanonicalIdExpectedCode": "ITEM_NOT_FOUND",
+    "automaticFallbackObserved": null,
+    "automaticRetryObserved": null,
+    "staleResultObserved": null,
+    "allMutationCountsZero": null,
+    "stockUnchanged": null,
+    "passed": false
+  },
+  "safety": {
+    "testEnabled": true,
+    "trainingEnabled": true,
+    "liveEnabled": false,
+    "productionEnabled": false,
+    "persistenceAdded": false,
+    "queueWriteAdded": false,
+    "automaticSelectionAdded": false,
+    "automaticOpenAdded": false,
+    "automaticFallbackAdded": false,
+    "automaticRetryAdded": false,
+    "receivingIntegrationAuthorized": false,
+    "inventoryMutationAuthorized": false,
+    "scanOpsMutationAuthorized": false
+  }
+}

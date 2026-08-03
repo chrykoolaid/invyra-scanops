@@ -396,11 +396,11 @@ export async function runLiveItemLookup({ lookupType, lookupValue, session } = {
   const { profile, identity } = availability;
   const normalizedType = asText(lookupType).toUpperCase();
   const normalizedValue = asText(lookupValue);
-  if (!['BARCODE', 'SKU'].includes(normalizedType) || !normalizedValue || normalizedValue.length > 128) {
+  if (!['BARCODE', 'SKU', 'CANONICAL_ID'].includes(normalizedType) || !normalizedValue || normalizedValue.length > 128) {
     return baseReadFailure('ITEM_LOOKUP', validationFailure(
       'INVALID',
       'ITEM_LOOKUP_INPUT_INVALID',
-      'Scan a barcode or enter an exact SKU.',
+      'Scan a barcode or enter an exact SKU or Inventory sell ID.',
     ));
   }
 

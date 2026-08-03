@@ -1,0 +1,57 @@
+name: Phase 39-0F8.5 Live Canonical ID Routing
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/lib/scanOpsLiveConnectivity.js'
+      - 'src/pages/Scan.jsx'
+      - 'src/components/scanner/itemLookup/**'
+      - 'src/inventory-bridge/itemLookup/**'
+      - 'scripts/validate-phase39-0f8-5-live-canonical-id-routing.mjs'
+      - 'scripts/validate-phase39-0f8-4-canonical-id-lookup.mjs'
+      - 'evidence/phase39-0f8-5-live-canonical-id-routing.acceptance.template.json'
+      - '.github/workflows/phase39-0f8-5-live-canonical-id-routing.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout ScanOps candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Certify live canonical ID routing
+        run: node scripts/validate-phase39-0f8-5-live-canonical-id-routing.mjs
+
+      - name: Re-certify canonical ID contract
+        run: node scripts/validate-phase39-0f8-4-canonical-id-lookup.mjs
+
+      - name: Re-certify unified partial lookup
+        run: node scripts/validate-phase39-0f8-1-unified-partial-item-lookup.mjs
+
+      - name: Re-certify current-main reconciliation
+        run: node scripts/validate-phase39-0f8-current-main-item-lookup-reconciliation.mjs
+
+      - name: Re-certify operational exact lookup
+        run: node scripts/validate-phase39-0e-operational-item-lookup.mjs
+
+      - name: Build ScanOps
+        run: npm run build
+
+      - name: Targeted lint
+        run: npx eslint src/lib/scanOpsLiveConnectivity.js src/pages/Scan.jsx src/components/scanner/itemLookup/itemLookupHelpers.js
