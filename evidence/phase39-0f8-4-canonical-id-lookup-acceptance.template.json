@@ -1,0 +1,79 @@
+{
+  "phase": "39-0F8.4",
+  "status": "INCOMPLETE",
+  "environment": "TRAINING",
+  "executedAt": null,
+  "baselines": {
+    "inventory": "2efd675623f3933ee24ff5f18115b7f15dfde7f1",
+    "scanOps": "73a8844354306a889c840802b0728adef83b7cea",
+    "inventoryCandidate": "REPLACE_WITH_INVENTORY_PHASE_39_0F8_4_HEAD_OR_MERGE_COMMIT",
+    "scanOpsCandidate": "REPLACE_WITH_SCANOPS_PHASE_39_0F8_4_HEAD_OR_MERGE_COMMIT"
+  },
+  "operator": {
+    "name": "",
+    "operatorId": "",
+    "role": "staff"
+  },
+  "connection": {
+    "trainingModeConfirmed": false,
+    "listenerOnline": false,
+    "trustedPairingConfirmed": false,
+    "healthPingConfirmed": false,
+    "itemReadAuthorisationConfirmed": false
+  },
+  "canonicalIdLookup": {
+    "input": "6a2837ecb8270c9119eeebae",
+    "lookupType": "CANONICAL_ID",
+    "found": false,
+    "itemName": "",
+    "sku": "",
+    "exactResultVisibleBeforeOpen": false,
+    "openedAutomatically": false,
+    "explicitOpenUsed": false,
+    "operationalViewOpened": false
+  },
+  "notFound": {
+    "input": "ffffffffffffffffffffffff",
+    "lookupType": "CANONICAL_ID",
+    "itemNotFoundVisible": false,
+    "nameSearchStartedAutomatically": false,
+    "staleResultVisible": false
+  },
+  "failClosed": {
+    "authorizationClearBlocksNextRead": false,
+    "trustLossBlocksDispatch": false,
+    "automaticRetryObserved": false,
+    "staleResultReused": false
+  },
+  "mutationCounts": {
+    "inventory": 0,
+    "stock": 0,
+    "ledger": 0,
+    "item_master": 0,
+    "pricing": 0,
+    "purchase_order": 0,
+    "receiving": 0,
+    "scanops": 0
+  },
+  "safety": {
+    "liveEnabled": false,
+    "productionEnabled": false,
+    "automaticOpenAdded": false,
+    "automaticFallbackAdded": false,
+    "automaticRetryAdded": false,
+    "queueWriteAdded": false,
+    "persistenceAdded": false,
+    "receivingIntegrationAuthorized": false
+  },
+  "screenshots": [
+    { "label": "canonical-id-exact-result", "path": "" },
+    { "label": "canonical-id-operational-view", "path": "" },
+    { "label": "canonical-id-not-found", "path": "" },
+    { "label": "inventory-stock-unchanged", "path": "" }
+  ],
+  "notes": "",
+  "validation": {
+    "passed": false,
+    "blockers": []
+  }
+}

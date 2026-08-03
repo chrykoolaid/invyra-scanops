@@ -5,6 +5,7 @@ const LOOKUP_OPERATION = 'LOOKUP_REQUEST';
 const HEALTH_OPERATION = 'DEVICE_HEALTH_PING';
 export const ITEM_SEARCH_OPERATION = 'ITEM_SEARCH_REQUEST';
 export const ITEM_VIEW_OPERATION = 'ITEM_VIEW_REQUEST';
+export const EXACT_LOOKUP_TYPES = Object.freeze(['BARCODE', 'SKU', 'CANONICAL_ID']);
 const ZERO_MUTATION_KEYS = Object.freeze([
   'inventory', 'stock', 'ledger', 'item_master', 'pricing', 'purchase_order', 'receiving',
 ]);
@@ -73,8 +74,8 @@ function validateExactLookupResult(result, envelope, errors) {
   }
   const expectedType = asText(envelope?.payload?.lookupType || envelope?.payload?.lookup_type).toUpperCase();
   const expectedValue = asText(envelope?.payload?.lookupValue || envelope?.payload?.lookup_value);
-  if (!['BARCODE', 'SKU'].includes(result.lookupType)) {
-    errors.push(makeError('Lookup result type must be BARCODE or SKU.', 'result.lookupType'));
+  if (!EXACT_LOOKUP_TYPES.includes(result.lookupType)) {
+    errors.push(makeError('Lookup result type must be BARCODE, SKU, or CANONICAL_ID.', 'result.lookupType'));
   } else if (result.lookupType !== expectedType) {
     errors.push(makeError('Lookup result type does not match the request.', 'result.lookupType'));
   }
