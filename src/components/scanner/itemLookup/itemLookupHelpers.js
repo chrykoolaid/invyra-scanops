@@ -81,6 +81,7 @@ export function detectLookupType(value) {
   const structuredIdentifier = /[-_]/.test(trimmed);
   const canonicalIdentifier = /^[a-f0-9]{20,}$/i.test(trimmed);
 
-  if (compactIdentifier && (mixedAlphaNumeric || structuredIdentifier || canonicalIdentifier)) return "SKU";
+  if (canonicalIdentifier) return "CANONICAL_ID";
+  if (compactIdentifier && (mixedAlphaNumeric || structuredIdentifier)) return "SKU";
   return "NAME";
 }
