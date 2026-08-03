@@ -1,0 +1,113 @@
+name: Phase 39-0F8.4 Canonical ID Lookup
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/pages/Scan.jsx'
+      - 'src/components/scanner/itemLookup/itemLookupHelpers.js'
+      - 'src/inventory-bridge/itemLookup/v1/scanOpsItemLookupClientV1.js'
+      - 'src/inventory-bridge/itemLookup/v1/validateScanOpsItemLookupReceiptV1.js'
+      - 'scripts/validate-phase39-0f8-4-canonical-id-lookup.mjs'
+      - 'scripts/validate-phase39-0f8-1-unified-partial-item-lookup.mjs'
+      - 'evidence/phase39-0f8-4-canonical-id-lookup-acceptance.template.json'
+      - 'docs/bridge/PHASE_39_0F8_4_CANONICAL_ID_LOOKUP.md'
+      - '.github/workflows/phase39-0f8-4-canonical-id-lookup.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      INVENTORY_BASELINE_SHA: 2efd675623f3933ee24ff5f18115b7f15dfde7f1
+      SCANOPS_BASELINE_SHA: 73a8844354306a889c840802b0728adef83b7cea
+    steps:
+      - name: Checkout ScanOps candidate
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Phase 39-0F8.4 canonical ID lookup
+        run: node scripts/validate-phase39-0f8-4-canonical-id-lookup.mjs
+
+      - name: Phase 39-0F8.1 unified lookup compatibility
+        run: node scripts/validate-phase39-0f8-1-unified-partial-item-lookup.mjs
+
+      - name: Phase 39-0F8 current-main reconciliation compatibility
+        run: node scripts/validate-phase39-0f8-current-main-item-lookup-reconciliation.mjs
+
+      - name: Phase 39-0E operational lookup compatibility
+        run: node scripts/validate-phase39-0e-operational-item-lookup.mjs
+
+      - name: Canonical bridge contract compatibility
+        run: node scripts/validate-scanops-bridge-canonical-contract-v1.mjs
+
+      - name: Canonical adapter compatibility
+        run: node scripts/validate-scanops-bridge-canonical-adapter-v1.mjs
+
+      - name: Phase 35-A transport compatibility
+        run: node scripts/validate-phase35a-scanops-test-transport.mjs
+
+      - name: Phase 36-A pairing compatibility
+        run: node scripts/validate-phase36a-scanops-ephemeral-pairing.mjs
+
+      - name: Phase 39-0B connection compatibility
+        run: node scripts/validate-phase39-0b-scanops-connection-setup.mjs
+
+      - name: Install and build application
+        run: |
+          set -euo pipefail
+          npm install --ignore-scripts
+          npm run build
+
+      - name: Lint canonical ID lookup surfaces
+        run: |
+          set -euo pipefail
+          npx eslint \
+            src/components/scanner/itemLookup/itemLookupHelpers.js \
+            src/inventory-bridge/itemLookup/v1/scanOpsItemLookupClientV1.js \
+            src/inventory-bridge/itemLookup/v1/validateScanOpsItemLookupReceiptV1.js \
+            scripts/validate-phase39-0f8-4-canonical-id-lookup.mjs \
+            scripts/validate-phase39-0f8-1-unified-partial-item-lookup.mjs \
+            --quiet
+
+      - name: Record controlled evidence
+        run: |
+          cat > phase39-0f8-4-scanops-quality-note.json <<'JSON'
+          {
+            "phase": "39-0F8.4",
+            "repository": "chrykoolaid/invyra-scanops",
+            "status": "AUTOMATED_CERTIFICATION_ONLY",
+            "canonicalLookupType": "CANONICAL_ID",
+            "unifiedLookupField": true,
+            "automaticOpen": false,
+            "automaticFallback": false,
+            "automaticRetry": false,
+            "queueWriteAdded": false,
+            "persistenceAdded": false,
+            "receivingIntegrationAuthorized": false,
+            "liveAuthorized": false,
+            "productionAuthorized": false,
+            "realWindowsChromeAcceptanceRequired": true
+          }
+          JSON
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase39-0f8-4-scanops-canonical-id-lookup
+          path: |
+            phase39-0f8-4-scanops-quality-note.json
+            evidence/phase39-0f8-4-canonical-id-lookup-acceptance.template.json
+          if-no-files-found: warn
+          retention-days: 30
