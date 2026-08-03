@@ -9,9 +9,14 @@ import {
 } from './validateScanOpsItemLookupReceiptV1.js';
 
 export const SCANOPS_ITEM_LOOKUP_CLIENT_V1_PHASE = '39-0D';
-export const SCANOPS_ITEM_LOOKUP_CLIENT_V1_VERSION = 'scanops-item-lookup-client.v1.1.0';
+export const SCANOPS_ITEM_LOOKUP_CLIENT_V1_VERSION = 'scanops-item-lookup-client.v1.2.0';
 export const SCANOPS_ITEM_READ_CLIENT_V1_PHASE = '39-0F5';
 export const SCANOPS_ITEM_LOOKUP_CLIENT_V1_PATH = '/api/bridge/v1/handoffs';
+export const SCANOPS_EXACT_LOOKUP_TYPES_V1 = Object.freeze([
+  'BARCODE',
+  'SKU',
+  'CANONICAL_ID',
+]);
 
 const ALLOWED_ENVIRONMENTS = Object.freeze(['TEST', 'TRAINING']);
 const ALLOWED_ITEM_READ_ROLES = Object.freeze(['staff', 'supervisor', 'manager', 'admin', 'owner']);
@@ -184,7 +189,7 @@ export function createScanOpsItemLookupClientV1(options = {}) {
     const lookupType = asText(input.lookupType || input.lookup_type).toUpperCase();
     const lookupValue = asText(input.lookupValue || input.lookup_value);
     const blockers = commonInputBlockers(input);
-    if (!['BARCODE', 'SKU'].includes(lookupType)) blockers.push('LOOKUP_TYPE_INVALID');
+    if (!SCANOPS_EXACT_LOOKUP_TYPES_V1.includes(lookupType)) blockers.push('LOOKUP_TYPE_INVALID');
     if (!lookupValue) blockers.push('LOOKUP_VALUE_REQUIRED');
     if (lookupValue.length > 128) blockers.push('LOOKUP_VALUE_TOO_LONG');
     return guardedBuild(input, {
