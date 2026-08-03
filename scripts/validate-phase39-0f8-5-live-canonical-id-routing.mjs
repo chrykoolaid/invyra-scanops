@@ -32,7 +32,7 @@ check(
 check(
   'operator_validation_message_names_inventory_sell_id',
   liveConnectivity.includes('Scan a barcode or enter an exact SKU or Inventory sell ID.')
-    && !liveConnectivity.includes('Scan a barcode or enter an exact SKU.\'') ,
+    && !liveConnectivity.includes("'Scan a barcode or enter an exact SKU.',"),
   'scanOpsLiveConnectivity.js',
 );
 
@@ -105,11 +105,13 @@ const invalidBuild = client.buildLookupEnvelope({
   ...canonicalInput(knownCanonicalId, 'invalid'),
   lookupType: 'SELL_ID_GUESS',
 });
+const invalidBlockers = invalidBuild.gate?.blockers
+  || invalidBuild.buildResult?.errors?.map((entry) => entry?.code || entry)
+  || [];
 check(
   'unknown_lookup_types_remain_blocked',
-  invalidBuild.ok === false
-    && invalidBuild.buildResult?.errors?.some((entry) => entry.code === 'LOOKUP_TYPE_INVALID'),
-  invalidBuild.buildResult?.errors || invalidBuild.gate?.blockers,
+  invalidBuild.ok === false && invalidBlockers.includes('LOOKUP_TYPE_INVALID'),
+  invalidBlockers,
 );
 
 const failures = checks.filter((entry) => !entry.passed);
