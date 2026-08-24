@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Bell, PackageSearch, ShoppingCart } from "lucide-react";
+import { Bell, Minus, PackageSearch, Plus, ShoppingCart, Trash2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { getScanOpsSession } from "../lib/scanOpsSession";
-import { writeReorderRequestRecord } from "../lib/scanOpsRecordWriter";
+import { writeReorderBatchRecord } from "../lib/scanOpsRecordWriter";
 import { ensureInventoryLoaded, resolveInventoryIdentity } from "../lib/inventorySystemAdapter";
 import { getShelfNeedSnapshot } from "../lib/scanOpsReplenishment";
 import WorkflowHeader from "../components/scanner/WorkflowHeader";
@@ -11,13 +11,9 @@ import TouchSelect from "../components/scanner/TouchSelect";
 import {
   DoneCard,
   EmptyState,
-  FieldError,
   InfoLine,
-  ItemSummaryCard,
-  MetricPill,
   OperatorAlert,
   PageShell,
-  QuantityStepper,
   SectionCard,
   StickyActions,
   WorkflowMain,
@@ -63,17 +59,57 @@ function ReorderFlagCard({ flag, onAcknowledge, onOrder, onDismiss }) {
   );
 }
 
+function OrderLineCard({ line, onQuantityChange, onReasonChange, onRemove }) {
+  const item = line.item || {};
+  const identity = [item.sku && `SKU ${item.sku}`, item.barcode && `Barcode ${item.barcode}`].filter(Boolean).join(" · ") || "—";
+  const unit = line.unit || item.unitType || "each";
+  return (
+    <div className="rounded-2xl bg-secondary/60 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="break-words text-sm font-black text-foreground">{item.name || item.item_name || "Scanned item"}</p>
+          <p className="mt-0.5 break-all font-mono text-[10px] text-muted-foreground">{identity}</p>
+          <p className="mt-0.5 text-[11px] font-semibold text-muted-foreground">Shelf {line.shelfStock ?? "—"} · Backroom {line.backroomStock ?? "—"} · Below {line.threshold ?? "—"}</p>
+        </div>
+        <button type="button" onClick={onRemove} className="shrink-0 flex h-8 w-8 items-center justify-center rounded-xl bg-card text-muted-foreground active:bg-border" aria-label={`Remove ${item.name || "line"}`}>
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="mt-3 grid grid-cols-[3rem_1fr_3rem] gap-2">
+        <button type="button" onClick={() => onQuantityChange(Math.max(0, Number(line.quantity || 0) - 1))} className="flex min-h-11 items-center justify-center rounded-2xl bg-card font-black active:bg-border" aria-label={`Decrease quantity for ${item.name}`}>
+          <Minus className="h-4 w-4" />
+        </button>
+        <div className="flex min-h-11 flex-col items-center justify-center rounded-2xl bg-card px-2">
+          <span className="text-xl font-black leading-none text-foreground">{line.quantity}</span>
+          <span className="mt-0.5 text-[10px] font-semibold text-muted-foreground">{unit}</span>
+        </div>
+        <button type="button" onClick={() => onQuantityChange(Number(line.quantity || 0) + 1)} className="flex min-h-11 items-center justify-center rounded-2xl bg-card font-black active:bg-border" aria-label={`Increase quantity for ${item.name}`}>
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="mt-2">
+        <TouchSelect
+          label="Reason"
+          value={line.reason}
+          onChange={onReasonChange}
+          options={REORDER_REASONS}
+          placeholder="Select reason"
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function Order() {
   const [mode, setMode] = useState("review"); // "review" | "request"
   const [flags, setFlags] = useState([]);
   const [loadingFlags, setLoadingFlags] = useState(true);
   const [scanValue, setScanValue] = useState("");
-  const [item, setItem] = useState(null);
-  const [quantity, setQuantity] = useState(0);
-  const [reason, setReason] = useState("below_min");
+  const [batch, setBatch] = useState([]);
   const [notes, setNotes] = useState("");
   const [savedResult, setSavedResult] = useState(null);
   const [operatorError, setOperatorError] = useState(null);
+  const [lastScanned, setLastScanned] = useState(null);
 
   useEffect(() => { ensureInventoryLoaded(); }, []);
 
@@ -81,8 +117,7 @@ export default function Order() {
     setLoadingFlags(true);
     try {
       const rows = await base44.entities.ReorderFlag.list("-created_date", 100);
-      const active = (rows || []).filter((r) => ACTIVE_FLAG_STATUSES.includes(r.status));
-      setFlags(active);
+      setFlags((rows || []).filter((r) => ACTIVE_FLAG_STATUSES.includes(r.status)));
     } catch {
       setFlags([]);
     } finally {
@@ -92,104 +127,127 @@ export default function Order() {
 
   useEffect(() => { loadFlags(); }, []);
 
-  const need = useMemo(() => (item ? getShelfNeedSnapshot(item) : null), [item]);
+  const totalUnits = useMemo(() => batch.reduce((sum, l) => sum + (Number(l.quantity) || 0), 0), [batch]);
+
+  const lineKey = (item) => item?.internalItemId || item?.id || item?.sku || item?.barcode || item?.name;
 
   const scan = (value) => {
     const found = typeof value === "object" ? value : resolveInventoryIdentity(String(value || "").trim());
     if (!found) return;
     setOperatorError(null);
-    setItem(found);
-    setQuantity(Math.max(0, Number(need?.recommendedMove || 0)));
-    setSavedResult(null);
+    const need = getShelfNeedSnapshot(found);
+    const key = lineKey(found);
+    setBatch((prev) => {
+      const existing = prev.find((l) => lineKey(l.item) === key);
+      if (existing) {
+        return prev.map((l) => (lineKey(l.item) === key ? { ...l, quantity: Number(l.quantity || 0) + 1 } : l));
+      }
+      return [...prev, {
+        item: found,
+        quantity: Math.max(0, Number(need?.recommendedMove || 1)),
+        reason: "below_min",
+        unit: found.unitType || need?.unit || "each",
+        shelfStock: need?.shelf ?? found.shelfStock ?? null,
+        backroomStock: need?.backroom ?? found.backroomStock ?? null,
+        threshold: need?.shelfNeed ?? found.reorderPoint ?? null,
+      }];
+    });
+    setLastScanned(found.name || found.item_name || "Item");
+    setScanValue("");
   };
 
   const startNewRequest = () => {
     setMode("request");
-    setItem(null);
+    setBatch([]);
     setScanValue("");
-    setQuantity(0);
-    setReason("below_min");
     setNotes("");
     setSavedResult(null);
     setOperatorError(null);
+    setLastScanned(null);
   };
 
   const backToReview = () => {
     setMode("review");
-    setItem(null);
+    setBatch([]);
     setScanValue("");
     setNotes("");
     setSavedResult(null);
     setOperatorError(null);
+    setLastScanned(null);
     loadFlags();
   };
 
+  const updateLineQuantity = (key, next) => {
+    setBatch((prev) => prev.map((l) => (lineKey(l.item) === key ? { ...l, quantity: Number(next || 0) } : l)));
+  };
+
+  const updateLineReason = (key, reason) => {
+    setBatch((prev) => prev.map((l) => (lineKey(l.item) === key ? { ...l, reason } : l)));
+  };
+
+  const removeLine = (key) => {
+    setBatch((prev) => prev.filter((l) => lineKey(l.item) !== key));
+  };
+
   const updateFlagStatus = async (flag, status) => {
-    try {
-      await base44.entities.ReorderFlag.update(flag.id, { status });
-    } catch { /* ignore */ }
+    try { await base44.entities.ReorderFlag.update(flag.id, { status }); } catch { /* ignore */ }
     setFlags((prev) => prev.filter((f) => f.id !== flag.id));
   };
 
-  const submitRequest = () => {
-    if (!item) {
-      setOperatorError({ title: "Item required", helper: "Scan or search an item before submitting a reorder request." });
+  const submitOrder = async () => {
+    if (batch.length === 0) {
+      setOperatorError({ title: "Order is empty", helper: "Scan at least one item before submitting the order request." });
       return;
     }
-    if (quantity === "" || Number.isNaN(Number(quantity)) || Number(quantity) <= 0) {
-      setOperatorError({ title: "Quantity missing", helper: "Enter a valid requested quantity before submitting." });
+    const invalid = batch.find((l) => !l.quantity || Number(l.quantity) <= 0);
+    if (invalid) {
+      setOperatorError({ title: "Quantity missing", helper: `Set a quantity for ${invalid.item?.name || "a line"} before submitting.` });
       return;
     }
     setOperatorError(null);
     const session = getScanOpsSession();
-    const unit = item.unitType || need?.unit || "each";
-    const reasonLabel = REORDER_REASONS.find((r) => r.id === reason)?.label || reason;
+    const orderRequestId = `ord_req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-    // Create / update a ReorderFlag so the request flows through the existing lifecycle.
-    const existing = flags.find((f) => f.sku && item.sku && f.sku === item.sku);
-    const flagPromise = existing
-      ? base44.entities.ReorderFlag.update(existing.id, { status: "ordered", notes: notes || existing.notes }).catch(() => {})
-      : base44.entities.ReorderFlag.create({
-          itemId: item.internalItemId || item.id,
-          itemName: item.name,
-          sku: item.sku,
-          barcode: item.barcode,
-          shelfStock: need?.shelf ?? 0,
-          backroomStock: need?.backroom ?? 0,
-          threshold: need?.shelfNeed ?? 0,
-          unit,
-          flaggedBy: session.actorName,
-          flaggedByRole: session.actorRole,
-          storeId: session.storeId,
-          status: "ordered",
-          notes,
-        }).catch(() => {});
-
-    // Evidence-only ScanOpsRecord — no PO created, no stock mutation.
-    writeReorderRequestRecord({
-      item,
-      requestedQty: Number(quantity),
-      reason: reasonLabel,
+    // One evidence-only ScanOpsRecord for the whole batch — no PO, no stock mutation.
+    writeReorderBatchRecord({
+      orderRequestId,
+      lines: batch,
       notes,
-      threshold: need?.shelfNeed ?? 0,
-      shelfStock: need?.shelf ?? 0,
-      backroomStock: need?.backroom ?? 0,
-      unit,
+      storeId: session.storeId,
+      actorName: session.actorName,
+      actorRole: session.actorRole,
     });
 
-    setSavedResult({
-      itemName: item.name,
-      quantity: Number(quantity),
-      unit,
-      reason: reasonLabel,
-      flagId: existing?.id,
-    });
-    setItem(null);
-    setScanValue("");
+    // Update/create a ReorderFlag per line, linking to the order request so the flag list reflects it.
+    for (const line of batch) {
+      const existing = flags.find((f) => f.sku && line.item.sku && f.sku === line.item.sku);
+      try {
+        if (existing) {
+          await base44.entities.ReorderFlag.update(existing.id, { status: "ordered", notes: `Order ${orderRequestId}` });
+        } else {
+          await base44.entities.ReorderFlag.create({
+            itemId: line.item.internalItemId || line.item.id,
+            itemName: line.item.name,
+            sku: line.item.sku,
+            barcode: line.item.barcode,
+            shelfStock: line.shelfStock ?? 0,
+            backroomStock: line.backroomStock ?? 0,
+            threshold: line.threshold ?? 0,
+            unit: line.unit,
+            flaggedBy: session.actorName,
+            flaggedByRole: session.actorRole,
+            storeId: session.storeId,
+            status: "ordered",
+            notes: `Order ${orderRequestId}`,
+          });
+        }
+      } catch { /* best-effort flag sync */ }
+    }
+
+    setSavedResult({ lineCount: batch.length, totalUnits, orderRequestId });
+    setBatch([]);
     setNotes("");
-    setQuantity(0);
-    // Refresh flags after the flag write settles
-    flagPromise?.then?.(() => loadFlags());
+    setScanValue("");
   };
 
   const openCount = flags.filter((f) => f.status === "open").length;
@@ -268,85 +326,80 @@ export default function Order() {
             <SectionCard className="space-y-2">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-sm font-black text-foreground">New reorder request</p>
-                  <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Scan item, confirm quantity and reason, submit. Queued for Inventory Desktop — no PO created here.</p>
+                  <p className="text-sm font-black text-foreground">New order request</p>
+                  <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Scan items into the order list, adjust quantities, then submit as one request. Queued for Inventory Desktop — no PO created here.</p>
                 </div>
                 <button type="button" onClick={backToReview} className="shrink-0 rounded-xl bg-secondary px-3 py-2 text-xs font-black text-secondary-foreground active:bg-border">Back to flags</button>
               </div>
+              {lastScanned && !savedResult && <p className="text-[11px] font-bold text-primary">Added: {lastScanned}</p>}
             </SectionCard>
 
             {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}
 
             {savedResult ? (
               <DoneCard
-                title="Reorder request submitted"
+                title="Order request submitted"
                 helper="Saved locally. Pending future desktop handoff; no purchase order was created by handheld."
                 rows={[
-                  { label: "Item", value: savedResult.itemName },
-                  { label: "Qty requested", value: `${savedResult.quantity} ${savedResult.unit}` },
-                  { label: "Reason", value: savedResult.reason },
+                  { label: "Lines", value: `${savedResult.lineCount} item${savedResult.lineCount === 1 ? "" : "s"}` },
+                  { label: "Total units", value: `${savedResult.totalUnits}` },
+                  { label: "Request ID", value: savedResult.orderRequestId },
                   { label: "Handoff", value: "Pending future handoff" },
                 ]}
               />
-            ) : item ? (
-              <>
-                <ItemSummaryCard item={item} />
-                <SectionCard className="space-y-3">
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                      <PackageSearch className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-black text-foreground">Stock evidence</p>
-                      <p className="mt-1 text-xs font-semibold leading-snug text-muted-foreground">Read-only snapshot. Live inventory is not changed here.</p>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <MetricPill label="Shelf" value={need?.shelf ?? "—"} suffix={need?.shelf == null ? "" : need.unit} />
-                    <MetricPill label="Backroom" value={need?.backroom ?? "—"} suffix={need?.backroom == null ? "" : need.unit} />
-                    <MetricPill label="SOH" value={need?.soh ?? need?.shelf ?? "—"} suffix={(need?.soh ?? need?.shelf) == null ? "" : need.unit} />
-                  </div>
-                  <div className="rounded-2xl bg-secondary/60 p-3">
-                    <InfoLine label="Shelf location" value={need?.shelfLocation || "—"} />
-                    <InfoLine label="Reorder point" value={item.reorderPoint ?? "—"} />
-                    <InfoLine label="Min stock" value={item.minimumStock ?? "—"} />
-                  </div>
-                </SectionCard>
-
-                <QuantityStepper label="Qty requested" value={quantity} onChange={(v) => { setQuantity(v); if (operatorError?.title === "Quantity missing") setOperatorError(null); }} unit={need?.unit || item.unitType || "each"} min={0} />
-                {(quantity === "" || Number.isNaN(Number(quantity)) || Number(quantity) <= 0) && <FieldError title="Quantity missing" helper="Enter a valid requested quantity before submitting." />}
-
-                <TouchSelect
-                  label="Reason"
-                  value={reason}
-                  onChange={setReason}
-                  options={REORDER_REASONS}
-                  placeholder="Select reason"
-                />
-
-                <SectionCard className="space-y-3">
-                  <label className="block min-w-0">
-                    <span className="text-xs font-black uppercase tracking-wider text-muted-foreground">Notes (optional)</span>
-                    <textarea
-                      value={notes}
-                      onChange={(event) => setNotes(event.target.value)}
-                      rows={2}
-                      placeholder="Example: Promo next week, need 3 cases."
-                      className="mt-2 w-full min-w-0 resize-none rounded-2xl border border-input bg-card px-4 py-3 text-sm font-bold text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/20"
-                    />
-                  </label>
-                </SectionCard>
-              </>
             ) : (
-              <EmptyState title="No item selected." helper="Scan or search an item to start a reorder request." />
+              <>
+                <SectionCard className="space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Order list</p>
+                      <p className="mt-1 text-2xl font-black text-foreground">{batch.length} {batch.length === 1 ? "line" : "lines"}</p>
+                    </div>
+                    <div className="shrink-0 rounded-2xl bg-secondary px-3 py-2 text-center">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Total units</p>
+                      <p className="text-lg font-black text-foreground">{totalUnits}</p>
+                    </div>
+                  </div>
+                  {batch.length > 0 ? (
+                    <div className="space-y-2">
+                      {batch.map((line) => (
+                        <OrderLineCard
+                          key={lineKey(line.item)}
+                          line={line}
+                          onQuantityChange={(next) => updateLineQuantity(lineKey(line.item), next)}
+                          onReasonChange={(reason) => updateLineReason(lineKey(line.item), reason)}
+                          onRemove={() => removeLine(lineKey(line.item))}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyState title="Order list is empty." helper="Scan or search an item above to add it to the order." />
+                  )}
+                </SectionCard>
+
+                {batch.length > 0 && (
+                  <SectionCard className="space-y-2">
+                    <label className="block min-w-0">
+                      <span className="text-xs font-black uppercase tracking-wider text-muted-foreground">Notes (optional)</span>
+                      <textarea
+                        value={notes}
+                        onChange={(event) => setNotes(event.target.value)}
+                        rows={2}
+                        placeholder="Example: Promo next week, urgent fill."
+                        className="mt-2 w-full min-w-0 resize-none rounded-2xl border border-input bg-card px-4 py-3 text-sm font-bold text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                    </label>
+                  </SectionCard>
+                )}
+              </>
             )}
 
             <StickyActions
               leftLabel={savedResult ? "Back to flags" : "Cancel"}
-              rightLabel={savedResult ? "New request" : "Submit request"}
-              onLeft={savedResult ? backToReview : backToReview}
-              onRight={savedResult ? startNewRequest : submitRequest}
-              rightDisabled={!item && !savedResult}
+              rightLabel={savedResult ? "New request" : "Submit order"}
+              onLeft={backToReview}
+              onRight={savedResult ? startNewRequest : submitOrder}
+              rightDisabled={!savedResult && batch.length === 0}
             />
           </>
         )}

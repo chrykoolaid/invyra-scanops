@@ -208,6 +208,40 @@ export function writeReorderFlagRecord({ item, shelfStock, backroomStock, thresh
   });
 }
 
+export function writeReorderBatchRecord({ orderRequestId, lines, notes, storeId, actorName, actorRole }) {
+  const safeLines = Array.isArray(lines) ? lines : [];
+  const totalUnits = safeLines.reduce((sum, l) => sum + (Number(l.quantity) || 0), 0);
+  writeScanOpsRecord({
+    recordType: "reorder_flag",
+    status: "open",
+    quantity: totalUnits,
+    notes,
+    storeId,
+    actorName,
+    actorRole,
+    syncStatus: orderRequestId ? `ord_req:${orderRequestId}` : "pending",
+    outcomeLabel: "Order request submitted",
+    payload: {
+      request_type: "order_request",
+      order_request_id: orderRequestId,
+      line_count: safeLines.length,
+      total_units: totalUnits,
+      lines: safeLines.map((l) => ({
+        item_id: l.item?.internalItemId || l.item?.id || null,
+        item_name: l.item?.name || l.item?.item_name || null,
+        sku: l.item?.sku || null,
+        barcode: l.item?.barcode || null,
+        quantity: Number(l.quantity) || 0,
+        unit: l.unit || l.item?.unitType || "each",
+        reason: l.reason || null,
+        shelf_stock: l.shelfStock ?? null,
+        backroom_stock: l.backroomStock ?? null,
+        threshold: l.threshold ?? null,
+      })),
+    },
+  });
+}
+
 export function writeReorderRequestRecord({ item, requestedQty, reason, notes, threshold, shelfStock, backroomStock, unit }) {
   writeScanOpsRecord({
     recordType: "reorder_flag",
