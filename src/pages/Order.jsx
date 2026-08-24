@@ -100,13 +100,59 @@ function OrderLineCard({ line, onQuantityChange, onReasonChange, onRemove }) {
   );
 }
 
+function PendingItemCard({ pending, onQuantityChange, onReasonChange, onNotesChange, onDismiss }) {
+  const item = pending.item || {};
+  const identity = [item.sku && `SKU ${item.sku}`, item.barcode && `Barcode ${item.barcode}`].filter(Boolean).join(" · ") || "—";
+  const unit = pending.unit || item.unitType || "each";
+  return (
+    <div className="rounded-2xl border border-primary/40 bg-primary/5 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-black uppercase tracking-wider text-primary">Not added yet</p>
+          <p className="mt-1 break-words text-sm font-black text-foreground">{item.name || item.item_name || "Scanned item"}</p>
+          <p className="mt-0.5 break-all font-mono text-[10px] text-muted-foreground">{identity}</p>
+          <p className="mt-0.5 text-[11px] font-semibold text-muted-foreground">Shelf {pending.shelfStock ?? "—"} · Backroom {pending.backroomStock ?? "—"} · Below {pending.threshold ?? "—"}</p>
+        </div>
+        <button type="button" onClick={onDismiss} className="shrink-0 flex h-8 w-8 items-center justify-center rounded-xl bg-card text-muted-foreground active:bg-border" aria-label="Clear pending item">
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="mt-3 grid grid-cols-[3rem_1fr_3rem] gap-2">
+        <button type="button" onClick={() => onQuantityChange(Math.max(0, Number(pending.quantity || 0) - 1))} className="flex min-h-11 items-center justify-center rounded-2xl bg-card font-black active:bg-border" aria-label="Decrease quantity">
+          <Minus className="h-4 w-4" />
+        </button>
+        <div className="flex min-h-11 flex-col items-center justify-center rounded-2xl bg-card px-2">
+          <span className="text-xl font-black leading-none text-foreground">{pending.quantity}</span>
+          <span className="mt-0.5 text-[10px] font-semibold text-muted-foreground">{unit}</span>
+        </div>
+        <button type="button" onClick={() => onQuantityChange(Number(pending.quantity || 0) + 1)} className="flex min-h-11 items-center justify-center rounded-2xl bg-card font-black active:bg-border" aria-label="Increase quantity">
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="mt-2">
+        <TouchSelect label="Reason" value={pending.reason} onChange={onReasonChange} options={REORDER_REASONS} placeholder="Select reason" />
+      </div>
+      <label className="mt-2 block min-w-0">
+        <span className="text-xs font-black uppercase tracking-wider text-muted-foreground">Notes (optional)</span>
+        <textarea
+          value={pending.notes || ""}
+          onChange={(event) => onNotesChange(event.target.value)}
+          rows={2}
+          placeholder="Example: Promo next week, urgent fill."
+          className="mt-2 w-full min-w-0 resize-none rounded-2xl border border-input bg-card px-4 py-3 text-sm font-bold text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/20"
+        />
+      </label>
+    </div>
+  );
+}
+
 export default function Order() {
   const [mode, setMode] = useState("review"); // "review" | "request"
   const [flags, setFlags] = useState([]);
   const [loadingFlags, setLoadingFlags] = useState(true);
   const [scanValue, setScanValue] = useState("");
   const [batch, setBatch] = useState([]);
-  const [notes, setNotes] = useState("");
+  const [pendingItem, setPendingItem] = useState(null);
   const [savedResult, setSavedResult] = useState(null);
   const [operatorError, setOperatorError] = useState(null);
   const [lastScanned, setLastScanned] = useState(null);
@@ -136,23 +182,37 @@ export default function Order() {
     if (!found) return;
     setOperatorError(null);
     const need = getShelfNeedSnapshot(found);
-    const key = lineKey(found);
+    setPendingItem({
+      item: found,
+      quantity: Math.max(0, Number(need?.recommendedMove || 1)),
+      reason: "below_min",
+      notes: "",
+      unit: found.unitType || need?.unit || "each",
+      shelfStock: need?.shelf ?? found.shelfStock ?? null,
+      backroomStock: need?.backroom ?? found.backroomStock ?? null,
+      threshold: need?.shelfNeed ?? found.reorderPoint ?? null,
+    });
+    setLastScanned(found.name || found.item_name || "Item");
+    setScanValue("");
+  };
+
+  const addToOrder = () => {
+    if (!pendingItem) return;
+    if (!pendingItem.quantity || Number(pendingItem.quantity) <= 0) {
+      setOperatorError({ title: "Quantity missing", helper: "Set a quantity before adding this item to the order." });
+      return;
+    }
+    setOperatorError(null);
+    const key = lineKey(pendingItem.item);
     setBatch((prev) => {
       const existing = prev.find((l) => lineKey(l.item) === key);
       if (existing) {
-        return prev.map((l) => (lineKey(l.item) === key ? { ...l, quantity: Number(l.quantity || 0) + 1 } : l));
+        return prev.map((l) => (lineKey(l.item) === key ? { ...l, quantity: Number(l.quantity || 0) + Number(pendingItem.quantity || 0), notes: pendingItem.notes || l.notes } : l));
       }
-      return [...prev, {
-        item: found,
-        quantity: Math.max(0, Number(need?.recommendedMove || 1)),
-        reason: "below_min",
-        unit: found.unitType || need?.unit || "each",
-        shelfStock: need?.shelf ?? found.shelfStock ?? null,
-        backroomStock: need?.backroom ?? found.backroomStock ?? null,
-        threshold: need?.shelfNeed ?? found.reorderPoint ?? null,
-      }];
+      return [...prev, { ...pendingItem }];
     });
-    setLastScanned(found.name || found.item_name || "Item");
+    setPendingItem(null);
+    setLastScanned(null);
     setScanValue("");
   };
 
@@ -160,7 +220,7 @@ export default function Order() {
     setMode("request");
     setBatch([]);
     setScanValue("");
-    setNotes("");
+    setPendingItem(null);
     setSavedResult(null);
     setOperatorError(null);
     setLastScanned(null);
@@ -170,7 +230,7 @@ export default function Order() {
     setMode("review");
     setBatch([]);
     setScanValue("");
-    setNotes("");
+    setPendingItem(null);
     setSavedResult(null);
     setOperatorError(null);
     setLastScanned(null);
@@ -212,7 +272,7 @@ export default function Order() {
     writeReorderBatchRecord({
       orderRequestId,
       lines: batch,
-      notes,
+      notes: batch.map((l) => l.notes).filter(Boolean).join("; "),
       storeId: session.storeId,
       actorName: session.actorName,
       actorRole: session.actorRole,
@@ -246,7 +306,7 @@ export default function Order() {
 
     setSavedResult({ lineCount: batch.length, totalUnits, orderRequestId });
     setBatch([]);
-    setNotes("");
+    setPendingItem(null);
     setScanValue("");
   };
 
@@ -331,7 +391,7 @@ export default function Order() {
                 </div>
                 <button type="button" onClick={backToReview} className="shrink-0 rounded-xl bg-secondary px-3 py-2 text-xs font-black text-secondary-foreground active:bg-border">Back to flags</button>
               </div>
-              {lastScanned && !savedResult && <p className="text-[11px] font-bold text-primary">Added: {lastScanned}</p>}
+              {lastScanned && !savedResult && <p className="text-[11px] font-bold text-primary">Scanned: {lastScanned}</p>}
             </SectionCard>
 
             {operatorError && <OperatorAlert title={operatorError.title} helper={operatorError.helper} actions={[{ label: "Keep Editing", onClick: () => setOperatorError(null), variant: "primary" }]} />}
@@ -349,16 +409,32 @@ export default function Order() {
               />
             ) : (
               <>
+                {pendingItem && (
+                  <PendingItemCard
+                    pending={pendingItem}
+                    onQuantityChange={(next) => setPendingItem((p) => (p ? { ...p, quantity: Number(next || 0) } : p))}
+                    onReasonChange={(reason) => setPendingItem((p) => (p ? { ...p, reason } : p))}
+                    onNotesChange={(notes) => setPendingItem((p) => (p ? { ...p, notes } : p))}
+                    onDismiss={() => { setPendingItem(null); setLastScanned(null); setScanValue(""); }}
+                  />
+                )}
+
                 <SectionCard className="space-y-3">
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-xs font-black uppercase tracking-wider text-muted-foreground">Order list</p>
                       <p className="mt-1 text-2xl font-black text-foreground">{batch.length} {batch.length === 1 ? "line" : "lines"}</p>
+                      <p className="mt-0.5 text-[11px] font-semibold text-muted-foreground">{totalUnits} total units</p>
                     </div>
-                    <div className="shrink-0 rounded-2xl bg-secondary px-3 py-2 text-center">
-                      <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Total units</p>
-                      <p className="text-lg font-black text-foreground">{totalUnits}</p>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={submitOrder}
+                      disabled={batch.length === 0}
+                      className="shrink-0 flex min-h-11 items-center gap-1.5 rounded-2xl bg-primary px-4 text-xs font-black text-primary-foreground active:scale-[0.98] disabled:opacity-40"
+                    >
+                      <ShoppingCart className="h-4 w-4" />
+                      Submit order
+                    </button>
                   </div>
                   {batch.length > 0 ? (
                     <div className="space-y-2">
@@ -373,33 +449,18 @@ export default function Order() {
                       ))}
                     </div>
                   ) : (
-                    <EmptyState title="Order list is empty." helper="Scan or search an item above to add it to the order." />
+                    <EmptyState title="Order list is empty." helper="Scan an item above and tap 'Add to list'." />
                   )}
                 </SectionCard>
-
-                {batch.length > 0 && (
-                  <SectionCard className="space-y-2">
-                    <label className="block min-w-0">
-                      <span className="text-xs font-black uppercase tracking-wider text-muted-foreground">Notes (optional)</span>
-                      <textarea
-                        value={notes}
-                        onChange={(event) => setNotes(event.target.value)}
-                        rows={2}
-                        placeholder="Example: Promo next week, urgent fill."
-                        className="mt-2 w-full min-w-0 resize-none rounded-2xl border border-input bg-card px-4 py-3 text-sm font-bold text-foreground placeholder:text-muted-foreground outline-none focus:ring-2 focus:ring-primary/20"
-                      />
-                    </label>
-                  </SectionCard>
-                )}
               </>
             )}
 
             <StickyActions
               leftLabel={savedResult ? "Back to flags" : "Cancel"}
-              rightLabel={savedResult ? "New request" : "Submit order"}
+              rightLabel={savedResult ? "New request" : "Add to list"}
               onLeft={backToReview}
-              onRight={savedResult ? startNewRequest : submitOrder}
-              rightDisabled={!savedResult && batch.length === 0}
+              onRight={savedResult ? startNewRequest : addToOrder}
+              rightDisabled={!savedResult && !pendingItem}
             />
           </>
         )}
