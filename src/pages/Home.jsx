@@ -15,6 +15,7 @@ import {
   Clock,
   History,
   BriefcaseBusiness,
+  ShoppingCart,
 } from "lucide-react";
 
 const HERO_TILE = {
@@ -34,7 +35,7 @@ const ALL_TILES = [
   { icon: Trash2,            label: "Waste",     description: "Record loss",   to: "/waste",             minRole: "Staff", tone: "green" },
   { icon: Tags,              label: "Markdown",  description: "Price labels",  to: "/markdowns",         minRole: "Staff", tone: "purple" },
   { icon: Clock,             label: "Expiry",    description: "Freshness",     to: "/expiry-check",      minRole: "Staff", tone: "purple" },
-  { icon: BarChart2,         label: "Reporting", description: "Shift view",    to: "/scanops-reporting", minRole: "Staff", tone: "amber" },
+  { icon: ShoppingCart,      label: "Order",     description: "Reorder",      to: "/order",             minRole: "Supervisor", tone: "amber" },
   { icon: History,           label: "Movements", description: "Stock history", to: "/movements",         minRole: "Staff", tone: "cyan" },
   { icon: BriefcaseBusiness, label: "Tools",     description: "Support",       to: "/more",              minRole: "Staff", tone: "grey" },
 ];

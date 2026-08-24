@@ -29,6 +29,7 @@ import ShelfTickets from './pages/ShelfTickets';
 import Transfers from './pages/TransfersOperator';
 import ProductIdentityReview from './pages/ProductIdentityReview';
 import ScanOpsReporting from './pages/ScanOpsReportingOperator';
+import Order from './pages/Order';
 import DeviceGovernance from './pages/DeviceGovernance';
 import DeviceHealth from './pages/DeviceHealth';
 import RecoveryGuidance from './pages/RecoveryGuidance';
@@ -95,7 +96,8 @@ const getAppEscapeMeta = (pathname) => {
     "/shelf-tickets": { title: "Shelf Tickets", subtitle: "Prepare shelf ticket work" },
     "/transfers": { title: "Transfers", subtitle: "Set route, scan item, move quantity, save" },
     "/product-identity-review": { title: "Product Review", subtitle: "Resolve scanned item identity" },
-    "/scanops-reporting": { title: "Reporting", subtitle: "Read-only ScanOps activity" },
+    "/scanops-reporting": { title: "Reporting", subtitle: "Read-only ScanOps activity", backTo: { path: "/more", label: "Tools" } },
+    "/order": { title: "Order", subtitle: "Review flags and submit reorder requests" },
     "/device-governance": { title: "Device & Shift Governance", subtitle: "Review device readiness" },
     "/device-health": { title: "Device Health", subtitle: "Scanner, network, printer, and queue readiness" },
     "/recovery-guidance": { title: "Recovery Guidance", subtitle: "What went wrong and what to do next" },
@@ -177,7 +179,8 @@ const AuthenticatedApp = () => {
             <Route path="/shelf-tickets" element={<ShelfTickets />} />
             <Route path="/transfers" element={<Transfers />} />
             <Route path="/product-identity-review" element={roleGated(<ProductIdentityReview />, "Supervisor", "Product Review")} />
-            <Route path="/scanops-reporting" element={roleGated(<ScanOpsReporting />, "Supervisor", "Reporting")} />
+            <Route path="/scanops-reporting" element={<ScanOpsReporting />} />
+            <Route path="/order" element={roleGated(<Order />, "Supervisor", "Order")} />
             <Route path="/device-governance" element={roleGated(<DeviceGovernance />, "Manager", "Device & Shift Governance")} />
             <Route path="/device-health" element={<DeviceHealth />} />
             <Route path="/recovery-guidance" element={<RecoveryGuidance />} />

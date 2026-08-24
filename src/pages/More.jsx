@@ -1,12 +1,13 @@
 import React from "react";
 import AppHeader from "../components/scanner/AppHeader";
 import ActionTile from "../components/scanner/ActionTile";
-import { ArrowLeft, HelpCircle, ListChecks, RefreshCw, Settings } from "lucide-react";
+import { ArrowLeft, BarChart2, HelpCircle, ListChecks, RefreshCw, Settings } from "lucide-react";
 
 const TOOL_TILES = [
   { icon: ListChecks, label: "Tasks",    description: "Assigned work", to: "/tasks",            tone: "blue" },
   { icon: RefreshCw,  label: "Sync",     description: "Manual handoff", to: "/sync-control",     tone: "cyan" },
   { icon: Settings,   label: "Settings", description: "Device setup",  to: "/scanner-settings", tone: "grey" },
+  { icon: BarChart2,  label: "Reporting", description: "Shift view",    to: "/scanops-reporting", tone: "cyan" },
   { icon: HelpCircle, label: "Help",     description: "Guidance",      to: "/help",             tone: "cyan" },
   { icon: ArrowLeft,  label: "Back",     description: "Home",          to: "/",                tone: "grey" },
 ];

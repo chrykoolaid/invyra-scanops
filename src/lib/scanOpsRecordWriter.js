@@ -207,3 +207,27 @@ export function writeReorderFlagRecord({ item, shelfStock, backroomStock, thresh
     payload: { shelf_stock: shelfStock, backroom_stock: backroomStock, threshold },
   });
 }
+
+export function writeReorderRequestRecord({ item, requestedQty, reason, notes, threshold, shelfStock, backroomStock, unit }) {
+  writeScanOpsRecord({
+    recordType: "reorder_flag",
+    status: "request_submitted",
+    itemId: item?.internalItemId || item?.id,
+    itemName: item?.name,
+    itemSku: item?.sku,
+    itemBarcode: item?.barcode,
+    quantity: Number(requestedQty) || 0,
+    unit,
+    reason,
+    notes,
+    outcomeLabel: "Reorder request submitted",
+    payload: {
+      request_type: "reorder_request",
+      requested_qty: Number(requestedQty) || 0,
+      reason,
+      threshold,
+      shelf_stock: shelfStock,
+      backroom_stock: backroomStock,
+    },
+  });
+}
