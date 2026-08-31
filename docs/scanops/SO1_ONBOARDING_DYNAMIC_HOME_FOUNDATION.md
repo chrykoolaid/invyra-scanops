@@ -2,17 +2,19 @@
 
 Status: FOUNDATION ONLY / RUNTIME DISABLED
 
+Taxonomy authority: Invyra Industry Coverage & Rollout Order v1.3 — LOCKED 11-INDUSTRY TAXONOMY.
+
 ## Purpose
 
-Prepare ScanOps for future industry-, location-, and role-aware onboarding and Home configuration without changing the current production operator experience.
+Prepare ScanOps for future industry-, subgroup-, location-, and role-aware onboarding and Home configuration without changing the current production operator experience.
 
 ## Locked architecture
 
 Inventory Desktop remains the system of record and configuration authority.
 
 Inventory owns:
-- company industry and sub-industry
-- location definitions and capabilities
+- company primary industry and subgroup
+- location definitions and cross-sector capabilities
 - employee/role permission policy
 - authoritative inventory truth and stock mutation
 
@@ -20,7 +22,7 @@ ScanOps remains the operational execution layer.
 
 The governed Bridge is the synchronization boundary between Inventory and ScanOps.
 
-ScanOps must not independently change company industry, inventory truth, stock, ledger, pricing, approvals, Item Master, POS, or orders.
+ScanOps must not independently change company industry, subgroup, inventory truth, stock, ledger, pricing, approvals, Item Master, POS, or orders.
 
 ## Approved onboarding sequence
 
@@ -66,7 +68,7 @@ When activation is eventually approved:
 
 `Visible Home Tiles = Industry Profile ∩ Location Capabilities ∩ Employee Permissions`
 
-The resolver must preserve stable positions wherever practical. Industry-specific terminology may change, but capability identity must remain canonical.
+The resolver must preserve stable positions wherever practical. Subgroup-specific terminology may change, but capability identity must remain canonical.
 
 ## Fail-safe rule
 
@@ -77,26 +79,132 @@ If any of the following applies, ScanOps must fall back to the existing canonica
 - operational profile is missing
 - operational profile is malformed
 - profile version is unsupported
+- subgroup is invalid for the primary industry
 - location capability data is missing or invalid
 - employee permission data is missing or invalid
 - Bridge/configuration source is unavailable
 
 No partial or speculative profile may hide operational workflows.
 
-## Industry profile foundation
+## Locked 11 primary industries
 
-SO-1 defines profile identifiers only. Runtime activation is deferred.
+SO-1 recognizes exactly these first-class onboarding profiles. Runtime activation remains deferred.
 
-- services
-- retail
-- hospitality_food_beverage
-- hospitality_accommodation
-- healthcare
-- wholesale_distribution
+1. `services`
+2. `retail`
+3. `hospitality_food_beverage`
+4. `hospitality_accommodation`
+5. `healthcare`
+6. `wholesale_distribution`
+7. `manufacturing`
+8. `construction_trades`
+9. `automotive`
+10. `rental_hire`
+11. `agriculture_primary_production`
 
-Warehouse Operations is a cross-sector location capability, not a standalone company industry.
+A business selects one primary industry profile. A subgroup supplies relevant terminology, defaults, UI and operational presets. Subgroups do not create separate transaction or inventory engines.
+
+## Locked subgroups
+
+### Services
+- Laundry & Dry Cleaning
+- Repair & Maintenance
+- Salon, Beauty & Wellness
+- Cleaning Services
+- Professional / Business Services
+- Other Service & Allied Service Businesses
+
+### Retail
+- Convenience Stores
+- Sari-sari Stores
+- Mini-marts & Groceries
+- Supermarkets / Hypermarkets
+- Specialty Retail
+
+### Hospitality — Food & Beverage
+- Restaurants
+- Cafes
+- Bars / Pubs
+- Quick Service Restaurants (QSR)
+
+### Hospitality — Accommodation
+- Hotels
+- Resorts
+- Motels
+- Lodges / Guesthouses / Serviced Accommodation
+
+### Healthcare
+- Pharmacies
+- Clinics
+- Hospitals
+- Allied Health
+
+### Wholesale & Distribution
+- Wholesalers
+- Distributors
+- B2B Fulfilment Operations
+
+### Manufacturing
+- Food & Beverage Manufacturing
+- Light Manufacturing
+- Assembly Manufacturing
+- Fabrication & Workshop Manufacturing
+- Process Manufacturing
+- Textile & Apparel Manufacturing
+- Pharmaceutical / Regulated Manufacturing
+- Construction Materials Manufacturing
+- Other / General Manufacturing
+
+### Construction & Trades
+- Residential Construction
+- Commercial Construction
+- Electrical
+- Plumbing
+- HVAC / Mechanical Services
+- General Contractors & Trade Services
+
+### Automotive
+- Mechanical Workshops
+- Tyre Centres
+- Auto Electrical
+- Vehicle Service Centres
+- Motorcycle Workshops
+- Other Automotive Service Operations
+
+### Rental & Hire
+- Tool Hire
+- Equipment Rental
+- Machinery Hire
+- Party & Event Hire
+- Vehicle Hire
+- Other Rental Operations
+
+### Agriculture & Primary Production
+- Crop Farming / Growers
+- Livestock
+- Dairy
+- Poultry
+- Aquaculture
+- Fisheries
+- Nurseries / Horticulture
+- Other Primary Production
+
+## Cross-sector capabilities — not industries
+
+The following must never be accepted as primary industry profiles:
+
+- Warehouse Operations
+- E-commerce Overlay
+- Payroll & Staff Rostering
+- Reporting & Analytics
+- Multi-location
+- Integrations
+
+Cross-sector capabilities are enabled only when relevant to the organisation or location. Disabled capabilities remain hidden to reduce cognitive load.
 
 ## Warehouse capability
+
+Warehouse Operations is a cross-sector location capability, not a standalone company industry.
 
 Future Inventory onboarding/settings may enable warehouse capability per location. A warehouse-enabled location may later expose capabilities such as:
 
@@ -108,10 +216,24 @@ Future Inventory onboarding/settings may enable warehouse capability per locatio
 - dispatch
 - transfers
 - returns
-- cycle count
+- scanner workflows
+- cycle counts
 - exceptions
 
 Inventory remains the authoritative stock record; warehouse workflows control physical execution only.
+
+## Industry readiness gate
+
+No industry profile may be activated in ScanOps merely because its dormant profile exists. Activation requires the wider Invyra industry readiness gate to pass, including:
+
+- scope and terminology approved
+- industry-specific UI/workflows reviewed
+- inventory behaviour mapped and tested
+- onboarding and feature gating implemented
+- permissions, audit, offline/failure states validated
+- receipts/payments validated where applicable
+- documentation completed
+- industry readiness checklist fully passed and signed
 
 ## SO-1 non-goals
 
@@ -120,6 +242,7 @@ SO-1 must not:
 - alter the visible 3x3 grid
 - activate first-run onboarding
 - activate industry-specific tile resolution
+- activate subgroup-specific terminology at runtime
 - activate warehouse workflows
 - change current role filtering
 - create Inventory writes
@@ -133,10 +256,11 @@ Runtime activation requires an explicit later approval after:
 
 - ScanOps core workflows are stable
 - operational profile contract is certified cross-repository
-- Inventory exposes authoritative company/location capability configuration
+- Inventory exposes authoritative primary-industry, subgroup and location capability configuration
 - employee identity and permission mapping is ready
 - migration behavior for existing registered devices is defined
 - offline/failure fallback has been acceptance-tested
 - the fixed 3x3 layout remains usable across supported profiles
+- the target industry has passed the locked industry readiness gate
 
 Until then, the current Home remains the production authority.
