@@ -25,6 +25,7 @@ const spec = fs.readFileSync(specPath, "utf8");
 const requiredProfileTokens = [
   "SCANOPS_ONBOARDING_ENABLED = false",
   "SCANOPS_DYNAMIC_HOME_ENABLED = false",
+  "SCANOPS_PROFILE_SCHEMA_VERSION = 2",
   '"receive"',
   '"count"',
   '"transfers"',
@@ -34,6 +35,23 @@ const requiredProfileTokens = [
   '"order"',
   '"movements"',
   '"tools"',
+  '"services"',
+  '"retail"',
+  '"hospitality_food_beverage"',
+  '"hospitality_accommodation"',
+  '"healthcare"',
+  '"wholesale_distribution"',
+  '"manufacturing"',
+  '"construction_trades"',
+  '"automotive"',
+  '"rental_hire"',
+  '"agriculture_primary_production"',
+  '"warehouse_operations"',
+  '"ecommerce_overlay"',
+  '"payroll_staff_rostering"',
+  '"reporting_analytics"',
+  '"multi_location"',
+  '"integrations"',
   'WAREHOUSE_LOCATION_CAPABILITY_ID = "warehouse_operations"',
 ];
 
@@ -41,12 +59,53 @@ for (const token of requiredProfileTokens) {
   if (!profile.includes(token)) fail(`operational profile foundation missing token: ${token}`);
 }
 
+const primaryIndustryIds = [
+  "services",
+  "retail",
+  "hospitality_food_beverage",
+  "hospitality_accommodation",
+  "healthcare",
+  "wholesale_distribution",
+  "manufacturing",
+  "construction_trades",
+  "automotive",
+  "rental_hire",
+  "agriculture_primary_production",
+];
+
+if (primaryIndustryIds.length !== 11) fail("validator primary industry list must contain exactly 11 profiles");
+
+const forbiddenPrimaryIndustryIds = [
+  "warehouse_operations",
+  "ecommerce_overlay",
+  "payroll_staff_rostering",
+  "reporting_analytics",
+  "multi_location",
+  "integrations",
+];
+
+const supportedBlockMatch = profile.match(/SUPPORTED_INDUSTRY_PROFILE_IDS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\);/);
+if (!supportedBlockMatch) {
+  fail("could not locate SUPPORTED_INDUSTRY_PROFILE_IDS block");
+} else {
+  const supportedBlock = supportedBlockMatch[1];
+  const foundPrimaryIds = primaryIndustryIds.filter((id) => supportedBlock.includes(`"${id}"`));
+  if (foundPrimaryIds.length !== 11) fail(`supported industry registry contains ${foundPrimaryIds.length}/11 locked primary industries`);
+  for (const forbidden of forbiddenPrimaryIndustryIds) {
+    if (supportedBlock.includes(`"${forbidden}"`)) fail(`cross-sector capability incorrectly registered as primary industry: ${forbidden}`);
+  }
+}
+
 const requiredSpecTokens = [
   "FOUNDATION ONLY / RUNTIME DISABLED",
+  "v1.3 — LOCKED 11-INDUSTRY TAXONOMY",
   "scanops_onboarding_enabled = false",
   "scanops_dynamic_home_enabled = false",
   "Visible Home Tiles = Industry Profile ∩ Location Capabilities ∩ Employee Permissions",
   "Warehouse Operations is a cross-sector location capability",
+  "A business selects one primary industry profile",
+  "Disabled capabilities remain hidden to reduce cognitive load",
+  "Industry readiness checklist fully passed and signed",
   "modify `src/pages/Home.jsx`",
 ];
 
@@ -79,5 +138,5 @@ for (const label of canonicalHomeLabels) {
 }
 
 if (!process.exitCode) {
-  console.log("SO-1 PASS: onboarding and dynamic Home foundation remain dormant; canonical 3x3 Home is preserved.");
+  console.log("SO-1 PASS: locked 11-industry taxonomy is represented dormantly; onboarding and dynamic Home remain disabled; canonical 3x3 Home is preserved.");
 }
